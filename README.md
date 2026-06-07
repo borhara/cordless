@@ -129,12 +129,14 @@ No WebSocket required.
 
 # 📦 Architecture
 
+```
 cordless
 ├── app.py
 ├── router.py
 ├── context.py
 ├── response/
 └── adapters/
+```
 ---
 
 # 💡 Philosophy
