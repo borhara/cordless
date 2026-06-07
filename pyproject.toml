@@ -11,9 +11,6 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []
 
-[project.urls]
-Homepage = "https://github.com/borhara/cordless"
-
 authors = [
   { name = "borhara" }
 ]
@@ -23,6 +20,10 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent"
 ]
+
+
+[project.urls]
+Homepage = "https://github.com/borhara/cordless"
 
 
 [project.optional-dependencies]
