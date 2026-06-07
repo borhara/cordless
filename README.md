@@ -1,52 +1,56 @@
 # 📡 Cordless
 
-**A serverless Discord interactions framework for AWS Lambda**
+> **A serverless Discord interactions framework for AWS Lambda**
 
 Cordless lets you build Discord bots without running a server — just functions, deployed to Lambda.
 
-No WebSockets. No stateful runtime. No gateway sharding.
+* **No WebSockets**
+* **No stateful runtime**
+* **No gateway sharding**
 
-Just HTTP → functions → responses.
+Just **HTTP → functions → responses**.
 
----
-
-# ✨ Why Cordless?
+## ✨ Why Cordless?
 
 Traditional Discord bots require:
-
-- persistent servers
-- WebSocket connections
-- intent configuration
-- runtime state management
+* persistent servers
+* WebSocket connections
+* intent configuration
+* runtime state management
 
 Cordless flips that model:
-
 > Discord sends events → AWS Lambda runs your code → you return a response
 
----
+## ⚡ Core Idea
 
-# ⚡ Core idea
-
+```text
 Discord Interaction
-→ API Gateway
-→ AWS Lambda
-→ Cordless Router
-→ Your Functions
-→ JSON Response back to Discord
+      │
+      ▼
+API Gateway
+      │
+      ▼
+ AWS Lambda
+      │
+      ▼
+Cordless Router
+      │
+      ▼
+ Your Functions
+      │
+      ▼
+JSON Response back to Discord
+```
 
----
+## 🚀 Quickstart
 
-# 🚀 Quickstart
-
-## Install
+### Install
 
 ```bash
 pip install cordless
 ```
 
----
-
-## Create your first bot
+### Create your first bot
 
 ```python
 from cordless import Cordless
@@ -58,9 +62,7 @@ async def ping(ctx):
     await ctx.send("pong")
 ```
 
----
-
-## Lambda entry point
+### Lambda entry point
 
 ```python
 from cordless import Cordless
@@ -75,9 +77,9 @@ def handler(event, context):
     return bot.handle(event)
 ```
 
----
+## 🧩 Commands & Interactivity
 
-# 🧩 Commands
+### Commands
 
 ```python
 @bot.command("hello")
@@ -85,9 +87,9 @@ async def hello(ctx):
     await ctx.send("Hello world!")
 ```
 
----
+### Buttons
 
-# 🔘 Buttons
+> **Note:** Button components and decorators are currently in active development.
 
 Send a button:
 
@@ -104,8 +106,6 @@ async def ping(ctx):
     )
 ```
 
----
-
 Handle button clicks:
 
 ```python
@@ -114,33 +114,30 @@ async def edit_ping(ctx):
     await ctx.edit("edited")
 ```
 
----
-
-# 🧠 Key concepts
+## 🧠 Key concepts
 
 Stateless by design:
-- interaction payload
-- custom_id routing
-- Lambda invocation context
+* **interaction payload**
+* **custom_id routing**
+* **Lambda invocation context**
 
 No WebSocket required.
 
----
+## 📦 Architecture
 
-# 📦 Architecture
-
-```
-cordless
+```text
+src/cordless/
+├── __init__.py
 ├── app.py
 ├── router.py
 ├── context.py
-├── response/
-└── adapters/
+└── response/
+    └── responder.py
 ```
----
 
-# 💡 Philosophy
+## 💡 Philosophy
 
 Cordless is built around one idea:
 
 > Discord apps should feel like serverless functions, not servers.
+
