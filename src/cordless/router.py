@@ -148,14 +148,20 @@ class Router:
             handler = entry["handler"]
             if getattr(handler, "_defer", False) and not ctx._worker_mode:
                 import os
+                import traceback
                 from .defer import invoke_worker
                 worker_fn = os.environ.get("CORDLESS_WORKER_FUNCTION")
                 if not worker_fn:
                     raise CordlessError(
                         "CORDLESS_WORKER_FUNCTION is not set — add defer_worker to cordless.toml and run cordless deploy"
                     )
-                invoke_worker(worker_fn, interaction)
-                return await ctx.defer()
+                # ACK Discord first — guarantees type 5 is returned even if invoke fails
+                await ctx.defer()
+                try:
+                    invoke_worker(worker_fn, interaction)
+                except Exception:
+                    traceback.print_exc()
+                return ctx.response
             return await _invoke(handler, ctx, f"Command '{key}'")
 
         if itype == MESSAGE_COMPONENT:

@@ -5,11 +5,13 @@ from http.client import HTTPSConnection
 
 def invoke_worker(function_name, interaction):
     import boto3
-    boto3.client("lambda").invoke(
+    resp = boto3.client("lambda").invoke(
         FunctionName=function_name,
         InvocationType="Event",
         Payload=json.dumps(interaction).encode(),
     )
+    if resp["StatusCode"] != 202:
+        raise RuntimeError(f"Lambda async invoke returned {resp['StatusCode']} (FunctionError: {resp.get('FunctionError')})")
 
 
 def patch_followup(app_id, token, payload):

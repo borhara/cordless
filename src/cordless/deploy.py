@@ -260,33 +260,27 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
         else:
             print(f"Creating '{function_name}'...", flush=True)
             function_arn = _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn or "", env, timeout=timeout)
-    finally:
-        os.unlink(zip_path)
 
-    print("Setting up API Gateway...", flush=True)
-    url = _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id)
+        print("Setting up API Gateway...", flush=True)
+        url = _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id)
 
-    if defer_worker:
-        print(f"Setting up deferred dispatch (worker Lambda)...", flush=True)
-
-        worker_zip = build_function_zip(source_dir, bundle_cordless=bundle_cordless)
-        try:
+        if defer_worker:
+            print(f"Setting up deferred dispatch (worker Lambda)...", flush=True)
             w_exists, worker_arn = _function_exists(lam, defer_worker)
             if w_exists:
                 print(f"  Updating worker '{defer_worker}'...", flush=True)
-                _update_function(lam, defer_worker, worker_zip, defer_handler, layer_arn, {}, timeout=defer_timeout)
+                _update_function(lam, defer_worker, zip_path, defer_handler, layer_arn, {}, timeout=defer_timeout)
             else:
                 print(f"  Creating worker '{defer_worker}'...", flush=True)
-                worker_arn = _create_function(lam, defer_worker, worker_zip, role_arn, defer_handler, runtime, layer_arn, {}, timeout=defer_timeout)
-        finally:
-            os.unlink(worker_zip)
+                worker_arn = _create_function(lam, defer_worker, zip_path, role_arn, defer_handler, runtime, layer_arn, {}, timeout=defer_timeout)
+    finally:
+        os.unlink(zip_path)
 
+    if defer_worker:
         _allow_worker_invoke(iam, role_name, worker_arn)
-
-        merged_env = {**env, "CORDLESS_WORKER_FUNCTION": defer_worker}
         lam.update_function_configuration(
             FunctionName=function_name,
-            Environment=_env_vars(merged_env),
+            Environment=_env_vars({**env, "CORDLESS_WORKER_FUNCTION": defer_worker}),
         )
         lam.get_waiter("function_updated").wait(FunctionName=function_name)
         print(f"  Worker ready.", flush=True)
