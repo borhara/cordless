@@ -20,3 +20,15 @@ class InvalidSignatureError(CordlessError):
 
 class NoResponseError(CordlessError):
     """Raised when a handler never calls ctx.send/edit/defer nor returns a response."""
+
+
+class UnknownComponentError(CordlessError):
+    """Raised when a select menu interaction has no registered handler."""
+
+
+class UnknownModalError(CordlessError):
+    """Raised when a modal submission has no registered handler."""
+
+
+class PermissionDeniedError(CordlessError):
+    """Raised by a guard function when the interaction is not permitted."""
