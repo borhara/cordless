@@ -30,6 +30,38 @@ class Cordless:
 
         return decorator
 
+    def select(self, custom_id):
+        def decorator(func):
+            self.router.register_select(custom_id, func)
+            return func
+
+        return decorator
+
+    def modal(self, custom_id):
+        def decorator(func):
+            self.router.register_modal(custom_id, func)
+            return func
+
+        return decorator
+
+    def autocomplete(self, cmd_name, option_name):
+        def decorator(func):
+            self.router.register_autocomplete(cmd_name, option_name, func)
+            return func
+
+        return decorator
+
+    def error(self, func):
+        self.router.register_error_handler(func)
+        return func
+
+    def guard(self, fn):
+        def decorator(handler):
+            handler._guard = fn
+            return handler
+
+        return decorator
+
     def handle(self, event, context=None):
         body = _extract_body(event)
 
