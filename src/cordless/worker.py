@@ -1,6 +1,7 @@
 """Worker Lambda entrypoint for deferred interactions (SQS-triggered)."""
 import asyncio
 import json
+import traceback
 
 from .context import Context
 
@@ -14,6 +15,6 @@ def make_worker_handler(bot):
             try:
                 asyncio.run(bot.router.dispatch(interaction, ctx))
             except Exception:
-                pass  # tracebacks go to CloudWatch; don't fail the SQS batch
+                traceback.print_exc()
 
     return handler

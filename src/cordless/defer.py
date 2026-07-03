@@ -22,6 +22,10 @@ def patch_followup(app_id, token, payload):
             {"Content-Type": "application/json", "User-Agent": "cordless"},
         )
         resp = conn.getresponse()
-        return resp.status, resp.read()
+        status = resp.status
+        body_out = resp.read()
+        if status >= 300:
+            print(f"[cordless] followup PATCH returned {status}: {body_out.decode(errors='replace')}")
+        return status, body_out
     finally:
         conn.close()

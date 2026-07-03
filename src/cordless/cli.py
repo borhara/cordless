@@ -73,6 +73,7 @@ def _deploy(args):
         env={**cfg.get("env", {}), **env},
         region=args.region or cfg.get("region") or os.environ.get("AWS_DEFAULT_REGION"),
         timeout=int(args.timeout or cfg.get("timeout", 10)),
+        bundle_cordless=args.bundle_cordless or cfg.get("bundle_cordless", False),
         defer_worker=defer_worker,
         defer_handler=args.defer_handler or cfg.get("defer_handler", "lambda_function.worker_handler"),
         defer_timeout=int(args.defer_timeout or cfg.get("defer_timeout", 30)),
@@ -113,6 +114,7 @@ def main(argv=None):
     deploy_cmd.add_argument("--region", "-r", default=None, metavar="REGION", help="AWS region")
     deploy_cmd.add_argument("--env", metavar="KEY=VALUE", action="append", help="Environment variable (repeatable)")
     deploy_cmd.add_argument("--timeout", metavar="SECONDS", default=None, help="Main Lambda timeout in seconds (default: 10)")
+    deploy_cmd.add_argument("--bundle-cordless", action="store_true", default=False, help="Embed local cordless source in the zip instead of using a Lambda layer")
     deploy_cmd.add_argument("--defer-worker", metavar="NAME", help="Name of the worker Lambda for deferred commands (also set via cordless.toml defer_worker)")
     deploy_cmd.add_argument("--defer-handler", metavar="HANDLER", default=None, help="Worker handler string (default: lambda_function.worker_handler)")
     deploy_cmd.add_argument("--defer-timeout", metavar="SECONDS", default=None, help="Worker Lambda timeout in seconds (default: 30)")

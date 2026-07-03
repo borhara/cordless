@@ -35,7 +35,7 @@ def load_config(source_dir):
         return tomllib.load(f).get("deploy", {})
 
 
-def build_function_zip(source_dir):
+def build_function_zip(source_dir, bundle_cordless=False):
     tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
     tmp.close()
     with zipfile.ZipFile(tmp.name, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -46,6 +46,19 @@ def build_function_zip(source_dir):
                     continue
                 abs_path = os.path.join(root, fname)
                 zf.write(abs_path, os.path.relpath(abs_path, source_dir))
+
+        if bundle_cordless:
+            from .upload import _cordless_package_dir
+            pkg_dir = _cordless_package_dir()
+            pkg_parent = os.path.dirname(pkg_dir)
+            for root, dirs, files in os.walk(pkg_dir):
+                dirs[:] = [d for d in dirs if d != "__pycache__"]
+                for fname in files:
+                    if fname.endswith(".pyc"):
+                        continue
+                    abs_path = os.path.join(root, fname)
+                    zf.write(abs_path, os.path.relpath(abs_path, pkg_parent))
+
     return tmp.name
 
 
@@ -125,7 +138,7 @@ def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, l
             Role=role_arn,
             Handler=handler,
             Code={"ZipFile": f.read()},
-            Layers=[layer_arn],
+            Layers=[layer_arn] if layer_arn else [],
             Environment=_env_vars(env),
             Timeout=timeout,
         )
@@ -141,7 +154,7 @@ def _update_function(lam, function_name, zip_path, handler, layer_arn, env, time
     lam.update_function_configuration(
         FunctionName=function_name,
         Handler=handler,
-        Layers=[layer_arn],
+        Layers=[layer_arn] if layer_arn else [],
         Environment=_env_vars(env),
         Timeout=timeout,
     )
@@ -254,8 +267,8 @@ def _ensure_sqs_trigger(lam, worker_name, queue_arn):
 
 
 def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, env, region,
-           timeout=10, defer_worker=None, defer_handler="lambda_function.worker_handler",
-           defer_timeout=30):
+           timeout=10, bundle_cordless=False, defer_worker=None,
+           defer_handler="lambda_function.worker_handler", defer_timeout=30):
     if not function_name:
         raise SystemExit("Function name is required — pass --function or set [deploy] function in cordless.toml")
 
@@ -272,21 +285,25 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
     role_arn = ensure_iam_role(iam, role_name)
     print(f"  {role_arn}", flush=True)
 
-    print("Publishing cordless layer...", flush=True)
-    layer_arn = _publish_cordless_layer(lam, layer_name)
-    print(f"  {layer_arn}", flush=True)
+    if bundle_cordless:
+        print("Bundling local cordless into function zip...", flush=True)
+        layer_arn = None
+    else:
+        print("Publishing cordless layer...", flush=True)
+        layer_arn = _publish_cordless_layer(lam, layer_name)
+        print(f"  {layer_arn}", flush=True)
 
     print("Packaging function code...", flush=True)
-    zip_path = build_function_zip(source_dir)
+    zip_path = build_function_zip(source_dir, bundle_cordless=bundle_cordless)
 
     try:
         exists, function_arn = _function_exists(lam, function_name)
         if exists:
             print(f"Updating '{function_name}'...", flush=True)
-            _update_function(lam, function_name, zip_path, handler, layer_arn, env, timeout=timeout)
+            _update_function(lam, function_name, zip_path, handler, layer_arn or "", env, timeout=timeout)
         else:
             print(f"Creating '{function_name}'...", flush=True)
-            function_arn = _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn, env, timeout=timeout)
+            function_arn = _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn or "", env, timeout=timeout)
     finally:
         os.unlink(zip_path)
 
@@ -311,7 +328,7 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
         )
         lam.get_waiter("function_updated").wait(FunctionName=function_name)
 
-        worker_zip = build_function_zip(source_dir)
+        worker_zip = build_function_zip(source_dir, bundle_cordless=bundle_cordless)
         try:
             w_exists, _ = _function_exists(lam, defer_worker)
             if w_exists:
