@@ -35,6 +35,9 @@ dev = [
   "pytest>=8.0",
   "pynacl>=1.5",
 ]
+deploy = [
+  "boto3>=1.20",
+]
 
 
 [tool.setuptools]

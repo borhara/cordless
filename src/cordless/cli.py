@@ -61,9 +61,10 @@ def _deploy(args):
         k, _, v = pair.partition("=")
         env[k] = v
 
+    function_name = args.function or cfg.get("function")
     deploy(
-        function_name=args.function or cfg.get("function"),
-        role=args.role or cfg.get("role"),
+        function_name=function_name,
+        role_name=args.role_name or cfg.get("role_name") or f"{function_name}-role",
         handler=args.handler or cfg.get("handler", "lambda_function.handler"),
         source_dir=source_dir,
         runtime=args.runtime or cfg.get("runtime", "python3.12"),
@@ -99,7 +100,7 @@ def main(argv=None):
         help="Package and deploy your bot to Lambda with the cordless layer attached",
     )
     deploy_cmd.add_argument("--function", "-f", metavar="FUNCTION", help="Lambda function name")
-    deploy_cmd.add_argument("--role", metavar="ARN", help="IAM execution role ARN (required when creating a new function)")
+    deploy_cmd.add_argument("--role-name", metavar="NAME", help="IAM role name to create or reuse (default: <function>-role)")
     deploy_cmd.add_argument("--handler", metavar="HANDLER", help="Handler string, e.g. lambda_function.handler (default: lambda_function.handler)")
     deploy_cmd.add_argument("--source", "-s", default=".", metavar="DIR", help="Source directory to package (default: current directory)")
     deploy_cmd.add_argument("--runtime", metavar="RUNTIME", help="Lambda runtime (default: python3.12)")
