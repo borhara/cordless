@@ -16,11 +16,11 @@ class Cordless:
         self.router = Router()
         self.public_key = public_key
 
-    def command(self, name, description="No description provided.", options=None, defer=False):
+    def command(self, name, description="No description provided.", options=None, defer=False, dm_permission=True):
         def decorator(func):
             if defer:
                 func._defer = True
-            self.router.register_command(name, func, description=description, options=options)
+            self.router.register_command(name, func, description=description, options=options, dm_permission=dm_permission)
             return func
 
         return decorator

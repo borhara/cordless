@@ -29,11 +29,12 @@ class Router:
         self.autocompletes = {}   # (cmd_key, option_name) → handler
         self._error_handler = None
 
-    def register_command(self, name, handler, description="No description provided.", options=None):
+    def register_command(self, name, handler, description="No description provided.", options=None, dm_permission=True):
         self.commands[name] = {
             "handler": handler,
             "description": description,
             "options": options or [],
+            "dm_permission": dm_permission,
         }
 
     def register_button(self, custom_id, handler):
@@ -66,12 +67,15 @@ class Router:
         result = []
 
         for name, meta in flat.items():
-            result.append({
+            cmd = {
                 "name": name,
                 "description": meta["description"],
                 "type": 1,
                 "options": meta["options"],
-            })
+            }
+            if not meta.get("dm_permission", True):
+                cmd["dm_permission"] = False
+            result.append(cmd)
 
         for top, entries in subs.items():
             options = []
@@ -106,12 +110,15 @@ class Router:
                     })
 
             first_desc = next(iter(entries.values()))["description"]
-            result.append({
+            cmd = {
                 "name": top,
                 "description": first_desc,
                 "type": 1,
                 "options": options,
-            })
+            }
+            if any(not m.get("dm_permission", True) for m in entries.values()):
+                cmd["dm_permission"] = False
+            result.append(cmd)
 
         return result
 
