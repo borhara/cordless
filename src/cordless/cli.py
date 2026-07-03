@@ -39,6 +39,15 @@ def _register(args):
     print(f"Registered {len(commands)} command(s) {scope}: {names}")
 
 
+def _upload(args):
+    from .upload import upload
+    upload(
+        function_name=args.function,
+        layer_name=args.layer_name,
+        region=args.region,
+    )
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="cordless", description="cordless command-line tools")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -64,6 +73,26 @@ def main(argv=None):
         help="Register to a single guild instead of globally (defaults to $DISCORD_GUILD_ID)",
     )
     register.set_defaults(func=_register)
+
+    upload = subparsers.add_parser(
+        "upload",
+        help="Package cordless as a Lambda layer and attach it to your function",
+    )
+    upload.add_argument("--function", "-f", required=True, metavar="FUNCTION", help="Lambda function name or ARN")
+    upload.add_argument(
+        "--layer-name",
+        default="cordless",
+        metavar="NAME",
+        help="Name for the Lambda layer (default: cordless)",
+    )
+    upload.add_argument(
+        "--region",
+        "-r",
+        default=os.environ.get("AWS_DEFAULT_REGION"),
+        metavar="REGION",
+        help="AWS region (defaults to $AWS_DEFAULT_REGION or your AWS CLI profile)",
+    )
+    upload.set_defaults(func=_upload)
 
     args = parser.parse_args(argv)
     args.func(args)
