@@ -83,6 +83,8 @@ class Context:
             data["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
         if components is not None:
             data["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
+        if _contains_uikit(components):
+            data["flags"] = _FLAG_UI_KIT
         self.response = _response({"type": _UPDATE_MESSAGE, "data": data})
         return self.response
 

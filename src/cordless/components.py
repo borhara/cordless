@@ -33,16 +33,23 @@ class SelectOption:
 
 
 class Button:
-    def __init__(self, label, custom_id=None, style=1, url=None, emoji=None, disabled=False):
+    def __init__(self, label=None, custom_id=None, style=1, url=None, emoji=None, disabled=False, sku_id=None):
         self.label = label
         self.custom_id = custom_id
         self.style = style
         self.url = url
         self.emoji = emoji
         self.disabled = disabled
+        self.sku_id = sku_id  # required for style=6 (PREMIUM) buttons
 
     def to_dict(self):
-        d = {"type": 2, "label": self.label, "style": self.style}
+        d = {"type": 2, "style": self.style}
+        # Premium buttons (style 6) only take sku_id — no label, custom_id, or url
+        if self.style == 6:
+            d["sku_id"] = self.sku_id
+            return d
+        if self.label is not None:
+            d["label"] = self.label
         if self.custom_id is not None:
             d["custom_id"] = self.custom_id
         if self.url is not None:
