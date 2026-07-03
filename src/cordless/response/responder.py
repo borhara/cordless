@@ -1,9 +1,24 @@
+import json
+
+CHANNEL_MESSAGE_WITH_SOURCE = 4
+UPDATE_MESSAGE = 7
+DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE = 5
+
+
 class Responder:
     def send(self, msg):
-        return {"statusCode": 200, "body": {"type": 4, "data": {"content": msg}}}
+        return _response({"type": CHANNEL_MESSAGE_WITH_SOURCE, "data": {"content": msg}})
 
     def edit(self, msg):
-        return {"statusCode": 200, "body": {"type": 7, "data": {"content": msg}}}
+        return _response({"type": UPDATE_MESSAGE, "data": {"content": msg}})
 
     def defer(self):
-        return {"statusCode": 200, "body": {"type": 5}}
+        return _response({"type": DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE})
+
+
+def _response(payload):
+    return {
+        "statusCode": 200,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps(payload),
+    }
