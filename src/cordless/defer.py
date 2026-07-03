@@ -2,10 +2,21 @@
 import json
 from http.client import HTTPSConnection
 
+# Pre-create the Lambda client at import time so cold-start invocations don't
+# pay the boto3 initialisation cost inside Discord's 3-second response window.
+try:
+    import boto3 as _boto3
+    _lambda_client = _boto3.client("lambda")
+except ImportError:
+    _lambda_client = None
+
 
 def invoke_worker(function_name, interaction):
-    import boto3
-    resp = boto3.client("lambda").invoke(
+    client = _lambda_client
+    if client is None:
+        import boto3
+        client = boto3.client("lambda")
+    resp = client.invoke(
         FunctionName=function_name,
         InvocationType="Event",
         Payload=json.dumps(interaction).encode(),

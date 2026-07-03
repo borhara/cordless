@@ -20,6 +20,13 @@ class Cordless:
         def decorator(func):
             if defer:
                 func._defer = True
+                # Importing defer.py here (at decorator-application time, i.e. Lambda INIT)
+                # causes boto3 to be imported and the Lambda client pre-created before
+                # Discord's 3-second response window opens on the first invocation.
+                try:
+                    from . import defer as _defer_mod  # noqa: F401
+                except Exception:
+                    pass
             self.router.register_command(name, func, description=description, options=options, dm_permission=dm_permission)
             return func
 
