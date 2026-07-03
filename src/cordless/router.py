@@ -141,13 +141,13 @@ class Router:
             handler = entry["handler"]
             if getattr(handler, "_defer", False) and not ctx._worker_mode:
                 import os
-                from .defer import push_to_queue
-                queue_url = os.environ.get("CORDLESS_QUEUE_URL")
-                if not queue_url:
+                from .defer import invoke_worker
+                worker_fn = os.environ.get("CORDLESS_WORKER_FUNCTION")
+                if not worker_fn:
                     raise CordlessError(
-                        "CORDLESS_QUEUE_URL is not set — add defer_worker to cordless.toml and run cordless deploy"
+                        "CORDLESS_WORKER_FUNCTION is not set — add defer_worker to cordless.toml and run cordless deploy"
                     )
-                push_to_queue(queue_url, interaction)
+                invoke_worker(worker_fn, interaction)
                 return await ctx.defer()
             return await _invoke(handler, ctx, f"Command '{key}'")
 
