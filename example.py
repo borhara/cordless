@@ -6,16 +6,22 @@ your dependencies (cordless pulls in pynacl) — e.g. via a zip package or
 container image. Set these environment variables on the function:
 
   DISCORD_PUBLIC_KEY   - from the Discord Developer Portal, General Information
-  DISCORD_APPLICATION_ID
-  DISCORD_BOT_TOKEN
+  DISCORD_BOT_TOKEN    - from the Bot page; also used to resolve the application id
 
 Point Discord's "Interactions Endpoint URL" at this function's URL/API Gateway
 route. Discord's initial PING to that URL is answered automatically by
 cordless once `public_key` is set.
 
-Run `python example.py` locally (with DISCORD_APPLICATION_ID/DISCORD_BOT_TOKEN
-set) to register the slash commands with Discord — do this once after
-deploying, and again whenever a command's shape changes.
+Register the slash commands with Discord using the `cordless` CLI (installed
+alongside the package) — do this once after deploying, and again whenever a
+command's shape changes:
+
+    cordless register example:bot
+
+The application id is resolved from the bot token automatically. Registering
+globally (the default) rolls the commands out to every guild that has
+authorized the bot, for every user in it. Pass --guild-id while developing
+for instant, guild-scoped updates.
 """
 
 import os
@@ -48,12 +54,3 @@ async def edit_ping(ctx):
 
 def handler(event, context):
     return bot.handle(event)
-
-
-if __name__ == "__main__":
-    bot.sync_commands(
-        application_id=os.environ["DISCORD_APPLICATION_ID"],
-        bot_token=os.environ["DISCORD_BOT_TOKEN"],
-        guild_id=os.environ.get("DISCORD_DEV_GUILD_ID"),
-    )
-    print("Commands synced.")

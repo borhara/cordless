@@ -28,6 +28,10 @@ classifiers = [
 Homepage = "https://github.com/borhara/cordless"
 
 
+[project.scripts]
+cordless = "cordless.cli:main"
+
+
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0"

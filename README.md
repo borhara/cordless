@@ -101,8 +101,7 @@ endpoint URL, are answered automatically.
 
 `@bot.command(...)` only wires up local dispatch — Discord also needs to know
 your commands exist so it can show them in the client. Give each command a
-description (and options, if it takes arguments), then sync them from a
-deploy script (not from inside the Lambda handler, since it makes a network call):
+description (and options, if it takes arguments):
 
 ```python
 @bot.command(
@@ -114,17 +113,27 @@ deploy script (not from inside the Lambda handler, since it makes a network call
 )
 async def echo(ctx):
     await ctx.send(ctx.options["text"])
-
-# Run once after deploying, e.g. from a deploy script or CI step.
-bot.sync_commands(
-    application_id=os.environ["DISCORD_APPLICATION_ID"],
-    bot_token=os.environ["DISCORD_BOT_TOKEN"],
-    guild_id=os.environ.get("DISCORD_DEV_GUILD_ID"),  # omit for global commands
-)
 ```
 
-Pass `guild_id` while developing — guild-scoped commands update instantly.
-Global commands (no `guild_id`) can take up to an hour to propagate.
+Then sync them to Discord with the `cordless` CLI (installed alongside the
+package) — run this once after deploying, and again whenever a command's
+shape changes. Point it at `MODULE:ATTRIBUTE`, wherever your `Cordless()`
+instance lives:
+
+```bash
+export DISCORD_BOT_TOKEN=...
+
+cordless register app:bot                       # global — every authorized guild, every user
+cordless register app:bot --guild-id 123456789   # a single guild, for instant updates while developing
+```
+
+The application id is resolved from the bot token, so that's all you need to
+provide. Omit `--guild-id` to register **globally**; global commands can take
+up to an hour to propagate, so use `--guild-id` while iterating.
+
+Prefer calling it from code instead (e.g. inside a deploy script)? Use
+`bot.sync_commands(bot_token=..., guild_id=...)` directly — it's what the
+CLI calls under the hood.
 
 Command arguments show up on `ctx.options` as a plain dict, e.g. `ctx.options["text"]`.
 

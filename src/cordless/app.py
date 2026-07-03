@@ -55,13 +55,16 @@ class Cordless:
         except CordlessError as exc:
             return _json_response(400, {"error": str(exc)})
 
-    def sync_commands(self, application_id, bot_token, guild_id=None):
+    def sync_commands(self, bot_token, guild_id=None):
         """Push this bot's registered commands to Discord.
 
-        Run this from a deploy step, not from inside the Lambda handler —
-        it makes a blocking network call to Discord's API.
+        The application id is resolved from the bot token. Omit `guild_id`
+        (the default) to register commands globally, for every guild that
+        has authorized the bot and every user in it. Run this from a deploy
+        step, not from inside the Lambda handler — it makes blocking network
+        calls to Discord's API.
         """
-        return sync_commands(application_id, bot_token, self.router.command_definitions(), guild_id=guild_id)
+        return sync_commands(bot_token, self.router.command_definitions(), guild_id=guild_id)
 
 
 def _extract_body(event):

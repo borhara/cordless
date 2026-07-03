@@ -40,24 +40,31 @@ class _FakeResponse:
         return False
 
 
-def test_sync_commands_hits_global_endpoint_with_bot_auth():
-    with patch("cordless.register.urllib.request.urlopen", return_value=_FakeResponse([{"id": "1"}])) as urlopen:
-        result = sync_commands("app-id", "bot-token", [{"name": "ping", "description": "x", "type": 1, "options": []}])
+def test_sync_commands_resolves_application_id_from_bot_token_and_hits_global_endpoint():
+    responses = [_FakeResponse({"id": "app-id"}), _FakeResponse([{"id": "1"}])]
 
-    request = urlopen.call_args[0][0]
+    with patch("cordless.register.urllib.request.urlopen", side_effect=responses) as urlopen:
+        result = sync_commands("bot-token", [{"name": "ping", "description": "x", "type": 1, "options": []}])
 
-    assert request.full_url == "https://discord.com/api/v10/applications/app-id/commands"
-    assert request.get_header("Authorization") == "Bot bot-token"
+    lookup_request, put_request = (call.args[0] for call in urlopen.call_args_list)
+
+    assert lookup_request.full_url == "https://discord.com/api/v10/oauth2/applications/@me"
+    assert lookup_request.get_header("Authorization") == "Bot bot-token"
+
+    assert put_request.full_url == "https://discord.com/api/v10/applications/app-id/commands"
+    assert put_request.get_header("Authorization") == "Bot bot-token"
     assert result == [{"id": "1"}]
 
 
 def test_sync_commands_scopes_to_guild_when_provided():
-    with patch("cordless.register.urllib.request.urlopen", return_value=_FakeResponse([])) as urlopen:
-        sync_commands("app-id", "bot-token", [], guild_id="guild-id")
+    responses = [_FakeResponse({"id": "app-id"}), _FakeResponse([])]
 
-    request = urlopen.call_args[0][0]
+    with patch("cordless.register.urllib.request.urlopen", side_effect=responses) as urlopen:
+        sync_commands("bot-token", [], guild_id="guild-id")
 
-    assert request.full_url == "https://discord.com/api/v10/applications/app-id/guilds/guild-id/commands"
+    put_request = urlopen.call_args_list[1].args[0]
+
+    assert put_request.full_url == "https://discord.com/api/v10/applications/app-id/guilds/guild-id/commands"
 
 
 def test_bot_sync_commands_delegates_to_register_module():
@@ -68,7 +75,7 @@ def test_bot_sync_commands_delegates_to_register_module():
         pass
 
     with patch("cordless.app.sync_commands", return_value=[{"id": "1"}]) as mock_sync:
-        result = bot.sync_commands("app-id", "bot-token", guild_id="guild-id")
+        result = bot.sync_commands("bot-token", guild_id="guild-id")
 
-    mock_sync.assert_called_once_with("app-id", "bot-token", bot.router.command_definitions(), guild_id="guild-id")
+    mock_sync.assert_called_once_with("bot-token", bot.router.command_definitions(), guild_id="guild-id")
     assert result == [{"id": "1"}]
