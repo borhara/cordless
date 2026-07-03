@@ -72,8 +72,10 @@ def _deploy(args):
         layer_name=args.layer_name or cfg.get("layer_name", "cordless"),
         env={**cfg.get("env", {}), **env},
         region=args.region or cfg.get("region") or os.environ.get("AWS_DEFAULT_REGION"),
+        timeout=int(args.timeout or cfg.get("timeout", 10)),
         defer_worker=defer_worker,
         defer_handler=args.defer_handler or cfg.get("defer_handler", "lambda_function.worker_handler"),
+        defer_timeout=int(args.defer_timeout or cfg.get("defer_timeout", 30)),
     )
 
 
@@ -110,8 +112,10 @@ def main(argv=None):
     deploy_cmd.add_argument("--layer-name", default=None, metavar="NAME", help="Cordless layer name (default: cordless)")
     deploy_cmd.add_argument("--region", "-r", default=None, metavar="REGION", help="AWS region")
     deploy_cmd.add_argument("--env", metavar="KEY=VALUE", action="append", help="Environment variable (repeatable)")
+    deploy_cmd.add_argument("--timeout", metavar="SECONDS", default=None, help="Main Lambda timeout in seconds (default: 10)")
     deploy_cmd.add_argument("--defer-worker", metavar="NAME", help="Name of the worker Lambda for deferred commands (also set via cordless.toml defer_worker)")
     deploy_cmd.add_argument("--defer-handler", metavar="HANDLER", default=None, help="Worker handler string (default: lambda_function.worker_handler)")
+    deploy_cmd.add_argument("--defer-timeout", metavar="SECONDS", default=None, help="Worker Lambda timeout in seconds (default: 30)")
     deploy_cmd.set_defaults(func=_deploy)
 
     args = parser.parse_args(argv)

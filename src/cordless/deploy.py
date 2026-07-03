@@ -117,7 +117,7 @@ def _env_vars(env):
     return {"Variables": env} if env else {}
 
 
-def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn, env):
+def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn, env, timeout=10):
     with open(zip_path, "rb") as f:
         resp = lam.create_function(
             FunctionName=function_name,
@@ -127,12 +127,13 @@ def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, l
             Code={"ZipFile": f.read()},
             Layers=[layer_arn],
             Environment=_env_vars(env),
+            Timeout=timeout,
         )
     lam.get_waiter("function_active").wait(FunctionName=function_name)
     return resp["FunctionArn"]
 
 
-def _update_function(lam, function_name, zip_path, handler, layer_arn, env):
+def _update_function(lam, function_name, zip_path, handler, layer_arn, env, timeout=10):
     with open(zip_path, "rb") as f:
         lam.update_function_code(FunctionName=function_name, ZipFile=f.read())
     lam.get_waiter("function_updated").wait(FunctionName=function_name)
@@ -142,6 +143,7 @@ def _update_function(lam, function_name, zip_path, handler, layer_arn, env):
         Handler=handler,
         Layers=[layer_arn],
         Environment=_env_vars(env),
+        Timeout=timeout,
     )
     lam.get_waiter("function_updated").wait(FunctionName=function_name)
 
@@ -252,7 +254,8 @@ def _ensure_sqs_trigger(lam, worker_name, queue_arn):
 
 
 def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, env, region,
-           defer_worker=None, defer_handler="lambda_function.worker_handler"):
+           timeout=10, defer_worker=None, defer_handler="lambda_function.worker_handler",
+           defer_timeout=30):
     if not function_name:
         raise SystemExit("Function name is required — pass --function or set [deploy] function in cordless.toml")
 
@@ -280,10 +283,10 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
         exists, function_arn = _function_exists(lam, function_name)
         if exists:
             print(f"Updating '{function_name}'...", flush=True)
-            _update_function(lam, function_name, zip_path, handler, layer_arn, env)
+            _update_function(lam, function_name, zip_path, handler, layer_arn, env, timeout=timeout)
         else:
             print(f"Creating '{function_name}'...", flush=True)
-            function_arn = _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn, env)
+            function_arn = _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn, env, timeout=timeout)
     finally:
         os.unlink(zip_path)
 
@@ -313,10 +316,10 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
             w_exists, _ = _function_exists(lam, defer_worker)
             if w_exists:
                 print(f"  Updating worker '{defer_worker}'...", flush=True)
-                _update_function(lam, defer_worker, worker_zip, defer_handler, layer_arn, {})
+                _update_function(lam, defer_worker, worker_zip, defer_handler, layer_arn, {}, timeout=defer_timeout)
             else:
                 print(f"  Creating worker '{defer_worker}'...", flush=True)
-                _create_function(lam, defer_worker, worker_zip, role_arn, defer_handler, runtime, layer_arn, {})
+                _create_function(lam, defer_worker, worker_zip, role_arn, defer_handler, runtime, layer_arn, {}, timeout=defer_timeout)
         finally:
             os.unlink(worker_zip)
 
