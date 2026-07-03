@@ -64,8 +64,21 @@ def test_register_uses_token_from_environment(monkeypatch, capsys):
     assert "Registered 0 command(s) globally" in capsys.readouterr().out
 
 
-def test_register_requires_a_token(monkeypatch):
+def test_register_via_client_credentials_needs_no_bot_token(capsys):
+    responses = [_FakeResponse({"access_token": "bearer-tok"}), _FakeResponse([{"id": "1", "name": "ping"}])]
+
+    with patch("cordless.register.urllib.request.urlopen", side_effect=responses) as urlopen:
+        main(["register", "sample_app:bot", "--client-id", "cid", "--client-secret", "csecret"])
+
+    put_request = urlopen.call_args_list[1].args[0]
+    assert put_request.get_header("Authorization") == "Bearer bearer-tok"
+    assert "Registered 1 command(s) globally: ping" in capsys.readouterr().out
+
+
+def test_register_requires_credentials(monkeypatch):
     monkeypatch.delenv("DISCORD_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("DISCORD_CLIENT_ID", raising=False)
+    monkeypatch.delenv("DISCORD_CLIENT_SECRET", raising=False)
 
     with pytest.raises(SystemExit):
         main(["register", "sample_app:bot"])

@@ -20,11 +20,19 @@ def _load_bot(target):
 
 
 def _register(args):
-    if not args.token:
-        raise SystemExit("A bot token is required: pass --token or set DISCORD_BOT_TOKEN")
+    if not args.token and not (args.client_id and args.client_secret):
+        raise SystemExit(
+            "Credentials required: pass --token (or set $DISCORD_BOT_TOKEN), "
+            "or both --client-id/--client-secret (or $DISCORD_CLIENT_ID/$DISCORD_CLIENT_SECRET)"
+        )
 
     bot = _load_bot(args.bot)
-    commands = bot.sync_commands(bot_token=args.token, guild_id=args.guild_id)
+    commands = bot.sync_commands(
+        bot_token=args.token,
+        client_id=args.client_id,
+        client_secret=args.client_secret,
+        guild_id=args.guild_id,
+    )
 
     scope = f"guild {args.guild_id}" if args.guild_id else "globally"
     names = ", ".join(c["name"] for c in commands) or "(none)"
@@ -39,6 +47,16 @@ def main(argv=None):
     register.add_argument("bot", help="Location of your Cordless instance, as MODULE:ATTRIBUTE (e.g. app:bot)")
     register.add_argument(
         "--token", default=os.environ.get("DISCORD_BOT_TOKEN"), help="Bot token (defaults to $DISCORD_BOT_TOKEN)"
+    )
+    register.add_argument(
+        "--client-id",
+        default=os.environ.get("DISCORD_CLIENT_ID"),
+        help="App client id, for auth without a bot token (defaults to $DISCORD_CLIENT_ID)",
+    )
+    register.add_argument(
+        "--client-secret",
+        default=os.environ.get("DISCORD_CLIENT_SECRET"),
+        help="App client secret, for auth without a bot token (defaults to $DISCORD_CLIENT_SECRET)",
     )
     register.add_argument(
         "--guild-id",

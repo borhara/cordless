@@ -131,9 +131,28 @@ The application id is resolved from the bot token, so that's all you need to
 provide. Omit `--guild-id` to register **globally**; global commands can take
 up to an hour to propagate, so use `--guild-id` while iterating.
 
+### No bot token? Use client credentials instead
+
+If your app never needs a bot user — it only ever responds to HTTP
+interactions, like everything cordless does — you don't need a bot token at
+all. Discord also accepts an OAuth2 **client credentials** grant for managing
+commands, authenticated with just your app's client ID and secret (from the
+Developer Portal's OAuth2 page):
+
+```bash
+export DISCORD_CLIENT_ID=...
+export DISCORD_CLIENT_SECRET=...
+
+cordless register app:bot
+```
+
+If both a bot token and client credentials are available, the bot token
+takes precedence.
+
 Prefer calling it from code instead (e.g. inside a deploy script)? Use
-`bot.sync_commands(bot_token=..., guild_id=...)` directly — it's what the
-CLI calls under the hood.
+`bot.sync_commands(bot_token=..., guild_id=...)` or
+`bot.sync_commands(client_id=..., client_secret=..., guild_id=...)` directly
+— it's what the CLI calls under the hood.
 
 Command arguments show up on `ctx.options` as a plain dict, e.g. `ctx.options["text"]`.
 
