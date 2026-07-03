@@ -87,10 +87,10 @@ def _publish_cordless_layer(lam, layer_name):
 
 def _function_exists(lam, function_name):
     try:
-        lam.get_function_configuration(FunctionName=function_name)
-        return True
+        config = lam.get_function_configuration(FunctionName=function_name)
+        return True, config["FunctionArn"]
     except lam.exceptions.ResourceNotFoundException:
-        return False
+        return False, None
 
 
 def _env_vars(env):
@@ -99,7 +99,7 @@ def _env_vars(env):
 
 def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn, env):
     with open(zip_path, "rb") as f:
-        lam.create_function(
+        resp = lam.create_function(
             FunctionName=function_name,
             Runtime=runtime,
             Role=role_arn,
@@ -109,6 +109,7 @@ def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, l
             Environment=_env_vars(env),
         )
     lam.get_waiter("function_active").wait(FunctionName=function_name)
+    return resp["FunctionArn"]
 
 
 def _update_function(lam, function_name, zip_path, handler, layer_arn, env):
@@ -125,29 +126,52 @@ def _update_function(lam, function_name, zip_path, handler, layer_arn, env):
     lam.get_waiter("function_updated").wait(FunctionName=function_name)
 
 
-def _ensure_function_url(lam, function_name):
+def _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id):
+    api_name = f"{function_name}-api"
+
+    # Reuse existing API if one with this name exists
+    apis = apigw.get_apis().get("Items", [])
+    existing = next((a for a in apis if a["Name"] == api_name), None)
+
+    if existing:
+        api_id = existing["ApiId"]
+        endpoint = existing["ApiEndpoint"]
+    else:
+        api = apigw.create_api(Name=api_name, ProtocolType="HTTP")
+        api_id = api["ApiId"]
+        endpoint = api["ApiEndpoint"]
+
+        integration = apigw.create_integration(
+            ApiId=api_id,
+            IntegrationType="AWS_PROXY",
+            IntegrationUri=function_arn,
+            PayloadFormatVersion="2.0",
+        )
+
+        apigw.create_route(
+            ApiId=api_id,
+            RouteKey="POST /",
+            Target=f"integrations/{integration['IntegrationId']}",
+        )
+
+        apigw.create_stage(ApiId=api_id, StageName="$default", AutoDeploy=True)
+
+    # Always refresh the Lambda invoke permission for this API
+    source_arn = f"arn:aws:execute-api:{region}:{account_id}:{api_id}/*/*"
     try:
-        return lam.get_function_url_config(FunctionName=function_name)["FunctionUrl"]
+        lam.remove_permission(FunctionName=function_name, StatementId="APIGatewayInvoke")
     except lam.exceptions.ResourceNotFoundException:
         pass
 
-    url = lam.create_function_url_config(
+    lam.add_permission(
         FunctionName=function_name,
-        AuthType="NONE",
-    )["FunctionUrl"]
+        StatementId="APIGatewayInvoke",
+        Action="lambda:InvokeFunction",
+        Principal="apigateway.amazonaws.com",
+        SourceArn=source_arn,
+    )
 
-    try:
-        lam.add_permission(
-            FunctionName=function_name,
-            StatementId="FunctionURLAllowPublicAccess",
-            Action="lambda:InvokeFunctionUrl",
-            Principal="*",
-            FunctionUrlAuthType="NONE",
-        )
-    except lam.exceptions.ResourceConflictException:
-        pass  # permission already exists
-
-    return url
+    return f"{endpoint}/"
 
 
 def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, env, region):
@@ -159,6 +183,8 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
     session = get_session(region)
     iam = session.client("iam")
     lam = session.client("lambda")
+    apigw = session.client("apigatewayv2")
+    account_id = session.client("sts").get_caller_identity()["Account"]
 
     print("Setting up IAM role...", flush=True)
     role_arn = ensure_iam_role(iam, role_name)
@@ -172,15 +198,16 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
     zip_path = build_function_zip(source_dir)
 
     try:
-        if _function_exists(lam, function_name):
+        exists, function_arn = _function_exists(lam, function_name)
+        if exists:
             print(f"Updating '{function_name}'...", flush=True)
             _update_function(lam, function_name, zip_path, handler, layer_arn, env)
         else:
             print(f"Creating '{function_name}'...", flush=True)
-            _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn, env)
+            function_arn = _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn, env)
     finally:
         os.unlink(zip_path)
 
-    print("Ensuring function URL...", flush=True)
-    url = _ensure_function_url(lam, function_name)
+    print("Setting up API Gateway...", flush=True)
+    url = _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id)
     print(f"\nDeployed. Paste this into Discord as your Interactions Endpoint URL:\n\n  {url}\n", flush=True)
