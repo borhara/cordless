@@ -5,7 +5,6 @@ import json
 from .context import Context
 from .errors import CordlessError
 from .register import sync_commands
-from .response.responder import Responder
 from .router import Router
 from .verify import verify_signature
 
@@ -47,8 +46,7 @@ class Cordless:
         if interaction.get("type") == PING:
             return _json_response(200, {"type": PING})
 
-        responder = Responder()
-        ctx = Context(interaction, responder)
+        ctx = Context(interaction)
 
         try:
             return asyncio.run(self.router.dispatch(interaction, ctx))
