@@ -69,14 +69,33 @@ def ensure_iam_role(iam, role_name):
     return role_arn
 
 
+def _cordless_version():
+    from importlib.metadata import version
+    return version("cordless")
+
+
 def _publish_cordless_layer(lam, layer_name):
     from .upload import build_layer_zip, _LAMBDA_RUNTIMES
+
+    current_version = _cordless_version()
+    description = f"cordless {current_version}"
+
+    # Reuse the existing layer version if it was built from the same cordless version
+    try:
+        versions = lam.list_layer_versions(LayerName=layer_name).get("LayerVersions", [])
+        for v in versions:
+            if v.get("Description") == description:
+                print(f"  Layer already up to date ({description}), reusing.", flush=True)
+                return v["LayerVersionArn"]
+    except lam.exceptions.ResourceNotFoundException:
+        pass
 
     zip_path = build_layer_zip()
     try:
         with open(zip_path, "rb") as f:
             resp = lam.publish_layer_version(
                 LayerName=layer_name,
+                Description=description,
                 Content={"ZipFile": f.read()},
                 CompatibleRuntimes=_LAMBDA_RUNTIMES,
             )
