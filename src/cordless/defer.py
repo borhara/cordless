@@ -25,9 +25,8 @@ def patch_followup(app_id, token, payload):
         resp = conn.getresponse()
         status = resp.status
         body_out = resp.read()
-        print(f"[cordless] followup PATCH app_id={app_id} token={token[:20]}... → {status}")
         if status >= 300:
-            print(f"[cordless] followup body: {body_out.decode(errors='replace')}")
+            print(f"[cordless] followup PATCH {status}: {body_out.decode(errors='replace')}")
         return status, body_out
     finally:
         conn.close()
