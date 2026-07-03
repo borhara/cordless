@@ -9,9 +9,7 @@ version = "0.2.0"
 description = "Serverless Discord interactions framework for AWS Lambda"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [
-  "pynacl>=1.5"
-]
+dependencies = []
 
 authors = [
   { name = "borhara" }
@@ -34,7 +32,8 @@ cordless = "cordless.cli:main"
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8.0"
+  "pytest>=8.0",
+  "pynacl>=1.5",
 ]
 
 
