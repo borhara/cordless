@@ -1,6 +1,7 @@
 import asyncio
 
 from .errors import (
+    CordlessError,
     NoResponseError,
     UnknownButtonError,
     UnknownCommandError,
@@ -137,7 +138,18 @@ class Router:
                 raise UnknownCommandError(f"Unknown command: {key}")
             if leaf_options is not None:
                 ctx.options = {opt["name"]: opt["value"] for opt in leaf_options if "value" in opt}
-            return await _invoke(entry["handler"], ctx, f"Command '{key}'")
+            handler = entry["handler"]
+            if getattr(handler, "_defer", False) and not ctx._worker_mode:
+                import os
+                from .defer import push_to_queue
+                queue_url = os.environ.get("CORDLESS_QUEUE_URL")
+                if not queue_url:
+                    raise CordlessError(
+                        "CORDLESS_QUEUE_URL is not set — add defer_worker to cordless.toml and run cordless deploy"
+                    )
+                push_to_queue(queue_url, interaction)
+                return await ctx.defer()
+            return await _invoke(handler, ctx, f"Command '{key}'")
 
         if itype == MESSAGE_COMPONENT:
             cid = interaction["data"]["custom_id"]

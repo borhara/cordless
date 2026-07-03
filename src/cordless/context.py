@@ -24,9 +24,10 @@ def _contains_uikit(components):
 
 
 class Context:
-    def __init__(self, interaction):
+    def __init__(self, interaction, *, _worker_mode=False):
         self.interaction = interaction
         self.response = None
+        self._worker_mode = _worker_mode
 
         data = interaction.get("data", {})
         self.custom_id = data.get("custom_id")
@@ -54,6 +55,9 @@ class Context:
                     self.modal_values[comp["custom_id"]] = comp.get("value", "")
 
     async def send(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None):
+        if self._worker_mode:
+            return await self.followup(msg, content=content, ephemeral=ephemeral, embeds=embeds, components=components)
+
         _content = content if content is not None else msg
         data = {}
         if _content is not None:
@@ -72,6 +76,32 @@ class Context:
             data["flags"] = flags
 
         self.response = _response({"type": _CHANNEL_MESSAGE_WITH_SOURCE, "data": data})
+        return self.response
+
+    async def followup(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None):
+        from .defer import patch_followup
+
+        _content = content if content is not None else msg
+        data = {}
+        if _content is not None:
+            data["content"] = _content
+        if embeds is not None:
+            data["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
+        if components is not None:
+            data["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
+
+        flags = 0
+        if ephemeral:
+            flags |= _FLAG_EPHEMERAL
+        if _contains_uikit(components):
+            flags |= _FLAG_UI_KIT
+        if flags:
+            data["flags"] = flags
+
+        app_id = self.interaction.get("application_id")
+        patch_followup(app_id, self.token, data)
+        # Set a sentinel so the router knows a response was sent
+        self.response = {"_cordless_followup": True}
         return self.response
 
     async def edit(self, msg=None, *, content=None, embeds=None, components=None):
