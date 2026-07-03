@@ -6,12 +6,17 @@ import urllib.request
 
 API_BASE = "https://discord.com/api/v10"
 
+# Discord's API sits behind Cloudflare, which blocks urllib's default
+# "Python-urllib/x.y" User-Agent outright (403, error code 1010) regardless
+# of whether the credentials are valid. Any descriptive User-Agent avoids it.
+USER_AGENT = "cordless (https://github.com/borhara/cordless)"
+
 
 def _get_application_id(bot_token):
     request = urllib.request.Request(
         f"{API_BASE}/oauth2/applications/@me",
         method="GET",
-        headers={"Authorization": f"Bot {bot_token}"},
+        headers={"Authorization": f"Bot {bot_token}", "User-Agent": USER_AGENT},
     )
 
     try:
@@ -34,6 +39,7 @@ def _get_client_credentials_token(client_id, client_secret):
         headers={
             "Authorization": f"Basic {credentials}",
             "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": USER_AGENT,
         },
     )
 
@@ -79,6 +85,7 @@ def sync_commands(commands, guild_id=None, bot_token=None, client_id=None, clien
         headers={
             "Authorization": authorization,
             "Content-Type": "application/json",
+            "User-Agent": USER_AGENT,
         },
     )
 
