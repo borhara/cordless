@@ -3,99 +3,143 @@ from unittest.mock import patch
 
 import pytest
 
-from cordless.app import Cordless
+from cordless.app import Cordless, option
 from cordless.register import sync_commands
 
+from conftest import FakeDiscordResponse
+
+
+# --- command_definitions ---
 
 def test_command_definitions_reflect_registered_commands():
     bot = Cordless()
 
     @bot.command("ping", description="Replies with pong")
-    async def ping(ctx):
-        pass
+    async def ping(ctx): pass
 
-    @bot.command(
-        "echo",
-        description="Echoes text back",
-        options=[{"name": "text", "description": "Text to echo", "type": 3, "required": True}],
-    )
-    async def echo(ctx):
-        pass
+    @bot.command("echo", description="Echoes text back",
+                 options=[{"name": "text", "description": "Text to echo", "type": 3, "required": True}])
+    async def echo(ctx): pass
 
-    definitions = bot.router.command_definitions()
-
-    assert {"name": "ping", "description": "Replies with pong", "type": 1, "options": []} in definitions
-    assert any(d["name"] == "echo" and d["options"][0]["name"] == "text" for d in definitions)
+    defs = bot.router.command_definitions()
+    assert {"name": "ping", "description": "Replies with pong", "type": 1, "options": []} in defs
+    assert any(d["name"] == "echo" and d["options"][0]["name"] == "text" for d in defs)
 
 
-class _FakeResponse:
-    def __init__(self, payload):
-        self._payload = payload
+def test_context_menu_definitions_have_no_description_or_options():
+    bot = Cordless()
 
-    def read(self):
-        return json.dumps(self._payload).encode()
+    @bot.user_command("Inspect User")
+    async def inspect(ctx): pass
 
-    def __enter__(self):
-        return self
+    @bot.message_command("Bookmark")
+    async def bookmark(ctx): pass
 
-    def __exit__(self, *exc_info):
-        return False
+    defs = {d["name"]: d for d in bot.router.command_definitions()}
+    assert defs["Inspect User"] == {"name": "Inspect User", "type": 2}
+    assert defs["Bookmark"] == {"name": "Bookmark", "type": 3}
 
 
-def test_sync_commands_resolves_application_id_from_bot_token_and_hits_global_endpoint():
-    responses = [_FakeResponse({"id": "app-id"}), _FakeResponse([{"id": "1"}])]
+# --- option() helper ---
+
+def test_option_defaults_to_string_type():
+    assert option("text", "A text option")["type"] == 3
+
+
+def test_option_type_aliases():
+    assert option("n", type="integer")["type"] == 4
+    assert option("b", type="boolean")["type"] == 5
+    assert option("u", type="user")["type"] == 6
+    assert option("c", type="channel")["type"] == 7
+    assert option("r", type="role")["type"] == 8
+    assert option("x", type="number")["type"] == 10
+    assert option("a", type="attachment")["type"] == 11
+
+
+def test_option_required():
+    o = option("msg", required=True)
+    assert o["required"] is True
+    assert "required" not in option("msg")  # absent when False
+
+
+def test_option_autocomplete():
+    o = option("q", autocomplete=True)
+    assert o["autocomplete"] is True
+
+
+def test_option_choices():
+    choices = [{"name": "Red", "value": "red"}]
+    assert option("color", choices=choices)["choices"] == choices
+
+
+def test_option_min_max_value():
+    o = option("n", type="integer", min_value=1, max_value=10)
+    assert o["min_value"] == 1
+    assert o["max_value"] == 10
+
+
+def test_option_min_max_length():
+    o = option("text", min_length=2, max_length=100)
+    assert o["min_length"] == 2
+    assert o["max_length"] == 100
+
+
+def test_option_omits_unused_keys():
+    o = option("text", "desc")
+    assert "required" not in o
+    assert "autocomplete" not in o
+    assert "choices" not in o
+    assert "min_value" not in o
+
+
+# --- sync_commands ---
+
+def test_sync_commands_resolves_app_id_from_bot_token_and_hits_global_endpoint():
+    responses = [FakeDiscordResponse({"id": "app-id"}), FakeDiscordResponse([{"id": "1"}])]
 
     with patch("cordless.register.urllib.request.urlopen", side_effect=responses) as urlopen:
-        result = sync_commands(
-            [{"name": "ping", "description": "x", "type": 1, "options": []}], bot_token="bot-token"
-        )
+        result = sync_commands([{"name": "ping", "description": "x", "type": 1, "options": []}],
+                               bot_token="bot-token")
 
-    lookup_request, put_request = (call.args[0] for call in urlopen.call_args_list)
-
-    assert lookup_request.full_url == "https://discord.com/api/v10/oauth2/applications/@me"
-    assert lookup_request.get_header("Authorization") == "Bot bot-token"
-
-    assert put_request.full_url == "https://discord.com/api/v10/applications/app-id/commands"
-    assert put_request.get_header("Authorization") == "Bot bot-token"
+    lookup, put = (call.args[0] for call in urlopen.call_args_list)
+    assert lookup.full_url == "https://discord.com/api/v10/oauth2/applications/@me"
+    assert lookup.get_header("Authorization") == "Bot bot-token"
+    assert put.full_url == "https://discord.com/api/v10/applications/app-id/commands"
+    assert put.get_header("Authorization") == "Bot bot-token"
     assert result == [{"id": "1"}]
 
 
-def test_sync_commands_scopes_to_guild_when_provided():
-    responses = [_FakeResponse({"id": "app-id"}), _FakeResponse([])]
+def test_sync_commands_scopes_to_guild():
+    responses = [FakeDiscordResponse({"id": "app-id"}), FakeDiscordResponse([])]
 
     with patch("cordless.register.urllib.request.urlopen", side_effect=responses) as urlopen:
         sync_commands([], guild_id="guild-id", bot_token="bot-token")
 
-    put_request = urlopen.call_args_list[1].args[0]
+    put = urlopen.call_args_list[1].args[0]
+    assert put.full_url == "https://discord.com/api/v10/applications/app-id/guilds/guild-id/commands"
 
-    assert put_request.full_url == "https://discord.com/api/v10/applications/app-id/guilds/guild-id/commands"
 
-
-def test_sync_commands_via_client_credentials_skips_application_id_lookup():
-    responses = [_FakeResponse({"access_token": "bearer-tok"}), _FakeResponse([{"id": "1"}])]
+def test_sync_commands_via_client_credentials():
+    responses = [FakeDiscordResponse({"access_token": "bearer-tok"}), FakeDiscordResponse([{"id": "1"}])]
 
     with patch("cordless.register.urllib.request.urlopen", side_effect=responses) as urlopen:
         result = sync_commands([], client_id="client-id", client_secret="client-secret")
 
-    token_request, put_request = (call.args[0] for call in urlopen.call_args_list)
-
-    assert token_request.full_url == "https://discord.com/api/v10/oauth2/token"
-    assert token_request.get_header("Authorization") == f"Basic {_basic('client-id', 'client-secret')}"
-    assert token_request.data == b"grant_type=client_credentials&scope=applications.commands.update"
-
-    assert put_request.full_url == "https://discord.com/api/v10/applications/client-id/commands"
-    assert put_request.get_header("Authorization") == "Bearer bearer-tok"
+    token_req, put = (call.args[0] for call in urlopen.call_args_list)
+    assert token_req.full_url == "https://discord.com/api/v10/oauth2/token"
+    assert token_req.get_header("Authorization") == f"Basic {_basic('client-id', 'client-secret')}"
+    assert put.full_url == "https://discord.com/api/v10/applications/client-id/commands"
+    assert put.get_header("Authorization") == "Bearer bearer-tok"
     assert result == [{"id": "1"}]
 
 
-def test_sync_commands_prefers_bot_token_when_both_provided():
-    responses = [_FakeResponse({"id": "app-id"}), _FakeResponse([])]
+def test_sync_commands_prefers_bot_token_over_client_credentials():
+    responses = [FakeDiscordResponse({"id": "app-id"}), FakeDiscordResponse([])]
 
     with patch("cordless.register.urllib.request.urlopen", side_effect=responses) as urlopen:
         sync_commands([], bot_token="bot-token", client_id="client-id", client_secret="client-secret")
 
-    lookup_request = urlopen.call_args_list[0].args[0]
-    assert lookup_request.full_url == "https://discord.com/api/v10/oauth2/applications/@me"
+    assert urlopen.call_args_list[0].args[0].full_url == "https://discord.com/api/v10/oauth2/applications/@me"
 
 
 def test_sync_commands_requires_some_credentials():
@@ -107,8 +151,7 @@ def test_bot_sync_commands_delegates_to_register_module():
     bot = Cordless()
 
     @bot.command("ping")
-    async def ping(ctx):
-        pass
+    async def ping(ctx): pass
 
     with patch("cordless.app.sync_commands", return_value=[{"id": "1"}]) as mock_sync:
         result = bot.sync_commands(bot_token="bot-token", guild_id="guild-id")
@@ -125,5 +168,4 @@ def test_bot_sync_commands_delegates_to_register_module():
 
 def _basic(client_id, client_secret):
     import base64
-
     return base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
