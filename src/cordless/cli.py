@@ -96,7 +96,40 @@ def _deploy(args):
         defer_handler=args.defer_handler or cfg.get("defer_handler", "lambda_function.worker_handler"),
         defer_timeout=int(args.defer_timeout or cfg.get("defer_timeout", 30)),
         defer_memory=int(cfg.get("defer_memory", 256)),
+        policies=cfg.get("policies"),
     )
+
+    if args.register:
+        toml_env = cfg.get("env", {})
+        token = os.environ.get("DISCORD_BOT_TOKEN")
+        client_id = os.environ.get("DISCORD_CLIENT_ID") or toml_env.get("DISCORD_CLIENT_ID")
+        client_secret = os.environ.get("DISCORD_CLIENT_SECRET")
+        if not token and not (client_id and client_secret):
+            raise SystemExit(
+                "--register requires $DISCORD_BOT_TOKEN, "
+                "or both $DISCORD_CLIENT_ID and $DISCORD_CLIENT_SECRET"
+            )
+        bot = _load_bot(args.register)
+        commands = bot.sync_commands(
+            bot_token=token,
+            client_id=client_id,
+            client_secret=client_secret,
+        )
+        names = ", ".join(c["name"] for c in commands) or "(none)"
+        print(f"  ✓ registered {len(commands)} command(s): {names}")
+
+
+def _destroy(args):
+    from .deploy import destroy, load_config
+
+    cfg = load_config(os.getcwd())
+    function_name = args.function or cfg.get("function")
+    if not function_name:
+        raise SystemExit("Function name required: pass --function or add `function` to [deploy] in cordless.toml.")
+    role_name = args.role_name or cfg.get("role_name") or f"{function_name}-role"
+    region = args.region or cfg.get("region") or os.environ.get("AWS_DEFAULT_REGION")
+    defer_worker = args.defer_worker or cfg.get("defer_worker")
+    destroy(function_name=function_name, role_name=role_name, region=region, defer_worker=defer_worker)
 
 
 def _logs(args):
@@ -195,7 +228,16 @@ def main(argv=None):
     deploy_cmd.add_argument("--defer-worker", metavar="NAME", help="Name of the worker Lambda for deferred commands (also set via cordless.toml defer_worker)")
     deploy_cmd.add_argument("--defer-handler", metavar="HANDLER", default=None, help="Worker handler string (default: lambda_function.worker_handler)")
     deploy_cmd.add_argument("--defer-timeout", metavar="SECONDS", default=None, help="Worker Lambda timeout in seconds (default: 30)")
+    deploy_cmd.add_argument("--register", metavar="MODULE:ATTRIBUTE", default=None, help="Register slash commands after deploy (e.g. app:bot); reads credentials from $DISCORD_BOT_TOKEN or $DISCORD_CLIENT_ID/$DISCORD_CLIENT_SECRET")
     deploy_cmd.set_defaults(func=_deploy)
+
+    # destroy
+    destroy_cmd = subparsers.add_parser("destroy", help="Delete the Lambda function(s), API Gateway, and IAM role for a deployed bot")
+    destroy_cmd.add_argument("--function", "-f", default=None, metavar="FUNCTION", help="Lambda function name (defaults to `function` in cordless.toml)")
+    destroy_cmd.add_argument("--role-name", metavar="NAME", default=None, help="IAM role name (default: <function>-role)")
+    destroy_cmd.add_argument("--region", "-r", default=None, metavar="REGION", help="AWS region")
+    destroy_cmd.add_argument("--defer-worker", metavar="NAME", default=None, help="Worker Lambda to also delete")
+    destroy_cmd.set_defaults(func=_destroy)
 
     # logs
     logs_cmd = subparsers.add_parser("logs", help="Tail CloudWatch logs for a deployed Lambda function")

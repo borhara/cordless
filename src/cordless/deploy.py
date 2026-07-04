@@ -96,21 +96,26 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
     return tmp.name
 
 
-def ensure_iam_role(iam, role_name):
+def ensure_iam_role(iam, role_name, extra_policies=None):
+    existing = True
     try:
-        return iam.get_role(RoleName=role_name)["Role"]["Arn"]
+        role_arn = iam.get_role(RoleName=role_name)["Role"]["Arn"]
     except iam.exceptions.NoSuchEntityException:
-        pass
+        existing = False
 
-    role_arn = iam.create_role(
-        RoleName=role_name,
-        AssumeRolePolicyDocument=_LAMBDA_TRUST_POLICY,
-    )["Role"]["Arn"]
+    if not existing:
+        role_arn = iam.create_role(
+            RoleName=role_name,
+            AssumeRolePolicyDocument=_LAMBDA_TRUST_POLICY,
+        )["Role"]["Arn"]
+        iam.attach_role_policy(RoleName=role_name, PolicyArn=_LAMBDA_BASIC_EXECUTION_POLICY)
 
-    iam.attach_role_policy(RoleName=role_name, PolicyArn=_LAMBDA_BASIC_EXECUTION_POLICY)
+    for arn in (extra_policies or []):
+        iam.attach_role_policy(RoleName=role_name, PolicyArn=arn)
 
-    # IAM is eventually consistent — Lambda rejects a brand-new role for ~10 s
-    time.sleep(12)
+    if not existing:
+        # IAM is eventually consistent — Lambda rejects a brand-new role for ~10 s
+        time.sleep(12)
 
     return role_arn
 
@@ -239,7 +244,7 @@ def _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account
         SourceArn=source_arn,
     )
 
-    return f"{endpoint}/"
+    return endpoint
 
 
 def _allow_worker_invoke(iam, role_name, worker_arn):
@@ -259,7 +264,8 @@ def _allow_worker_invoke(iam, role_name, worker_arn):
 
 def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, env, region,
            timeout=10, bundle_cordless=False, packages=None, python_version="3.12",
-           defer_worker=None, defer_handler="lambda_function.worker_handler", defer_timeout=30, defer_memory=256):
+           defer_worker=None, defer_handler="lambda_function.worker_handler", defer_timeout=30, defer_memory=256,
+           policies=None):
     if not function_name:
         raise SystemExit("Function name is required — pass --function or set [deploy] function in cordless.toml")
 
@@ -275,12 +281,13 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
     print()
 
     with Spinner("IAM role"):
-        role_arn = ensure_iam_role(iam, role_name)
+        role_arn = ensure_iam_role(iam, role_name, extra_policies=policies)
 
     if bundle_cordless:
-        layer_arn = None
+        with Spinner(f"cordless  {_cordless_version()} (local)"):
+            layer_arn = None
     else:
-        with Spinner("cordless layer"):
+        with Spinner(f"cordless layer  {_cordless_version()}"):
             layer_arn = _publish_cordless_layer(lam, layer_name)
 
     with Spinner("packaging"):
@@ -319,3 +326,45 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
             lam.get_waiter("function_updated").wait(FunctionName=function_name)
 
     success(url)
+    return url
+
+
+def destroy(function_name, role_name, region, defer_worker=None):
+    if not function_name:
+        raise SystemExit("Function name is required — pass --function or set [deploy] function in cordless.toml")
+
+    from ._aws import get_session
+    from ._progress import Spinner
+
+    session = get_session(region)
+    iam = session.client("iam")
+    lam = session.client("lambda")
+    apigw = session.client("apigatewayv2")
+
+    print()
+
+    api_name = f"{function_name}-api"
+    with Spinner(f"API Gateway  {api_name}"):
+        apis = apigw.get_apis().get("Items", [])
+        existing = next((a for a in apis if a["Name"] == api_name), None)
+        if existing:
+            apigw.delete_api(ApiId=existing["ApiId"])
+
+    for fn in ([function_name] + ([defer_worker] if defer_worker else [])):
+        with Spinner(f"Lambda  {fn}"):
+            try:
+                lam.delete_function(FunctionName=fn)
+            except lam.exceptions.ResourceNotFoundException:
+                pass
+
+    with Spinner(f"IAM role  {role_name}"):
+        try:
+            for policy in iam.list_attached_role_policies(RoleName=role_name).get("AttachedPolicies", []):
+                iam.detach_role_policy(RoleName=role_name, PolicyArn=policy["PolicyArn"])
+            for policy in iam.list_role_policies(RoleName=role_name).get("PolicyNames", []):
+                iam.delete_role_policy(RoleName=role_name, PolicyName=policy)
+            iam.delete_role(RoleName=role_name)
+        except iam.exceptions.NoSuchEntityException:
+            pass
+
+    print(f"  ✓ destroyed {function_name}")
