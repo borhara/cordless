@@ -2,6 +2,7 @@ import asyncio
 import base64
 import inspect
 import json
+import re
 
 from .context import Context
 from .errors import CordlessError
@@ -21,6 +22,41 @@ _OPTION_TYPES = {
     "number": 10,
     "attachment": 11,
 }
+
+_ANNOTATION_TYPES = {str: 3, int: 4, bool: 5, float: 10}
+
+_NAME_RE = re.compile(r"[a-z0-9_-]{1,32}")
+
+
+def _validate_command_name(name):
+    """Fail at decoration time instead of with a cryptic Discord API error at register time."""
+    for part in name.split("/"):
+        if not _NAME_RE.fullmatch(part):
+            raise ValueError(
+                f"Invalid command name {name!r}: Discord requires 1-32 lowercase letters, digits, - or _"
+            )
+
+
+def options_from_signature(func):
+    """Infer Discord option dicts from a handler's type hints.
+
+    async def buy(ctx, item: str, qty: int = 1) →
+    a required string option "item" and an optional integer option "qty".
+    """
+    params = list(inspect.signature(func).parameters.values())[1:]  # skip ctx
+    options = []
+    for p in params:
+        if p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD):
+            continue
+        opt = {
+            "name": p.name,
+            "description": "No description provided.",
+            "type": _ANNOTATION_TYPES.get(p.annotation, 3),
+        }
+        if p.default is inspect.Parameter.empty:
+            opt["required"] = True
+        options.append(opt)
+    return options
 
 
 def option(name, description="No description provided.", *, type="string", required=False,
@@ -53,9 +89,13 @@ class Cordless:
     def __init__(self, public_key=None):
         self.router = Router()
         self.public_key = public_key
+        self.crons = {}
 
     def command(self, name, description="No description provided.", options=None, defer=False, dm_permission=True):
+        _validate_command_name(name)
+
         def decorator(func):
+            _options = options if options is not None else options_from_signature(func)
             if defer:
                 func._defer = True
                 # Importing defer.py here (at decorator-application time, i.e. Lambda INIT)
@@ -65,7 +105,7 @@ class Cordless:
                     from . import defer as _defer_mod  # noqa: F401
                 except Exception:
                     pass
-            self.router.register_command(name, func, description=description, options=options, dm_permission=dm_permission)
+            self.router.register_command(name, func, description=description, options=_options, dm_permission=dm_permission)
             return func
 
         return decorator
@@ -77,8 +117,28 @@ class Cordless:
 
     def handler(self):
         def _handler(event, context=None):
+            cron_name = (event or {}).get("_cordless_cron")
+            if cron_name:
+                return self.run_cron(cron_name)
             return self.handle(event, context)
         return _handler
+
+    def cron(self, schedule, name=None):
+        """Register a scheduled handler; `cordless deploy` wires it to EventBridge.
+
+        `schedule` is an EventBridge expression, e.g. "rate(1 day)" or
+        "cron(0 12 * * ? *)". The handler takes no arguments.
+        """
+        def decorator(func):
+            self.crons[name or func.__name__] = {"schedule": schedule, "handler": func}
+            return func
+        return decorator
+
+    def run_cron(self, name):
+        entry = self.crons.get(name)
+        if entry is None:
+            raise CordlessError(f"Unknown cron: {name}")
+        return asyncio.run(entry["handler"]())
 
     def button(self, custom_id, defer=False):
         def decorator(func):
@@ -150,7 +210,10 @@ class Cordless:
             if not verify_signature(self.public_key, signature, timestamp, body):
                 return _json_response(401, {"error": "invalid request signature"})
 
-        interaction = json.loads(body)
+        try:
+            interaction = json.loads(body)
+        except (ValueError, TypeError):
+            return _json_response(400, {"error": "invalid JSON body"})
 
         if interaction.get("type") == PING:
             return _json_response(200, {"type": PING})
@@ -184,10 +247,14 @@ class Cordless:
                         from . import defer as _defer_mod  # noqa: F401
                     except Exception:
                         pass
+                _validate_command_name(method._cog_name)
+                cog_options = method._cog_options
+                if cog_options is None:
+                    cog_options = options_from_signature(method)
                 self.router.register_command(
                     method._cog_name, method,
                     description=method._cog_description,
-                    options=method._cog_options,
+                    options=cog_options,
                     dm_permission=method._cog_dm_permission,
                 )
             elif ctype == "button":

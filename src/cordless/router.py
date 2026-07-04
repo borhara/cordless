@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 
 from .errors import (
     CordlessError,
@@ -175,19 +176,17 @@ class Router:
                 except Exception:
                     traceback.print_exc()
                 return ctx.response
-            return await _invoke(handler, ctx, f"Command '{key}'")
+            return await _invoke(handler, ctx, f"Command '{key}'", pass_options=True)
 
         if itype == MESSAGE_COMPONENT:
             cid = interaction["data"]["custom_id"]
             component_type = interaction["data"].get("component_type", 2)
             if component_type == 2:
-                handler = self.buttons.get(cid)
-                if not handler:
-                    handler = self.buttons.get(cid.split(":")[0])
+                handler = _prefix_lookup(self.buttons, cid, ctx)
                 if not handler:
                     raise UnknownButtonError(f"Unknown button: {cid}")
             else:
-                handler = self.selects.get(cid)
+                handler = _prefix_lookup(self.selects, cid, ctx)
                 if not handler:
                     raise UnknownComponentError(f"Unknown select: {cid}")
 
@@ -219,7 +218,7 @@ class Router:
 
         if itype == MODAL_SUBMIT:
             cid = interaction["data"]["custom_id"]
-            handler = self.modals.get(cid)
+            handler = _prefix_lookup(self.modals, cid, ctx)
             if not handler:
                 raise UnknownModalError(f"Unknown modal: {cid}")
             return await _invoke(handler, ctx, f"Modal '{cid}'")
@@ -256,14 +255,31 @@ def _focused_option_name(data):
     return None
 
 
-async def _invoke(handler, ctx, description):
+def _prefix_lookup(registry, cid, ctx):
+    """Match "shop:item1" to a "shop" handler; suffix segments land on ctx.custom_id_args."""
+    handler = registry.get(cid)
+    if handler is None and ":" in cid:
+        prefix, *args = cid.split(":")
+        handler = registry.get(prefix)
+        if handler is not None:
+            ctx.custom_id_args = args
+    return handler
+
+
+async def _invoke(handler, ctx, description, pass_options=False):
     guard = getattr(handler, "_guard", None)
     if guard is not None:
         result = guard(ctx)
         if asyncio.iscoroutine(result):
             await result
 
-    result = await handler(ctx)
+    kwargs = {}
+    if pass_options and ctx.options:
+        # Handlers may declare options as parameters: async def buy(ctx, item: str, qty: int = 1)
+        params = list(inspect.signature(handler).parameters)
+        kwargs = {name: ctx.options[name] for name in params[1:] if name in ctx.options}
+
+    result = await handler(ctx, **kwargs)
     response = result if result is not None else ctx.response
 
     if response is None:

@@ -28,7 +28,7 @@ def cog_command(name, description="No description provided.", options=None,
         func._cog_type = "command"
         func._cog_name = name
         func._cog_description = description
-        func._cog_options = options or []
+        func._cog_options = options
         func._cog_defer = defer
         func._cog_dm_permission = dm_permission
         return func
