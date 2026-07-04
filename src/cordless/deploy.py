@@ -1,17 +1,21 @@
+import hashlib
 import json
 import os
 import tempfile
 import time
+import tomllib
 import zipfile
 
-try:
-    import tomllib
-except ImportError:
-    tomllib = None
-
-_EXCLUDE_DIRS = {"__pycache__", ".venv", "venv", ".git", "node_modules", ".mypy_cache", ".ruff_cache"}
-_EXCLUDE_FILES = {".env", "cordless.toml"}
+_EXCLUDE_DIRS = {
+    "__pycache__", ".venv", "venv", ".git", "node_modules", ".mypy_cache",
+    ".ruff_cache", ".pytest_cache", ".idea", ".vscode", "dist", "build", ".tox",
+}
+_EXCLUDE_FILES = {".env", "cordless.toml", ".DS_Store"}
 _EXCLUDE_SUFFIXES = (".pyc", ".pyo")
+
+
+def _exclude_dir(d):
+    return d in _EXCLUDE_DIRS or d.endswith(".egg-info")
 
 _LAMBDA_TRUST_POLICY = json.dumps({
     "Version": "2012-10-17",
@@ -25,8 +29,6 @@ _LAMBDA_BASIC_EXECUTION_POLICY = "arn:aws:iam::aws:policy/service-role/AWSLambda
 
 
 def load_config(source_dir):
-    if tomllib is None:
-        return {}
     path = os.path.join(source_dir, "cordless.toml")
     if not os.path.exists(path):
         return {}
@@ -39,7 +41,7 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
     tmp.close()
     with zipfile.ZipFile(tmp.name, "w", zipfile.ZIP_DEFLATED) as zf:
         for root, dirs, files in os.walk(source_dir):
-            dirs[:] = [d for d in dirs if d not in _EXCLUDE_DIRS]
+            dirs[:] = [d for d in dirs if not _exclude_dir(d)]
             for fname in files:
                 if fname in _EXCLUDE_FILES or fname.endswith(_EXCLUDE_SUFFIXES):
                     continue
@@ -59,41 +61,74 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                     zf.write(abs_path, os.path.relpath(abs_path, pkg_parent))
 
         if packages:
-            import subprocess, sys, shutil
-            abi = "cp" + python_version.replace(".", "")
-            # uv venvs don't ship pip — search PATH excluding the active venv
-            venv = os.environ.get("VIRTUAL_ENV", "")
-            search_path = os.pathsep.join(
-                d for d in os.environ.get("PATH", "").split(os.pathsep)
-                if not (venv and d.startswith(venv))
-            )
-            python = shutil.which("python3", path=search_path) or shutil.which("python", path=search_path) or sys.executable
-            with tempfile.TemporaryDirectory() as pkg_tmp:
-                result = subprocess.run(
-                    [
-                        python, "-m", "pip", "install",
-                        "--target", pkg_tmp,
-                        "--platform", "manylinux2014_x86_64",
-                        "--python-version", python_version,
-                        "--implementation", "cp",
-                        "--abi", abi,
-                        "--only-binary", ":all:",
-                        "--no-compile",
-                        *packages,
-                    ],
-                    capture_output=True,
-                )
-                if result.returncode != 0:
-                    raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
-                for root, dirs, files in os.walk(pkg_tmp):
-                    dirs[:] = [d for d in dirs if d != "__pycache__"]
-                    for fname in files:
-                        if fname.endswith(".pyc"):
-                            continue
-                        abs_path = os.path.join(root, fname)
-                        zf.write(abs_path, os.path.relpath(abs_path, pkg_tmp))
+            pkg_dir = _ensure_packages(packages, python_version)
+            for root, dirs, files in os.walk(pkg_dir):
+                dirs[:] = [d for d in dirs if d != "__pycache__"]
+                for fname in files:
+                    if fname.endswith(".pyc"):
+                        continue
+                    abs_path = os.path.join(root, fname)
+                    zf.write(abs_path, os.path.relpath(abs_path, pkg_dir))
 
     return tmp.name
+
+
+def _packages_cache_dir(packages, python_version):
+    key = hashlib.sha256(json.dumps([sorted(packages), python_version]).encode()).hexdigest()[:16]
+    return os.path.join(os.path.expanduser("~"), ".cache", "cordless", "packages", key)
+
+
+def _ensure_packages(packages, python_version):
+    """pip-install Lambda-compatible wheels, cached across deploys.
+
+    The cache key is the exact packages list + python version, so unpinned
+    specs (e.g. "pillow") stay at whatever version was first installed until
+    the list changes or ~/.cache/cordless is cleared.
+    """
+    cache_dir = _packages_cache_dir(packages, python_version)
+    if os.path.isdir(cache_dir) and os.listdir(cache_dir):
+        return cache_dir
+
+    import shutil
+    import subprocess
+    import sys
+
+    abi = "cp" + python_version.replace(".", "")
+    # uv venvs don't ship pip — search PATH excluding the active venv
+    venv = os.environ.get("VIRTUAL_ENV", "")
+    search_path = os.pathsep.join(
+        d for d in os.environ.get("PATH", "").split(os.pathsep)
+        if not (venv and d.startswith(venv))
+    )
+    python = shutil.which("python3", path=search_path) or shutil.which("python", path=search_path) or sys.executable
+
+    os.makedirs(os.path.dirname(cache_dir), exist_ok=True)
+    staging = tempfile.mkdtemp(dir=os.path.dirname(cache_dir))
+    try:
+        result = subprocess.run(
+            [
+                python, "-m", "pip", "install",
+                "--target", staging,
+                "--platform", "manylinux2014_x86_64",
+                "--python-version", python_version,
+                "--implementation", "cp",
+                "--abi", abi,
+                "--only-binary", ":all:",
+                "--no-compile",
+                *packages,
+            ],
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
+        try:
+            os.rename(staging, cache_dir)
+        except OSError:
+            shutil.rmtree(staging, ignore_errors=True)  # concurrent deploy won the race
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    return cache_dir
 
 
 def ensure_iam_role(iam, role_name, extra_policies=None):
@@ -112,10 +147,6 @@ def ensure_iam_role(iam, role_name, extra_policies=None):
 
     for arn in (extra_policies or []):
         iam.attach_role_policy(RoleName=role_name, PolicyArn=arn)
-
-    if not existing:
-        # IAM is eventually consistent — Lambda rejects a brand-new role for ~10 s
-        time.sleep(12)
 
     return role_arn
 
@@ -166,24 +197,35 @@ def _env_vars(env):
     return {"Variables": env} if env else {}
 
 
-def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn, env, timeout=10, memory_size=128):
+def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn, env, timeout=10, memory_size=256):
     with open(zip_path, "rb") as f:
-        resp = lam.create_function(
-            FunctionName=function_name,
-            Runtime=runtime,
-            Role=role_arn,
-            Handler=handler,
-            Code={"ZipFile": f.read()},
-            Layers=[layer_arn] if layer_arn else [],
-            Environment=_env_vars(env),
-            Timeout=timeout,
-            MemorySize=memory_size,
-        )
+        zip_bytes = f.read()
+
+    # IAM is eventually consistent — a brand-new role is rejected for ~5-10 s,
+    # so retry instead of sleeping a fixed worst-case delay up front
+    for attempt in range(15):
+        try:
+            resp = lam.create_function(
+                FunctionName=function_name,
+                Runtime=runtime,
+                Role=role_arn,
+                Handler=handler,
+                Code={"ZipFile": zip_bytes},
+                Layers=[layer_arn] if layer_arn else [],
+                Environment=_env_vars(env),
+                Timeout=timeout,
+                MemorySize=memory_size,
+            )
+            break
+        except lam.exceptions.InvalidParameterValueException as exc:
+            if "role" not in str(exc).lower() or attempt == 14:
+                raise
+            time.sleep(2)
     lam.get_waiter("function_active").wait(FunctionName=function_name)
     return resp["FunctionArn"]
 
 
-def _update_function(lam, function_name, zip_path, handler, layer_arn, env, timeout=10, memory_size=128):
+def _update_function(lam, function_name, zip_path, handler, runtime, layer_arn, env, timeout=10, memory_size=256):
     with open(zip_path, "rb") as f:
         lam.update_function_code(FunctionName=function_name, ZipFile=f.read())
     lam.get_waiter("function_updated").wait(FunctionName=function_name)
@@ -191,6 +233,7 @@ def _update_function(lam, function_name, zip_path, handler, layer_arn, env, time
     lam.update_function_configuration(
         FunctionName=function_name,
         Handler=handler,
+        Runtime=runtime,
         Layers=[layer_arn] if layer_arn else [],
         Environment=_env_vars(env),
         Timeout=timeout,
@@ -263,9 +306,9 @@ def _allow_worker_invoke(iam, role_name, worker_arn):
 
 
 def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, env, region,
-           timeout=10, bundle_cordless=False, packages=None, python_version="3.12",
+           timeout=10, memory=256, bundle_cordless=False, packages=None, python_version="3.12",
            defer_worker=None, defer_handler="lambda_function.worker_handler", defer_timeout=30, defer_memory=256,
-           policies=None):
+           policies=None, crons=None):
     if not function_name:
         raise SystemExit("Function name is required — pass --function or set [deploy] function in cordless.toml")
 
@@ -298,9 +341,9 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
         verb = "updating" if exists else "creating"
         with Spinner(f"{verb}  {function_name}"):
             if exists:
-                _update_function(lam, function_name, zip_path, handler, layer_arn or "", env, timeout=timeout)
+                _update_function(lam, function_name, zip_path, handler, runtime, layer_arn or "", env, timeout=timeout, memory_size=memory)
             else:
-                function_arn = _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn or "", env, timeout=timeout)
+                function_arn = _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn or "", env, timeout=timeout, memory_size=memory)
 
         with Spinner("API Gateway"):
             url = _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id)
@@ -310,9 +353,11 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
             w_verb = "updating" if w_exists else "creating"
             with Spinner(f"{w_verb}  {defer_worker}"):
                 if w_exists:
-                    _update_function(lam, defer_worker, zip_path, defer_handler, layer_arn, {}, timeout=defer_timeout, memory_size=defer_memory)
+                    _update_function(lam, defer_worker, zip_path, defer_handler, runtime, layer_arn, env, timeout=defer_timeout, memory_size=defer_memory)
                 else:
-                    worker_arn = _create_function(lam, defer_worker, zip_path, role_arn, defer_handler, runtime, layer_arn, {}, timeout=defer_timeout, memory_size=defer_memory)
+                    worker_arn = _create_function(lam, defer_worker, zip_path, role_arn, defer_handler, runtime, layer_arn, env, timeout=defer_timeout, memory_size=defer_memory)
+                # deferred handlers aren't idempotent — never let Lambda re-run them on error
+                lam.put_function_event_invoke_config(FunctionName=defer_worker, MaximumRetryAttempts=0)
     finally:
         os.unlink(zip_path)
 
@@ -325,8 +370,38 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
             )
             lam.get_waiter("function_updated").wait(FunctionName=function_name)
 
+    if crons:
+        cron_target = defer_worker or function_name
+        _, cron_arn = _function_exists(lam, cron_target)
+        events = session.client("events")
+        with Spinner(f"cron schedules ({len(crons)})"):
+            _wire_crons(events, lam, function_name, cron_target, cron_arn, crons)
+
     success(url)
     return url
+
+
+def _wire_crons(events, lam, function_name, target_fn, target_arn, crons):
+    for name, schedule in crons.items():
+        rule_name = f"{function_name}-cron-{name}"
+        rule_arn = events.put_rule(Name=rule_name, ScheduleExpression=schedule)["RuleArn"]
+        events.put_targets(Rule=rule_name, Targets=[{
+            "Id": "cordless",
+            "Arn": target_arn,
+            "Input": json.dumps({"_cordless_cron": name}),
+        }])
+        statement_id = f"cordless-cron-{name}"
+        try:
+            lam.remove_permission(FunctionName=target_fn, StatementId=statement_id)
+        except lam.exceptions.ResourceNotFoundException:
+            pass
+        lam.add_permission(
+            FunctionName=target_fn,
+            StatementId=statement_id,
+            Action="lambda:InvokeFunction",
+            Principal="events.amazonaws.com",
+            SourceArn=rule_arn,
+        )
 
 
 def destroy(function_name, role_name, region, defer_worker=None):
@@ -340,6 +415,8 @@ def destroy(function_name, role_name, region, defer_worker=None):
     iam = session.client("iam")
     lam = session.client("lambda")
     apigw = session.client("apigatewayv2")
+    events = session.client("events")
+    logs = session.client("logs")
 
     print()
 
@@ -350,11 +427,23 @@ def destroy(function_name, role_name, region, defer_worker=None):
         if existing:
             apigw.delete_api(ApiId=existing["ApiId"])
 
+    with Spinner("cron schedules"):
+        rules = events.list_rules(NamePrefix=f"{function_name}-cron-").get("Rules", [])
+        for rule in rules:
+            target_ids = [t["Id"] for t in events.list_targets_by_rule(Rule=rule["Name"]).get("Targets", [])]
+            if target_ids:
+                events.remove_targets(Rule=rule["Name"], Ids=target_ids)
+            events.delete_rule(Name=rule["Name"])
+
     for fn in ([function_name] + ([defer_worker] if defer_worker else [])):
         with Spinner(f"Lambda  {fn}"):
             try:
                 lam.delete_function(FunctionName=fn)
             except lam.exceptions.ResourceNotFoundException:
+                pass
+            try:
+                logs.delete_log_group(logGroupName=f"/aws/lambda/{fn}")
+            except logs.exceptions.ResourceNotFoundException:
                 pass
 
     with Spinner(f"IAM role  {role_name}"):

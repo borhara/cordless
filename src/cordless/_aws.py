@@ -23,7 +23,7 @@ Once configured, re-run: cordless deploy
 """
 
 
-def get_session(region=None):
+def get_session(region=None, validate=True):
     try:
         import boto3
         from botocore.exceptions import ClientError, NoCredentialsError
@@ -34,6 +34,9 @@ def get_session(region=None):
         )
 
     session = boto3.Session(region_name=region)
+
+    if not validate:
+        return session
 
     try:
         session.client("sts").get_caller_identity()
