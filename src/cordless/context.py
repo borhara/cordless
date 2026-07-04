@@ -118,7 +118,9 @@ class Context:
         self.response = {"_cordless_followup": True}
         return self.response
 
-    async def edit(self, msg=None, *, content=None, embeds=None, components=None):
+    async def edit(self, msg=None, *, content=None, embeds=None, components=None, files=None):
+        if self._worker_mode:
+            return await self.followup(msg, content=content, embeds=embeds, components=components, files=files)
         _content = content if content is not None else msg
         data = {}
         if _content is not None:

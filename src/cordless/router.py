@@ -267,6 +267,8 @@ async def _invoke(handler, ctx, description):
     response = result if result is not None else ctx.response
 
     if response is None:
+        if ctx._worker_mode:
+            return None  # deferred handler did nothing — Discord keeps the message as-is
         raise NoResponseError(f"{description} handler never called ctx.send/edit/defer nor returned a response")
 
     return response
