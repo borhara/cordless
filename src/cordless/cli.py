@@ -4,13 +4,13 @@ import os
 import sys
 
 
-def _load_bot(target):
+def _load_bot(target, path=None):
     module_name, _, attr = target.partition(":")
 
     if not attr:
         raise SystemExit(f"Expected MODULE:ATTRIBUTE (e.g. app:bot), got: {target}")
 
-    sys.path.insert(0, os.getcwd())
+    sys.path.insert(0, path or os.getcwd())
     module = importlib.import_module(module_name)
 
     try:
@@ -19,13 +19,21 @@ def _load_bot(target):
         raise SystemExit(f"Module '{module_name}' has no attribute '{attr}'")
 
 
+def _pick(*values):
+    """First value that is not None — unlike `or`, 0 and "" survive."""
+    for v in values:
+        if v is not None:
+            return v
+    return None
+
+
 def _register(args):
     from .deploy import load_config
     toml_env = load_config(os.getcwd()).get("env", {})
 
     token = args.token
     client_id = args.client_id or toml_env.get("DISCORD_CLIENT_ID")
-    client_secret = args.client_secret
+    client_secret = args.client_secret or toml_env.get("DISCORD_CLIENT_SECRET")
 
     if not token and not (client_id and client_secret):
         raise SystemExit(
@@ -79,6 +87,13 @@ def _deploy(args):
     function_name = args.function or cfg.get("function")
     runtime = args.runtime or cfg.get("runtime", "python3.12")
     defer_worker = args.defer_worker or cfg.get("defer_worker")
+
+    # Loading the bot is only needed for cron schedules and --register;
+    # `bot` in cordless.toml (e.g. "lambda_function:bot") enables both.
+    bot_target = args.register or cfg.get("bot")
+    bot = _load_bot(bot_target, path=source_dir) if bot_target else None
+    crons = {name: entry["schedule"] for name, entry in bot.crons.items()} if bot else None
+
     deploy(
         function_name=function_name,
         role_name=args.role_name or cfg.get("role_name") or f"{function_name}-role",
@@ -88,28 +103,29 @@ def _deploy(args):
         layer_name=args.layer_name or cfg.get("layer_name", "cordless"),
         env={**cfg.get("env", {}), **env},
         region=args.region or cfg.get("region") or os.environ.get("AWS_DEFAULT_REGION"),
-        timeout=int(args.timeout or cfg.get("timeout", 10)),
+        timeout=int(_pick(args.timeout, cfg.get("timeout"), 10)),
+        memory=int(cfg.get("memory", 256)),
         bundle_cordless=args.bundle_cordless or cfg.get("bundle_cordless", False),
         packages=cfg.get("packages"),
         python_version=runtime.replace("python", ""),
         defer_worker=defer_worker,
         defer_handler=args.defer_handler or cfg.get("defer_handler", "lambda_function.worker_handler"),
-        defer_timeout=int(args.defer_timeout or cfg.get("defer_timeout", 30)),
+        defer_timeout=int(_pick(args.defer_timeout, cfg.get("defer_timeout"), 30)),
         defer_memory=int(cfg.get("defer_memory", 256)),
         policies=cfg.get("policies"),
+        crons=crons,
     )
 
     if args.register:
         toml_env = cfg.get("env", {})
         token = os.environ.get("DISCORD_BOT_TOKEN")
         client_id = os.environ.get("DISCORD_CLIENT_ID") or toml_env.get("DISCORD_CLIENT_ID")
-        client_secret = os.environ.get("DISCORD_CLIENT_SECRET")
+        client_secret = os.environ.get("DISCORD_CLIENT_SECRET") or toml_env.get("DISCORD_CLIENT_SECRET")
         if not token and not (client_id and client_secret):
             raise SystemExit(
                 "--register requires $DISCORD_BOT_TOKEN, "
                 "or both $DISCORD_CLIENT_ID and $DISCORD_CLIENT_SECRET"
             )
-        bot = _load_bot(args.register)
         commands = bot.sync_commands(
             bot_token=token,
             client_id=client_id,
@@ -129,7 +145,65 @@ def _destroy(args):
     role_name = args.role_name or cfg.get("role_name") or f"{function_name}-role"
     region = args.region or cfg.get("region") or os.environ.get("AWS_DEFAULT_REGION")
     defer_worker = args.defer_worker or cfg.get("defer_worker")
+
+    if not args.yes:
+        targets = f"function '{function_name}'" + (f", worker '{defer_worker}'" if defer_worker else "")
+        answer = input(f"Delete {targets}, its API Gateway, logs, and role '{role_name}'? [y/N] ")
+        if answer.strip().lower() not in ("y", "yes"):
+            raise SystemExit("Aborted.")
+
     destroy(function_name=function_name, role_name=role_name, region=region, defer_worker=defer_worker)
+
+
+_INIT_LAMBDA = '''\
+import os
+
+from cordless import Cordless
+
+bot = Cordless(public_key=os.environ.get("DISCORD_PUBLIC_KEY"))
+
+
+@bot.command("ping", description="Check the bot is alive")
+async def ping(ctx):
+    await ctx.send("pong")
+
+
+handler = bot.handler()
+'''
+
+_INIT_TOML = '''\
+[deploy]
+function = "{name}"
+bot = "lambda_function:bot"
+# region = "eu-west-2"
+
+[deploy.env]
+DISCORD_PUBLIC_KEY = ""
+'''
+
+_INIT_ENV = '''\
+# Discord Developer Portal -> your app -> General Information
+DISCORD_PUBLIC_KEY=
+DISCORD_CLIENT_ID=
+DISCORD_BOT_TOKEN=
+'''
+
+
+def _init(args):
+    name = args.name or os.path.basename(os.getcwd())
+    files = {
+        "lambda_function.py": _INIT_LAMBDA,
+        "cordless.toml": _INIT_TOML.format(name=name),
+        ".env.example": _INIT_ENV,
+    }
+    for fname, content in files.items():
+        if os.path.exists(fname):
+            print(f"  - {fname} already exists, skipped")
+            continue
+        with open(fname, "w") as f:
+            f.write(content)
+        print(f"  ✓ {fname}")
+    print(f"\nNext: fill in DISCORD_PUBLIC_KEY in cordless.toml, then run `cordless deploy`")
 
 
 def _logs(args):
@@ -148,7 +222,9 @@ def _logs(args):
             "or add `region` to [deploy] in cordless.toml."
         )
 
-    session = get_session(region)
+    # Skip the STS validation round-trip — a credentials problem surfaces
+    # on the first CloudWatch call anyway
+    session = get_session(region, validate=False)
     cw = session.client("logs")
     log_group = f"/aws/lambda/{function}"
     start_ms = int((time.time() - args.since * 60) * 1000)
@@ -178,7 +254,12 @@ def _logs(args):
             kwargs["nextToken"] = token
         return latest
 
-    latest_ms = fetch_and_print(start_ms)
+    from botocore.exceptions import NoCredentialsError
+    try:
+        latest_ms = fetch_and_print(start_ms)
+    except NoCredentialsError:
+        from ._aws import _NO_CREDENTIALS_MSG
+        raise SystemExit(_NO_CREDENTIALS_MSG)
     if args.follow:
         print("  --- following (Ctrl+C to stop) ---", flush=True)
         try:
@@ -232,12 +313,18 @@ def main(argv=None):
     deploy_cmd.set_defaults(func=_deploy)
 
     # destroy
-    destroy_cmd = subparsers.add_parser("destroy", help="Delete the Lambda function(s), API Gateway, and IAM role for a deployed bot")
+    destroy_cmd = subparsers.add_parser("destroy", help="Delete the Lambda function(s), API Gateway, cron rules, logs, and IAM role for a deployed bot")
     destroy_cmd.add_argument("--function", "-f", default=None, metavar="FUNCTION", help="Lambda function name (defaults to `function` in cordless.toml)")
     destroy_cmd.add_argument("--role-name", metavar="NAME", default=None, help="IAM role name (default: <function>-role)")
     destroy_cmd.add_argument("--region", "-r", default=None, metavar="REGION", help="AWS region")
     destroy_cmd.add_argument("--defer-worker", metavar="NAME", default=None, help="Worker Lambda to also delete")
+    destroy_cmd.add_argument("--yes", "-y", action="store_true", help="Skip the confirmation prompt")
     destroy_cmd.set_defaults(func=_destroy)
+
+    # init
+    init_cmd = subparsers.add_parser("init", help="Scaffold a new cordless bot in the current directory")
+    init_cmd.add_argument("name", nargs="?", default=None, help="Function name (default: current directory name)")
+    init_cmd.set_defaults(func=_init)
 
     # logs
     logs_cmd = subparsers.add_parser("logs", help="Tail CloudWatch logs for a deployed Lambda function")
