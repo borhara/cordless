@@ -59,10 +59,15 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                     zf.write(abs_path, os.path.relpath(abs_path, pkg_parent))
 
         if packages:
-            import subprocess, sys, shutil
+            import subprocess, sys, shutil, os
             abi = "cp" + python_version.replace(".", "")
-            # uv venvs don't ship pip — prefer system python3 which does
-            python = shutil.which("python3") or shutil.which("python") or sys.executable
+            # uv venvs don't ship pip — search PATH excluding the active venv
+            venv = os.environ.get("VIRTUAL_ENV", "")
+            search_path = os.pathsep.join(
+                d for d in os.environ.get("PATH", "").split(os.pathsep)
+                if not (venv and d.startswith(venv))
+            )
+            python = shutil.which("python3", path=search_path) or shutil.which("python", path=search_path) or sys.executable
             with tempfile.TemporaryDirectory() as pkg_tmp:
                 subprocess.run(
                     [
