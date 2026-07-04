@@ -20,7 +20,14 @@ def _load_bot(target):
 
 
 def _register(args):
-    if not args.token and not (args.client_id and args.client_secret):
+    from .deploy import load_config
+    toml_env = load_config(os.getcwd()).get("env", {})
+
+    token = args.token
+    client_id = args.client_id or toml_env.get("DISCORD_CLIENT_ID")
+    client_secret = args.client_secret
+
+    if not token and not (client_id and client_secret):
         raise SystemExit(
             "Credentials required: pass --token (or set $DISCORD_BOT_TOKEN), "
             "or both --client-id/--client-secret (or $DISCORD_CLIENT_ID/$DISCORD_CLIENT_SECRET)"
@@ -28,9 +35,9 @@ def _register(args):
 
     bot = _load_bot(args.bot)
     commands = bot.sync_commands(
-        bot_token=args.token,
-        client_id=args.client_id,
-        client_secret=args.client_secret,
+        bot_token=token,
+        client_id=client_id,
+        client_secret=client_secret,
         guild_id=args.guild_id,
     )
 
