@@ -102,6 +102,45 @@ def test_base64_encoded_body_is_decoded_before_verification():
     assert result["statusCode"] == 200
 
 
+def test_pure_python_fallback_accepts_valid_signature(monkeypatch):
+    import cordless.verify
+    monkeypatch.setattr(cordless.verify, "VerifyKey", None)
+
+    signing_key = SigningKey.generate()
+    public_key = signing_key.verify_key.encode().hex()
+
+    bot = Cordless(public_key=public_key)
+    body = json.dumps({"type": 1})
+
+    result = bot.handle(_signed_event(signing_key, body))
+    assert result["statusCode"] == 200
+
+
+def test_pure_python_fallback_rejects_invalid_signature(monkeypatch):
+    import cordless.verify
+    monkeypatch.setattr(cordless.verify, "VerifyKey", None)
+
+    signing_key = SigningKey.generate()
+    public_key = signing_key.verify_key.encode().hex()
+
+    bot = Cordless(public_key=public_key)
+    event = {
+        "headers": {
+            "X-Signature-Ed25519": "00" * 64,
+            "X-Signature-Timestamp": "1234567890",
+        },
+        "body": json.dumps({"type": 1}),
+    }
+
+    result = bot.handle(event)
+    assert result["statusCode"] == 401
+
+
+def test_nacl_fast_path_is_active_when_installed():
+    import cordless.verify
+    assert cordless.verify.VerifyKey is not None  # pynacl is a dev dep — fast path must be wired
+
+
 def test_no_public_key_skips_verification():
     bot = Cordless()
 

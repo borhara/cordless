@@ -1,5 +1,14 @@
 import hashlib
 
+# PyNaCl verifies in C at ~100x the speed of the pure-Python fallback below —
+# worth real milliseconds inside Discord's 3-second window on small Lambdas.
+# Opt in by adding "pynacl" to packages in cordless.toml.
+try:
+    from nacl.exceptions import BadSignatureError
+    from nacl.signing import VerifyKey
+except ImportError:
+    VerifyKey = None
+
 # Ed25519 curve parameters (RFC 8032)
 _P = 2**255 - 19
 _L = 2**252 + 27742317777372353535851937790883648493
@@ -75,6 +84,13 @@ def verify_signature(public_key, signature, timestamp, body):
 
     if len(pk_bytes) != 32 or len(sig_bytes) != 64:
         return False
+
+    if VerifyKey is not None:
+        try:
+            VerifyKey(pk_bytes).verify(f"{timestamp}{body}".encode(), sig_bytes)
+            return True
+        except (BadSignatureError, ValueError):
+            return False
 
     try:
         A = _point_decompress(pk_bytes)

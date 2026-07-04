@@ -113,6 +113,7 @@ def _ensure_packages(packages, python_version):
                 "--python-version", python_version,
                 "--implementation", "cp",
                 "--abi", abi,
+                "--abi", "abi3",  # accept stable-ABI wheels too (pynacl, cryptography, …)
                 "--only-binary", ":all:",
                 "--no-compile",
                 *packages,
