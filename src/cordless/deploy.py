@@ -159,7 +159,7 @@ def _env_vars(env):
     return {"Variables": env} if env else {}
 
 
-def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn, env, timeout=10):
+def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn, env, timeout=10, memory_size=128):
     with open(zip_path, "rb") as f:
         resp = lam.create_function(
             FunctionName=function_name,
@@ -170,12 +170,13 @@ def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, l
             Layers=[layer_arn] if layer_arn else [],
             Environment=_env_vars(env),
             Timeout=timeout,
+            MemorySize=memory_size,
         )
     lam.get_waiter("function_active").wait(FunctionName=function_name)
     return resp["FunctionArn"]
 
 
-def _update_function(lam, function_name, zip_path, handler, layer_arn, env, timeout=10):
+def _update_function(lam, function_name, zip_path, handler, layer_arn, env, timeout=10, memory_size=128):
     with open(zip_path, "rb") as f:
         lam.update_function_code(FunctionName=function_name, ZipFile=f.read())
     lam.get_waiter("function_updated").wait(FunctionName=function_name)
@@ -186,6 +187,7 @@ def _update_function(lam, function_name, zip_path, handler, layer_arn, env, time
         Layers=[layer_arn] if layer_arn else [],
         Environment=_env_vars(env),
         Timeout=timeout,
+        MemorySize=memory_size,
     )
     lam.get_waiter("function_updated").wait(FunctionName=function_name)
 
@@ -255,7 +257,7 @@ def _allow_worker_invoke(iam, role_name, worker_arn):
 
 def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, env, region,
            timeout=10, bundle_cordless=False, packages=None, python_version="3.12",
-           defer_worker=None, defer_handler="lambda_function.worker_handler", defer_timeout=30):
+           defer_worker=None, defer_handler="lambda_function.worker_handler", defer_timeout=30, defer_memory=256):
     if not function_name:
         raise SystemExit("Function name is required — pass --function or set [deploy] function in cordless.toml")
 
@@ -299,9 +301,9 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
             w_verb = "updating" if w_exists else "creating"
             with Spinner(f"{w_verb}  {defer_worker}"):
                 if w_exists:
-                    _update_function(lam, defer_worker, zip_path, defer_handler, layer_arn, {}, timeout=defer_timeout)
+                    _update_function(lam, defer_worker, zip_path, defer_handler, layer_arn, {}, timeout=defer_timeout, memory_size=defer_memory)
                 else:
-                    worker_arn = _create_function(lam, defer_worker, zip_path, role_arn, defer_handler, runtime, layer_arn, {}, timeout=defer_timeout)
+                    worker_arn = _create_function(lam, defer_worker, zip_path, role_arn, defer_handler, runtime, layer_arn, {}, timeout=defer_timeout, memory_size=defer_memory)
     finally:
         os.unlink(zip_path)
 

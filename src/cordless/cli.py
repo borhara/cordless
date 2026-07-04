@@ -95,6 +95,7 @@ def _deploy(args):
         defer_worker=defer_worker,
         defer_handler=args.defer_handler or cfg.get("defer_handler", "lambda_function.worker_handler"),
         defer_timeout=int(args.defer_timeout or cfg.get("defer_timeout", 30)),
+        defer_memory=int(cfg.get("defer_memory", 256)),
     )
 
 
