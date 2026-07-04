@@ -1,6 +1,6 @@
 import hashlib
 
-# PyNaCl verifies in C at ~100x the speed of the pure-Python fallback below —
+# PyNaCl verifies in C at ~100x the speed of the pure-Python fallback below,
 # worth real milliseconds inside Discord's 3-second window on small Lambdas.
 # Opt in by adding "pynacl" to packages in cordless.toml.
 try:

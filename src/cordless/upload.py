@@ -9,7 +9,7 @@ _LAMBDA_RUNTIMES = ["python3.10", "python3.11", "python3.12", "python3.13"]
 def _cordless_package_dir():
     spec = importlib.util.find_spec("cordless")
     if spec is None or spec.origin is None:
-        raise SystemExit("Cannot locate the cordless package — is it installed?")
+        raise SystemExit("Cannot locate the cordless package. Is it installed?")
     return os.path.dirname(spec.origin)
 
 

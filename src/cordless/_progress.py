@@ -1,4 +1,4 @@
-"""Minimal terminal spinner — no external dependencies."""
+"""Minimal terminal spinner, no external dependencies."""
 import sys
 import threading
 import time

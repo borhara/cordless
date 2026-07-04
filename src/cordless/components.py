@@ -44,7 +44,7 @@ class Button:
 
     def to_dict(self):
         d = {"type": 2, "style": self.style}
-        # Premium buttons (style 6) only take sku_id — no label, custom_id, or url
+        # premium buttons (style 6) only take sku_id, no label/custom_id/url
         if self.style == 6:
             d["sku_id"] = self.sku_id
             return d
@@ -215,7 +215,7 @@ class Modal:
         return {"custom_id": self.custom_id, "title": self.title, "components": rows}
 
 
-# Discord UI Kit (Components v2) — flag 32768 is set automatically when these are used
+# Discord UI Kit (Components v2). flag 32768 is set automatically when these are used
 
 class Container:
     is_ui_kit = True

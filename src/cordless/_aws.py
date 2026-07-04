@@ -11,7 +11,7 @@ No AWS credentials found. cordless looks for credentials in the standard places:
   2. ~/.aws/credentials file (via `aws configure`)
        Stores keys on disk with proper file permissions, not in shell history.
 
-  3. AWS IAM Identity Center (SSO) — recommended
+  3. AWS IAM Identity Center (SSO, recommended)
        Set up a profile with `aws configure sso`, then log in with:
        aws sso login --profile your-profile
        and set AWS_PROFILE=your-profile (or pass --profile to aws commands).

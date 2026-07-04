@@ -54,7 +54,7 @@ def sync_commands(commands, guild_id=None, bot_token=None, client_id=None, clien
     """Overwrite Discord's registered slash commands to match `commands`.
 
     Authenticate either with a bot token, or with a client id + secret via
-    OAuth2's client credentials grant — the latter needs no bot user at all,
+    OAuth2's client credentials grant. The latter needs no bot user at all,
     which suits apps that only ever respond to HTTP interactions. If both are
     given, the bot token wins.
 

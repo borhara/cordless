@@ -48,7 +48,7 @@ def test_handler_without_return_still_responds():
 
     @bot.command("ping")
     async def ping(ctx):
-        await ctx.send("pong")  # no return — common gotcha
+        await ctx.send("pong")  # no return, common gotcha
 
     result = _handle(bot, {"type": 2, "data": {"name": "ping"}})
     assert result["statusCode"] == 200

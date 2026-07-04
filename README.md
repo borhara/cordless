@@ -335,6 +335,32 @@ async def ban(ctx): ...
 
 ---
 
+## local development
+
+### cordless dev
+
+Run your bot locally with hot reload, no deploy needed:
+
+```bash
+cordless dev                       # uses `bot` from cordless.toml
+cordless dev lambda_function:bot   # or pass the target directly
+```
+
+If [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) is installed (`brew install cloudflared`), dev opens a free public tunnel and prints the URL. Paste it into your app's Interactions Endpoint URL and Discord talks to your local code with real, signed interactions. Edit a file, save, run the command again in Discord: changes apply instantly.
+
+Deferred handlers (`defer=True`) run in-process on a background thread, so the full defer flow works without a worker Lambda. `[deploy.env]` and any `.env` file are loaded into the environment automatically.
+
+```
+cordless dev
+  local   http://127.0.0.1:8787
+  public  https://random-words.trycloudflare.com
+
+  paste the public url into your app's Interactions Endpoint URL
+  watching for changes (ctrl+c to stop)
+```
+
+---
+
 ## deploying
 
 ### cordless init

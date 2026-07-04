@@ -94,7 +94,7 @@ def _ensure_packages(packages, python_version):
     import sys
 
     abi = "cp" + python_version.replace(".", "")
-    # uv venvs don't ship pip — search PATH excluding the active venv
+    # uv venvs don't ship pip, so search PATH excluding the active venv
     venv = os.environ.get("VIRTUAL_ENV", "")
     search_path = os.pathsep.join(
         d for d in os.environ.get("PATH", "").split(os.pathsep)
@@ -162,7 +162,7 @@ def _publish_cordless_layer(lam, layer_name, python_version=None):
 
     current_version = _cordless_version()
     # pynacl's cffi dependency is compiled per python version, so layers are
-    # runtime-specific — the description keys the reuse check on both
+    # runtime-specific. the description keys the reuse check on both
     description = f"cordless {current_version} (python{python_version})" if python_version else f"cordless {current_version}"
 
     try:
@@ -206,7 +206,7 @@ def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, l
     with open(zip_path, "rb") as f:
         zip_bytes = f.read()
 
-    # IAM is eventually consistent — a brand-new role is rejected for ~5-10 s,
+    # IAM is eventually consistent and a brand-new role gets rejected for ~5-10s,
     # so retry instead of sleeping a fixed worst-case delay up front
     for attempt in range(15):
         try:
@@ -315,7 +315,7 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
            defer_worker=None, defer_handler="lambda_function.worker_handler", defer_timeout=30, defer_memory=256,
            policies=None, crons=None):
     if not function_name:
-        raise SystemExit("Function name is required — pass --function or set [deploy] function in cordless.toml")
+        raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
 
     from ._aws import get_session
     from ._progress import Spinner, success
@@ -361,7 +361,7 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
                     _update_function(lam, defer_worker, zip_path, defer_handler, runtime, layer_arn, env, timeout=defer_timeout, memory_size=defer_memory)
                 else:
                     worker_arn = _create_function(lam, defer_worker, zip_path, role_arn, defer_handler, runtime, layer_arn, env, timeout=defer_timeout, memory_size=defer_memory)
-                # deferred handlers aren't idempotent — never let Lambda re-run them on error
+                # deferred handlers aren't idempotent, never let Lambda re-run them on error
                 lam.put_function_event_invoke_config(FunctionName=defer_worker, MaximumRetryAttempts=0)
     finally:
         os.unlink(zip_path)
@@ -411,7 +411,7 @@ def _wire_crons(events, lam, function_name, target_fn, target_arn, crons):
 
 def destroy(function_name, role_name, region, defer_worker=None):
     if not function_name:
-        raise SystemExit("Function name is required — pass --function or set [deploy] function in cordless.toml")
+        raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
 
     from ._aws import get_session
     from ._progress import Spinner

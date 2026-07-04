@@ -1,4 +1,4 @@
-"""Deferred interaction support — async Lambda invoke and Discord followup webhook."""
+"""Deferred interaction support: async Lambda invoke and Discord followup webhook."""
 import json
 import mimetypes
 import time

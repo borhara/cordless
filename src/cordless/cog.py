@@ -1,5 +1,5 @@
 """
-Cog support — split bot commands across multiple classes.
+Cog support: split bot commands across multiple classes.
 
 Usage:
     from cordless import Cog, cog_command, cog_button

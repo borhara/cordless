@@ -138,7 +138,7 @@ def test_pure_python_fallback_rejects_invalid_signature(monkeypatch):
 
 def test_nacl_fast_path_is_active_when_installed():
     import cordless.verify
-    assert cordless.verify.VerifyKey is not None  # pynacl is a dev dep — fast path must be wired
+    assert cordless.verify.VerifyKey is not None  # pynacl is a dev dep, fast path must be wired
 
 
 def test_no_public_key_skips_verification():

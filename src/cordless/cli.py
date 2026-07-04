@@ -20,7 +20,7 @@ def _load_bot(target, path=None):
 
 
 def _pick(*values):
-    """First value that is not None — unlike `or`, 0 and "" survive."""
+    """First value that is not None, so 0 and "" survive (unlike `or`)."""
     for v in values:
         if v is not None:
             return v
@@ -207,6 +207,20 @@ def _init(args):
     print(f"\nNext: fill in DISCORD_PUBLIC_KEY in cordless.toml, then run `cordless deploy`")
 
 
+def _dev(args):
+    from .deploy import load_config
+    from .dev import run_dev
+
+    source_dir = os.path.abspath(args.source)
+    target = args.bot or load_config(source_dir).get("bot")
+    if not target:
+        raise SystemExit(
+            "Bot location required: pass it as an argument (e.g. `cordless dev lambda_function:bot`) "
+            "or add `bot` to [deploy] in cordless.toml."
+        )
+    run_dev(target, port=args.port, tunnel=not args.no_tunnel, source_dir=source_dir)
+
+
 def _logs(args):
     import time
     from ._aws import get_session
@@ -223,7 +237,7 @@ def _logs(args):
             "or add `region` to [deploy] in cordless.toml."
         )
 
-    # Skip the STS validation round-trip — a credentials problem surfaces
+    # skip the STS validation round-trip, a credentials problem surfaces
     # on the first CloudWatch call anyway
     session = get_session(region, validate=False)
     cw = session.client("logs")
@@ -327,6 +341,14 @@ def main(argv=None):
     init_cmd = subparsers.add_parser("init", help="Scaffold a new cordless bot in the current directory")
     init_cmd.add_argument("name", nargs="?", default=None, help="Function name (default: current directory name)")
     init_cmd.set_defaults(func=_init)
+
+    # dev
+    dev_cmd = subparsers.add_parser("dev", help="Run your bot locally with hot reload and a public tunnel")
+    dev_cmd.add_argument("bot", nargs="?", default=None, help="Your Cordless instance as MODULE:ATTRIBUTE (defaults to `bot` in cordless.toml)")
+    dev_cmd.add_argument("--port", "-p", type=int, default=8787, help="Port to listen on (default: 8787)")
+    dev_cmd.add_argument("--source", "-s", default=".", metavar="DIR", help="Project directory (default: current directory)")
+    dev_cmd.add_argument("--no-tunnel", action="store_true", help="Serve on localhost only, skip cloudflared")
+    dev_cmd.set_defaults(func=_dev)
 
     # logs
     logs_cmd = subparsers.add_parser("logs", help="Tail CloudWatch logs for a deployed Lambda function")

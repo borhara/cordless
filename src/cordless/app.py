@@ -289,7 +289,7 @@ class Cordless:
         OAuth2 client credentials (no bot user required). Omit `guild_id`
         (the default) to register commands globally, for every guild that
         has authorized the app and every user in it. Run this from a deploy
-        step, not from inside the Lambda handler — it makes blocking network
+        step, not from inside the Lambda handler, since it makes blocking network
         calls to Discord's API.
         """
         return sync_commands(

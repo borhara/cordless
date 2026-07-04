@@ -146,7 +146,7 @@ class Context:
         return self.response
 
     async def defer_edit(self):
-        """Defer a component interaction — tells Discord we'll update this message async (type 6)."""
+        """Defer a component interaction: tells Discord we'll update this message async (type 6)."""
         self.response = _response({"type": _DEFERRED_UPDATE_MESSAGE})
         return self.response
 

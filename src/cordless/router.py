@@ -104,7 +104,7 @@ class Router:
                         "options": meta["options"],
                     })
                 elif len(parts) == 3:
-                    # parent/group/sub — group entries by group name
+                    # parent/group/sub, grouped by group name
                     group_name = parts[1]
                     sub_name = parts[2]
                     group = next((o for o in options if o["name"] == group_name), None)
@@ -167,9 +167,9 @@ class Router:
                 worker_fn = os.environ.get("CORDLESS_WORKER_FUNCTION")
                 if not worker_fn:
                     raise CordlessError(
-                        "CORDLESS_WORKER_FUNCTION is not set — add defer_worker to cordless.toml and run cordless deploy"
+                        "CORDLESS_WORKER_FUNCTION is not set: add defer_worker to cordless.toml and run cordless deploy"
                     )
-                # ACK Discord first — guarantees type 5 is returned even if invoke fails
+                # ACK Discord first so type 5 still goes back even if the invoke fails
                 await ctx.defer()
                 try:
                     invoke_worker(worker_fn, interaction)
@@ -197,7 +197,7 @@ class Router:
                 worker_fn = os.environ.get("CORDLESS_WORKER_FUNCTION")
                 if not worker_fn:
                     raise CordlessError(
-                        "CORDLESS_WORKER_FUNCTION is not set — add defer_worker to cordless.toml and run cordless deploy"
+                        "CORDLESS_WORKER_FUNCTION is not set: add defer_worker to cordless.toml and run cordless deploy"
                     )
                 await ctx.defer_edit()
                 try:
@@ -284,7 +284,7 @@ async def _invoke(handler, ctx, description, pass_options=False):
 
     if response is None:
         if ctx._worker_mode:
-            return None  # deferred handler did nothing — Discord keeps the message as-is
+            return None  # deferred handler did nothing, Discord keeps the message as-is
         raise NoResponseError(f"{description} handler never called ctx.send/edit/defer nor returned a response")
 
     return response
