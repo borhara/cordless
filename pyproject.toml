@@ -23,7 +23,9 @@ classifiers = [
 
 
 [project.urls]
-Homepage = "https://github.com/borhara/cordless"
+Homepage = "https://cordless.dev"
+Documentation = "https://cordless.dev"
+Repository = "https://github.com/borhara/cordless"
 
 
 [project.scripts]
