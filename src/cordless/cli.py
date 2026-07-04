@@ -60,6 +60,7 @@ def _upload(args):
         function_name=args.function,
         layer_name=args.layer_name,
         region=args.region,
+        python_version=args.runtime.replace("python", ""),
     )
 
 
@@ -288,6 +289,7 @@ def main(argv=None):
     upload.add_argument("--function", "-f", required=True, metavar="FUNCTION", help="Lambda function name or ARN")
     upload.add_argument("--layer-name", default="cordless", metavar="NAME", help="Layer name (default: cordless)")
     upload.add_argument("--region", "-r", default=os.environ.get("AWS_DEFAULT_REGION"), metavar="REGION", help="AWS region")
+    upload.add_argument("--runtime", default="python3.12", metavar="RUNTIME", help="Lambda runtime the layer targets (default: python3.12)")
     upload.set_defaults(func=_upload)
 
     # deploy

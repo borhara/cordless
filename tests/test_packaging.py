@@ -72,3 +72,49 @@ def test_packages_cache_key_varies_by_inputs():
     base = _packages_cache_dir(["pillow"], "3.12")
     assert _packages_cache_dir(["pillow"], "3.13") != base
     assert _packages_cache_dir(["pillow>=10"], "3.12") != base
+
+
+# --- layer zip ---
+
+def test_layer_zip_bundles_pynacl_extras(tmp_path, monkeypatch):
+    import cordless.upload
+
+    extras = tmp_path / "extras"
+    _make_tree(extras, ["nacl/signing.py", "nacl/_sodium.abi3.so"])
+    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v: str(extras))
+
+    zip_path = cordless.upload.build_layer_zip("3.12")
+    try:
+        names = _zip_names(zip_path)
+        assert "python/nacl/signing.py" in names
+        assert "python/nacl/_sodium.abi3.so" in names
+        assert any(n.startswith("python/cordless/") for n in names)
+    finally:
+        os.unlink(zip_path)
+
+
+def test_layer_zip_survives_pynacl_fetch_failure(monkeypatch):
+    import cordless.upload
+
+    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v: None)
+
+    zip_path = cordless.upload.build_layer_zip("3.12")
+    try:
+        names = _zip_names(zip_path)
+        assert any(n.startswith("python/cordless/") for n in names)
+        assert not any("/nacl/" in n for n in names)
+    finally:
+        os.unlink(zip_path)
+
+
+def test_layer_zip_without_runtime_skips_extras(monkeypatch):
+    import cordless.upload
+
+    called = []
+    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v: called.append(v))
+
+    zip_path = cordless.upload.build_layer_zip()
+    try:
+        assert called == []
+    finally:
+        os.unlink(zip_path)

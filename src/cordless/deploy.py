@@ -157,13 +157,14 @@ def _cordless_version():
     return version("cordless")
 
 
-def _publish_cordless_layer(lam, layer_name):
-    from .upload import build_layer_zip, _LAMBDA_RUNTIMES
+def _publish_cordless_layer(lam, layer_name, python_version=None):
+    from .upload import build_layer_zip
 
     current_version = _cordless_version()
-    description = f"cordless {current_version}"
+    # pynacl's cffi dependency is compiled per python version, so layers are
+    # runtime-specific — the description keys the reuse check on both
+    description = f"cordless {current_version} (python{python_version})" if python_version else f"cordless {current_version}"
 
-    # Reuse the existing layer version if it was built from the same cordless version
     try:
         versions = lam.list_layer_versions(LayerName=layer_name).get("LayerVersions", [])
         for v in versions:
@@ -172,14 +173,17 @@ def _publish_cordless_layer(lam, layer_name):
     except lam.exceptions.ResourceNotFoundException:
         pass
 
-    zip_path = build_layer_zip()
+    from .upload import _LAMBDA_RUNTIMES
+    runtimes = [f"python{python_version}"] if python_version else _LAMBDA_RUNTIMES
+
+    zip_path = build_layer_zip(python_version)
     try:
         with open(zip_path, "rb") as f:
             resp = lam.publish_layer_version(
                 LayerName=layer_name,
                 Description=description,
                 Content={"ZipFile": f.read()},
-                CompatibleRuntimes=_LAMBDA_RUNTIMES,
+                CompatibleRuntimes=runtimes,
             )
         return resp["LayerVersionArn"]
     finally:
@@ -332,7 +336,7 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
             layer_arn = None
     else:
         with Spinner(f"cordless layer  {_cordless_version()}"):
-            layer_arn = _publish_cordless_layer(lam, layer_name)
+            layer_arn = _publish_cordless_layer(lam, layer_name, python_version)
 
     with Spinner("packaging"):
         zip_path = build_function_zip(source_dir, bundle_cordless=bundle_cordless, packages=packages, python_version=python_version)

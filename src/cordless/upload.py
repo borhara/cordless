@@ -13,8 +13,18 @@ def _cordless_package_dir():
     return os.path.dirname(spec.origin)
 
 
-def build_layer_zip():
-    """Zip the cordless package in the python/ layout required by Lambda layers."""
+def _layer_extras_dir(python_version):
+    """Fetch pynacl (fast Ed25519 verify) for the layer; None means build without it."""
+    from .deploy import _ensure_packages
+    try:
+        return _ensure_packages(["pynacl"], python_version)
+    except Exception as exc:
+        print(f"  (pynacl unavailable, layer will use pure-python verify: {exc})")
+        return None
+
+
+def build_layer_zip(python_version=None):
+    """Zip cordless (plus pynacl, when fetchable) in the python/ layout Lambda layers require."""
     pkg_dir = _cordless_package_dir()
     site_dir = os.path.dirname(pkg_dir)
 
@@ -31,17 +41,28 @@ def build_layer_zip():
                 rel_path = os.path.relpath(abs_path, site_dir)
                 zf.write(abs_path, os.path.join("python", rel_path))
 
+        extras_dir = _layer_extras_dir(python_version) if python_version else None
+        if extras_dir:
+            for root, dirs, files in os.walk(extras_dir):
+                dirs[:] = [d for d in dirs if d != "__pycache__"]
+                for fname in files:
+                    if fname.endswith(".pyc"):
+                        continue
+                    abs_path = os.path.join(root, fname)
+                    rel_path = os.path.relpath(abs_path, extras_dir)
+                    zf.write(abs_path, os.path.join("python", rel_path))
+
     return tmp.name
 
 
-def upload(function_name, layer_name, region):
+def upload(function_name, layer_name, region, python_version=None):
     from ._aws import get_session
 
     session = get_session(region)
     lam = session.client("lambda")
 
     print("Building layer zip...", flush=True)
-    zip_path = build_layer_zip()
+    zip_path = build_layer_zip(python_version)
 
     try:
         print(f"Publishing layer '{layer_name}'...", flush=True)
@@ -49,7 +70,7 @@ def upload(function_name, layer_name, region):
             resp = lam.publish_layer_version(
                 LayerName=layer_name,
                 Content={"ZipFile": f.read()},
-                CompatibleRuntimes=_LAMBDA_RUNTIMES,
+                CompatibleRuntimes=[f"python{python_version}"] if python_version else _LAMBDA_RUNTIMES,
             )
         layer_arn = resp["LayerVersionArn"]
         print(f"  {layer_arn}", flush=True)

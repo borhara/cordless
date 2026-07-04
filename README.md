@@ -43,7 +43,7 @@ Your **public key** is in the Discord Developer Portal → General Information. 
 
 > Omit `public_key` to skip verification. Fine for local testing; never do it in production.
 
-Verification uses a pure-Python Ed25519 implementation by default — zero dependencies, works everywhere. For faster verification (real milliseconds on small Lambdas), add `"pynacl"` to `packages` in `cordless.toml` and cordless picks it up automatically.
+Verification runs at C speed automatically — `cordless deploy` bundles PyNaCl into the cordless layer. If it can't be fetched (or you deploy with `--bundle-cordless`), cordless falls back to a built-in pure-Python Ed25519 implementation, so verification always works.
 
 ---
 
