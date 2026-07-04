@@ -49,7 +49,17 @@ Your **public key** is in the Discord Developer Portal → General Information. 
 
 ### options
 
-Use the `option()` helper to build option dicts. Type defaults to `string`.
+The simplest way: declare options as typed parameters. cordless infers the Discord option types from the annotations and passes the values as arguments.
+
+```python
+@bot.command("buy", description="Buy an item")
+async def buy(ctx, item: str, qty: int = 1):
+    await ctx.send(f"bought {qty}x {item}")
+```
+
+Parameters without a default are required. Supported annotations: `str`, `int`, `float`, `bool` (unannotated parameters default to string).
+
+For anything richer — choices, autocomplete, users/channels/roles, min/max — use the `option()` helper:
 
 ```python
 from cordless import Cordless, option
@@ -62,6 +72,17 @@ async def echo(ctx):
 ```
 
 Available types: `string`, `integer`, `number`, `boolean`, `user`, `channel`, `role`, `attachment`. Extra kwargs map directly to Discord option fields: `required`, `autocomplete`, `choices`, `min_value`, `max_value`, `min_length`, `max_length`.
+
+For `attachment` options, the option value is an id — look up the file metadata (filename, url, size) on `ctx.attachments`:
+
+```python
+@bot.command("inspect", options=[option("file", type="attachment", required=True)])
+async def inspect(ctx):
+    att = ctx.attachments[ctx.options["file"]]
+    await ctx.send(f"{att['filename']} — {att['size']} bytes")
+```
+
+Command names are validated at decoration time: 1-32 lowercase letters, digits, `-` or `_`.
 
 ### subcommands
 
@@ -125,6 +146,22 @@ async def slow_action(ctx):
     await ctx.edit(f"Done: {result}")
 ```
 
+### scheduled handlers
+
+Run code on a schedule with `@bot.cron()` — daily rewards, cleanup jobs, anything that shouldn't wait for an interaction. `cordless deploy` wires each schedule to an EventBridge rule automatically (set `bot = "lambda_function:bot"` in `cordless.toml` so deploy can find them).
+
+```python
+@bot.cron("rate(1 day)")
+async def daily_rewards():
+    ...
+
+@bot.cron("cron(0 12 * * ? *)", name="noon_report")
+async def noon():
+    ...
+```
+
+Schedules use EventBridge expressions (`rate(...)` or `cron(...)`). Handlers take no arguments and run on the worker Lambda when `defer_worker` is set, otherwise on the main function.
+
 ---
 
 ## context menu commands
@@ -171,6 +208,8 @@ async def on_yes(ctx):
 ```
 
 `ctx.edit()` updates the original message in-place. `ButtonStyle` values: `PRIMARY`, `SECONDARY`, `SUCCESS`, `DANGER`, `LINK`. Link buttons take a `url=` instead of `custom_id=`.
+
+Dynamic ids match by `:`-separated prefix — a handler registered as `"shop"` receives `"shop:sword:2"`, with the suffix segments on `ctx.custom_id_args` (`["sword", "2"]`). This works for buttons, selects, and modals.
 
 ---
 
@@ -296,6 +335,14 @@ async def ban(ctx): ...
 
 ## deploying
 
+### cordless init
+
+Scaffolds a new bot in the current directory: `lambda_function.py`, `cordless.toml`, and `.env.example`. Existing files are left alone.
+
+```bash
+cordless init my-bot
+```
+
 ### cordless deploy
 
 Packages your source directory, creates (or updates) the Lambda function and a cordless layer, sets up API Gateway, and returns the endpoint URL.
@@ -305,6 +352,20 @@ cordless deploy --function my-bot --source .
 
 # with a deferred worker Lambda
 cordless deploy --function my-bot --defer-worker my-bot-worker
+
+# deploy and register slash commands in one step
+cordless deploy --register lambda_function:bot
+```
+
+`--register` reads credentials from `$DISCORD_BOT_TOKEN`, or `$DISCORD_CLIENT_ID` + `$DISCORD_CLIENT_SECRET` (client id/secret also fall back to `[deploy.env]`).
+
+### cordless destroy
+
+Deletes everything `cordless deploy` created: the function(s), API Gateway, EventBridge cron rules, CloudWatch log groups, and the IAM role. Asks for confirmation unless you pass `--yes`.
+
+```bash
+cordless destroy
+cordless destroy --yes
 ```
 
 ### cordless register
@@ -345,9 +406,12 @@ function      = "my-bot"
 region        = "eu-west-1"
 runtime       = "python3.12"
 handler       = "lambda_function.handler"
+bot           = "lambda_function:bot"  # lets deploy find cron schedules (and is the --register target)
+memory        = 256        # MB — main function (default: 256)
 defer_worker  = "my-bot-worker"
 defer_memory  = 256        # MB — increase if your worker does heavy work (e.g. image generation)
-packages      = ["pillow"] # extra pip packages to bundle into the zip
+packages      = ["pillow"] # extra pip packages to bundle into the zip (cached between deploys)
+policies      = ["arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"]  # extra IAM policies for the role
 
 [deploy.env]
 DISCORD_PUBLIC_KEY = "abc123..."
@@ -370,7 +434,9 @@ Every handler receives a `ctx` object.
 | `ctx.channel_id` | Channel ID |
 | `ctx.options` | Command options as `{name: value}` |
 | `ctx.custom_id` | Custom ID of the button or select that fired |
+| `ctx.custom_id_args` | Suffix segments when matched by prefix (`"shop:x"` → `["x"]`) |
 | `ctx.values` | Selected values from a select menu |
+| `ctx.attachments` | Resolved attachment metadata, keyed by attachment id |
 | `ctx.modal_values` | Modal submission as `{custom_id: value}` |
 | `ctx.focused_value` | Current value of the focused autocomplete option |
 | `ctx.target_user` | Right-clicked user (user context menu commands) |
@@ -386,7 +452,7 @@ Every handler receives a `ctx` object.
 |---|---|
 | `await ctx.send(msg, *, content, ephemeral, embeds, components)` | Reply with a new message |
 | `await ctx.edit(msg, *, content, embeds, components)` | Edit the original message (buttons / selects) |
-| `await ctx.defer()` | ACK within 3 s; respond later via the worker |
+| `await ctx.defer(ephemeral=False)` | ACK within 3 s; respond later via the worker |
 | `await ctx.send_modal(modal)` | Open a modal form |
 | `await ctx.respond_autocomplete(choices)` | Return autocomplete suggestions |
-| `await ctx.followup(msg, …)` | Send a followup message (deferred worker, post-ACK) |
+| `await ctx.followup(msg, …, files=[(name, bytes), …])` | Send a followup message (deferred worker, post-ACK) |
