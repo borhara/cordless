@@ -134,8 +134,11 @@ class Context:
         self.response = _response({"type": _UPDATE_MESSAGE, "data": data})
         return self.response
 
-    async def defer(self):
-        self.response = _response({"type": _DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE})
+    async def defer(self, ephemeral=False):
+        data = {"type": _DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE}
+        if ephemeral:
+            data["data"] = {"flags": _FLAG_EPHEMERAL}
+        self.response = _response(data)
         return self.response
 
     async def defer_edit(self):

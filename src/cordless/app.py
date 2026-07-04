@@ -75,8 +75,19 @@ class Cordless:
         from .worker import make_worker_handler
         return make_worker_handler(self)
 
-    def button(self, custom_id):
+    def handler(self):
+        def _handler(event, context=None):
+            return self.handle(event, context)
+        return _handler
+
+    def button(self, custom_id, defer=False):
         def decorator(func):
+            if defer:
+                func._defer = True
+                try:
+                    from . import defer as _defer_mod  # noqa: F401
+                except Exception:
+                    pass
             self.router.register_button(custom_id, func)
             return func
 
