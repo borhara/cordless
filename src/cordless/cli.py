@@ -61,6 +61,14 @@ def _deploy(args):
     source_dir = os.path.abspath(args.source)
     cfg = load_config(source_dir)
 
+    setup_target = args.setup or cfg.get("setup")
+    if setup_target:
+        print(f"  running setup {setup_target}...")
+        sys.path.insert(0, source_dir)
+        setup_fn = _load_bot(setup_target)
+        setup_fn()
+        print(f"  ✓ setup")
+
     env = {}
     for pair in (args.env or []):
         if "=" not in pair:
@@ -92,7 +100,11 @@ def _logs(args):
     from ._aws import get_session
     from .deploy import load_config
 
-    region = args.region or load_config(os.getcwd()).get("region")
+    cfg = load_config(os.getcwd())
+    function = args.function or cfg.get("function")
+    if not function:
+        raise SystemExit("Function name required: pass --function or add `function` to [deploy] in cordless.toml.")
+    region = args.region or cfg.get("region")
     if not region:
         raise SystemExit(
             "Region is required. Pass --region, set AWS_DEFAULT_REGION, "
@@ -101,7 +113,7 @@ def _logs(args):
 
     session = get_session(region)
     cw = session.client("logs")
-    log_group = f"/aws/lambda/{args.function}"
+    log_group = f"/aws/lambda/{function}"
     start_ms = int((time.time() - args.since * 60) * 1000)
     seen = set()
 
@@ -174,6 +186,7 @@ def main(argv=None):
     deploy_cmd.add_argument("--region", "-r", default=None, metavar="REGION", help="AWS region")
     deploy_cmd.add_argument("--env", metavar="KEY=VALUE", action="append", help="Environment variable (repeatable)")
     deploy_cmd.add_argument("--timeout", metavar="SECONDS", default=None, help="Main Lambda timeout in seconds (default: 10)")
+    deploy_cmd.add_argument("--setup", metavar="MODULE:FUNCTION", default=None, help="Run a setup function before deploying (e.g. db:create_tables)")
     deploy_cmd.add_argument("--bundle-cordless", action="store_true", default=False, help="Embed local cordless source in the zip instead of using a Lambda layer")
     deploy_cmd.add_argument("--defer-worker", metavar="NAME", help="Name of the worker Lambda for deferred commands (also set via cordless.toml defer_worker)")
     deploy_cmd.add_argument("--defer-handler", metavar="HANDLER", default=None, help="Worker handler string (default: lambda_function.worker_handler)")
@@ -182,7 +195,7 @@ def main(argv=None):
 
     # logs
     logs_cmd = subparsers.add_parser("logs", help="Tail CloudWatch logs for a deployed Lambda function")
-    logs_cmd.add_argument("--function", "-f", required=True, metavar="FUNCTION", help="Lambda function name")
+    logs_cmd.add_argument("--function", "-f", default=None, metavar="FUNCTION", help="Lambda function name (defaults to `function` in cordless.toml)")
     logs_cmd.add_argument("--region", "-r", default=os.environ.get("AWS_DEFAULT_REGION"), metavar="REGION", help="AWS region")
     logs_cmd.add_argument("--follow", action="store_true", help="Keep tailing (Ctrl+C to stop)")
     logs_cmd.add_argument("--since", type=int, default=10, metavar="MINUTES", help="How many minutes back to start (default: 10)")
