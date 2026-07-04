@@ -32,6 +32,8 @@ class Context:
 
         data = interaction.get("data", {})
         self.custom_id = data.get("custom_id")
+        # Suffix segments when a handler matched by prefix, e.g. "shop:item1" → ["item1"]
+        self.custom_id_args = []
         self.options = {opt["name"]: opt["value"] for opt in data.get("options", []) if "value" in opt}
         self.user = (interaction.get("member") or {}).get("user") or interaction.get("user")
         self.guild_id = interaction.get("guild_id")
@@ -57,6 +59,9 @@ class Context:
 
         # Context menu commands (type 2/3): resolved target
         resolved = data.get("resolved", {})
+        # Attachment options (type 11): ctx.options holds the id,
+        # ctx.attachments[id] holds the filename/url/size metadata
+        self.attachments = resolved.get("attachments", {})
         target_id = data.get("target_id")
         self.target_user = resolved.get("users", {}).get(target_id) if target_id else None
         self.target_member = resolved.get("members", {}).get(target_id) if target_id else None
@@ -87,7 +92,7 @@ class Context:
         return self.response
 
     async def followup(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, files=None):
-        from .defer import patch_followup, patch_followup_with_file
+        from .defer import patch_followup, patch_followup_with_files
 
         _content = content if content is not None else msg
         data = {}
@@ -110,8 +115,7 @@ class Context:
 
         if files:
             data["attachments"] = [{"id": i, "filename": name} for i, (name, _) in enumerate(files)]
-            filename, file_bytes = files[0]
-            patch_followup_with_file(app_id, self.token, data, filename, file_bytes)
+            patch_followup_with_files(app_id, self.token, data, files)
         else:
             patch_followup(app_id, self.token, data)
 
