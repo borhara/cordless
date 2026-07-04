@@ -40,7 +40,7 @@ def test_button_disabled():
 # --- ActionRow ---
 
 def test_action_row_wraps_buttons():
-    d = ActionRow(Button("A", custom_id="a"), Button("B", custom_id="b")).to_dict()
+    d = ActionRow([Button("A", custom_id="a"), Button("B", custom_id="b")]).to_dict()
     assert d["type"] == 1
     assert len(d["components"]) == 2
 
@@ -92,7 +92,7 @@ def test_modal_wraps_text_inputs_in_action_rows():
 
 
 def test_modal_accepts_pre_wrapped_action_rows():
-    d = Modal("m", "Title", ActionRow(TextInput("q", "Question"))).to_dict()
+    d = Modal("m", "Title", ActionRow([TextInput("q", "Question")])).to_dict()
     assert d["components"][0]["type"] == 1
 
 
@@ -147,7 +147,7 @@ def test_section_with_accessory():
 
 
 def test_container():
-    d = Container(TextDisplay("Hi"), accent_color=0xFF0000).to_dict()
+    d = Container([TextDisplay("Hi")], accent_color=0xFF0000).to_dict()
     assert d["type"] == 17
     assert d["accent_color"] == 0xFF0000
 

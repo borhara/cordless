@@ -69,13 +69,13 @@ def test_send_without_ephemeral_has_no_flags():
 
 def test_send_uikit_sets_flag():
     ctx = _make_ctx()
-    run(ctx.send(components=[Container(TextDisplay("Hi"))]))
+    run(ctx.send(components=[Container([TextDisplay("Hi")])]))
     assert json.loads(ctx.response["body"])["data"]["flags"] & 32768
 
 
 def test_send_uikit_and_ephemeral_combines_flags():
     ctx = _make_ctx()
-    run(ctx.send(components=[Container(TextDisplay("Hi"))], ephemeral=True))
+    run(ctx.send(components=[Container([TextDisplay("Hi")])], ephemeral=True))
     assert json.loads(ctx.response["body"])["data"]["flags"] == (32768 | 64)
 
 
@@ -89,7 +89,7 @@ def test_send_with_embed():
 
 def test_send_with_components():
     ctx = _make_ctx()
-    run(ctx.send(components=[ActionRow(Button("Click", custom_id="c"))]))
+    run(ctx.send(components=[ActionRow([Button("Click", custom_id="c")])]))
     assert json.loads(ctx.response["body"])["data"]["components"][0]["type"] == 1
 
 

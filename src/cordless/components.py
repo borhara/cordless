@@ -62,7 +62,7 @@ class Button:
 
 
 class ActionRow:
-    def __init__(self, *components):
+    def __init__(self, components):
         self.components = list(components)
 
     def to_dict(self):
@@ -211,7 +211,7 @@ class Modal:
             if isinstance(c, ActionRow):
                 rows.append(c.to_dict())
             else:
-                rows.append(ActionRow(c).to_dict())
+                rows.append(ActionRow([c]).to_dict())
         return {"custom_id": self.custom_id, "title": self.title, "components": rows}
 
 
@@ -220,7 +220,7 @@ class Modal:
 class Container:
     is_ui_kit = True
 
-    def __init__(self, *components, accent_color=None, spoiler=False):
+    def __init__(self, components, accent_color=None, spoiler=False):
         self.components = list(components)
         self.accent_color = accent_color
         self.spoiler = spoiler
