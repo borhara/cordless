@@ -34,7 +34,7 @@ def load_config(source_dir):
         return tomllib.load(f).get("deploy", {})
 
 
-def build_function_zip(source_dir, bundle_cordless=False):
+def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_version="3.12"):
     tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
     tmp.close()
     with zipfile.ZipFile(tmp.name, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -57,6 +57,30 @@ def build_function_zip(source_dir, bundle_cordless=False):
                         continue
                     abs_path = os.path.join(root, fname)
                     zf.write(abs_path, os.path.relpath(abs_path, pkg_parent))
+
+        if packages:
+            import subprocess, sys
+            with tempfile.TemporaryDirectory() as pkg_tmp:
+                subprocess.run(
+                    [
+                        sys.executable, "-m", "pip", "install",
+                        "--target", pkg_tmp,
+                        "--platform", "manylinux2014_x86_64",
+                        "--python-version", python_version,
+                        "--only-binary", ":all:",
+                        "--no-compile",
+                        *packages,
+                    ],
+                    check=True,
+                    capture_output=True,
+                )
+                for root, dirs, files in os.walk(pkg_tmp):
+                    dirs[:] = [d for d in dirs if d != "__pycache__"]
+                    for fname in files:
+                        if fname.endswith(".pyc"):
+                            continue
+                        abs_path = os.path.join(root, fname)
+                        zf.write(abs_path, os.path.relpath(abs_path, pkg_tmp))
 
     return tmp.name
 
@@ -221,8 +245,8 @@ def _allow_worker_invoke(iam, role_name, worker_arn):
 
 
 def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, env, region,
-           timeout=10, bundle_cordless=False, defer_worker=None,
-           defer_handler="lambda_function.worker_handler", defer_timeout=30):
+           timeout=10, bundle_cordless=False, packages=None, python_version="3.12",
+           defer_worker=None, defer_handler="lambda_function.worker_handler", defer_timeout=30):
     if not function_name:
         raise SystemExit("Function name is required — pass --function or set [deploy] function in cordless.toml")
 
@@ -247,7 +271,7 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
             layer_arn = _publish_cordless_layer(lam, layer_name)
 
     with Spinner("packaging"):
-        zip_path = build_function_zip(source_dir, bundle_cordless=bundle_cordless)
+        zip_path = build_function_zip(source_dir, bundle_cordless=bundle_cordless, packages=packages, python_version=python_version)
 
     try:
         exists, function_arn = _function_exists(lam, function_name)

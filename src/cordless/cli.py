@@ -77,18 +77,21 @@ def _deploy(args):
         env[k] = v
 
     function_name = args.function or cfg.get("function")
+    runtime = args.runtime or cfg.get("runtime", "python3.12")
     defer_worker = args.defer_worker or cfg.get("defer_worker")
     deploy(
         function_name=function_name,
         role_name=args.role_name or cfg.get("role_name") or f"{function_name}-role",
         handler=args.handler or cfg.get("handler", "lambda_function.handler"),
         source_dir=source_dir,
-        runtime=args.runtime or cfg.get("runtime", "python3.12"),
+        runtime=runtime,
         layer_name=args.layer_name or cfg.get("layer_name", "cordless"),
         env={**cfg.get("env", {}), **env},
         region=args.region or cfg.get("region") or os.environ.get("AWS_DEFAULT_REGION"),
         timeout=int(args.timeout or cfg.get("timeout", 10)),
         bundle_cordless=args.bundle_cordless or cfg.get("bundle_cordless", False),
+        packages=cfg.get("packages"),
+        python_version=runtime.replace("python", ""),
         defer_worker=defer_worker,
         defer_handler=args.defer_handler or cfg.get("defer_handler", "lambda_function.worker_handler"),
         defer_timeout=int(args.defer_timeout or cfg.get("defer_timeout", 30)),
