@@ -198,10 +198,10 @@ from cordless import ActionRow, Button, ButtonStyle
 @bot.command("vote", description="Start a vote")
 async def vote(ctx):
     await ctx.send("Cast your vote:", components=[
-        ActionRow(
+        ActionRow([
             Button("Yes", custom_id="vote_yes", style=ButtonStyle.SUCCESS),
             Button("No",  custom_id="vote_no",  style=ButtonStyle.DANGER),
-        )
+        ])
     ])
 
 @bot.button("vote_yes")
@@ -223,11 +223,11 @@ from cordless import ActionRow, StringSelect, SelectOption
 @bot.command("pick", description="Pick a colour")
 async def pick(ctx):
     await ctx.send("Choose:", components=[
-        ActionRow(StringSelect("colour_select", [
+        ActionRow([StringSelect("colour_select", [
             SelectOption("Red",   "red"),
             SelectOption("Green", "green"),
             SelectOption("Blue",  "blue"),
-        ], placeholder="Pick one"))
+        ], placeholder="Pick one")])
     ])
 
 @bot.select("colour_select")
@@ -289,15 +289,14 @@ Discord's UI Kit — richer layouts with `Container`, `Section`, `TextDisplay`, 
 from cordless import Container, Section, TextDisplay, Thumbnail, Separator
 
 await ctx.send(components=[
-    Container(
+    Container([
         Section(
             TextDisplay(f"**{user['username']}**\n-# joined {joined_at}"),
             accessory=Thumbnail(avatar_url(user)),
         ),
         Separator(divider=True, spacing=1),
         TextDisplay(f"-# User ID: {user['id']}"),
-        accent_color=0x5865F2,
-    )
+    ], accent_color=0x5865F2)
 ])
 ```
 
