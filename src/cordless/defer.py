@@ -43,3 +43,46 @@ def patch_followup(app_id, token, payload):
         return status, body_out
     finally:
         conn.close()
+
+
+def patch_followup_with_file(app_id, token, payload, filename, file_bytes, content_type="image/png"):
+    """PATCH the deferred interaction message with a file attachment."""
+    boundary = "cordless_boundary_" + str(id(file_bytes))
+    sep = f"--{boundary}\r\n".encode()
+    end = f"--{boundary}--\r\n".encode()
+
+    json_part = (
+        sep +
+        b'Content-Disposition: form-data; name="payload_json"\r\n'
+        b'Content-Type: application/json\r\n\r\n' +
+        json.dumps(payload).encode() +
+        b"\r\n"
+    )
+    file_part = (
+        sep +
+        f'Content-Disposition: form-data; name="files[0]"; filename="{filename}"\r\n'.encode() +
+        f'Content-Type: {content_type}\r\n\r\n'.encode() +
+        file_bytes +
+        b"\r\n"
+    )
+    body = json_part + file_part + end
+
+    conn = HTTPSConnection("discord.com")
+    try:
+        conn.request(
+            "PATCH",
+            f"/api/v10/webhooks/{app_id}/{token}/messages/@original",
+            body,
+            {
+                "Content-Type": f"multipart/form-data; boundary={boundary}",
+                "User-Agent": "cordless",
+            },
+        )
+        resp = conn.getresponse()
+        status = resp.status
+        body_out = resp.read()
+        if status >= 300:
+            print(f"[cordless] followup PATCH (file) {status}: {body_out.decode(errors='replace')}")
+        return status, body_out
+    finally:
+        conn.close()

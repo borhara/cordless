@@ -61,9 +61,9 @@ class Context:
         self.target_member = resolved.get("members", {}).get(target_id) if target_id else None
         self.target_message = resolved.get("messages", {}).get(target_id) if target_id else None
 
-    async def send(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None):
+    async def send(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, files=None):
         if self._worker_mode:
-            return await self.followup(msg, content=content, ephemeral=ephemeral, embeds=embeds, components=components)
+            return await self.followup(msg, content=content, ephemeral=ephemeral, embeds=embeds, components=components, files=files)
 
         _content = content if content is not None else msg
         data = {}
@@ -85,8 +85,8 @@ class Context:
         self.response = _response({"type": _CHANNEL_MESSAGE_WITH_SOURCE, "data": data})
         return self.response
 
-    async def followup(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None):
-        from .defer import patch_followup
+    async def followup(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, files=None):
+        from .defer import patch_followup, patch_followup_with_file
 
         _content = content if content is not None else msg
         data = {}
@@ -106,8 +106,14 @@ class Context:
             data["flags"] = flags
 
         app_id = self.interaction.get("application_id")
-        patch_followup(app_id, self.token, data)
-        # Set a sentinel so the router knows a response was sent
+
+        if files:
+            data["attachments"] = [{"id": i, "filename": name} for i, (name, _) in enumerate(files)]
+            filename, file_bytes = files[0]
+            patch_followup_with_file(app_id, self.token, data, filename, file_bytes)
+        else:
+            patch_followup(app_id, self.token, data)
+
         self.response = {"_cordless_followup": True}
         return self.response
 
