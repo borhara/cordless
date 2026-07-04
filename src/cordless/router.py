@@ -183,6 +183,8 @@ class Router:
             if component_type == 2:
                 handler = self.buttons.get(cid)
                 if not handler:
+                    handler = self.buttons.get(cid.split(":")[0])
+                if not handler:
                     raise UnknownButtonError(f"Unknown button: {cid}")
             else:
                 handler = self.selects.get(cid)
