@@ -83,8 +83,16 @@ def _deploy(args):
 def _logs(args):
     import time
     from ._aws import get_session
+    from .deploy import load_config
 
-    session = get_session(args.region)
+    region = args.region or load_config(os.getcwd()).get("region")
+    if not region:
+        raise SystemExit(
+            "Region is required. Pass --region, set AWS_DEFAULT_REGION, "
+            "or add `region` to [deploy] in cordless.toml."
+        )
+
+    session = get_session(region)
     cw = session.client("logs")
     log_group = f"/aws/lambda/{args.function}"
     start_ms = int((time.time() - args.since * 60) * 1000)
