@@ -29,12 +29,13 @@ class Router:
         self.autocompletes = {}   # (cmd_key, option_name) → handler
         self._error_handler = None
 
-    def register_command(self, name, handler, description="No description provided.", options=None, dm_permission=True):
+    def register_command(self, name, handler, description="No description provided.", options=None, dm_permission=True, cmd_type=1):
         self.commands[name] = {
             "handler": handler,
             "description": description,
             "options": options or [],
             "dm_permission": dm_permission,
+            "cmd_type": cmd_type,
         }
 
     def register_button(self, custom_id, handler):
@@ -57,6 +58,10 @@ class Router:
         subs = {}   # top-level name → {path → meta}
 
         for key, meta in self.commands.items():
+            # Context menu commands (type 2/3) never participate in subcommand grouping
+            if meta.get("cmd_type", 1) in (2, 3):
+                flat[key] = meta
+                continue
             parts = key.split("/")
             if len(parts) == 1:
                 flat[key] = meta
@@ -67,6 +72,14 @@ class Router:
         result = []
 
         for name, meta in flat.items():
+            cmd_type = meta.get("cmd_type", 1)
+            if cmd_type in (2, 3):
+                # Context menu commands: no description, no options
+                cmd = {"name": name, "type": cmd_type}
+                if not meta.get("dm_permission", True):
+                    cmd["dm_permission"] = False
+                result.append(cmd)
+                continue
             cmd = {
                 "name": name,
                 "description": meta["description"],

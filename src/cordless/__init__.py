@@ -1,4 +1,4 @@
-from .app import Cordless
+from .app import Cordless, option
 from .components import (
     ActionRow,
     Button,
@@ -34,6 +34,7 @@ from .errors import (
 
 __all__ = [
     "Cordless",
+    "option",
     # Components
     "ActionRow",
     "Button",

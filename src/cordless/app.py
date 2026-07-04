@@ -10,6 +10,43 @@ from .verify import verify_signature
 
 PING = 1
 
+_OPTION_TYPES = {
+    "string": 3,
+    "integer": 4,
+    "boolean": 5,
+    "user": 6,
+    "channel": 7,
+    "role": 8,
+    "number": 10,
+    "attachment": 11,
+}
+
+
+def option(name, description="No description provided.", *, type="string", required=False,
+           autocomplete=False, choices=None, min_value=None, max_value=None,
+           min_length=None, max_length=None):
+    """Build a Discord application command option dict."""
+    opt = {
+        "name": name,
+        "description": description,
+        "type": _OPTION_TYPES.get(type, type) if isinstance(type, str) else type,
+    }
+    if required:
+        opt["required"] = True
+    if autocomplete:
+        opt["autocomplete"] = True
+    if choices is not None:
+        opt["choices"] = choices
+    if min_value is not None:
+        opt["min_value"] = min_value
+    if max_value is not None:
+        opt["max_value"] = max_value
+    if min_length is not None:
+        opt["min_length"] = min_length
+    if max_length is not None:
+        opt["max_length"] = max_length
+    return opt
+
 
 class Cordless:
     def __init__(self, public_key=None):
@@ -56,6 +93,20 @@ class Cordless:
             self.router.register_modal(custom_id, func)
             return func
 
+        return decorator
+
+    def user_command(self, name, dm_permission=True):
+        """Register a User context menu command (right-click → Apps → name)."""
+        def decorator(func):
+            self.router.register_command(name, func, description=None, options=[], dm_permission=dm_permission, cmd_type=2)
+            return func
+        return decorator
+
+    def message_command(self, name, dm_permission=True):
+        """Register a Message context menu command (right-click message → Apps → name)."""
+        def decorator(func):
+            self.router.register_command(name, func, description=None, options=[], dm_permission=dm_permission, cmd_type=3)
+            return func
         return decorator
 
     def autocomplete(self, cmd_name, option_name):

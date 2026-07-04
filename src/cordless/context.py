@@ -54,6 +54,13 @@ class Context:
                 if "custom_id" in comp:
                     self.modal_values[comp["custom_id"]] = comp.get("value", "")
 
+        # Context menu commands (type 2/3): resolved target
+        resolved = data.get("resolved", {})
+        target_id = data.get("target_id")
+        self.target_user = resolved.get("users", {}).get(target_id) if target_id else None
+        self.target_member = resolved.get("members", {}).get(target_id) if target_id else None
+        self.target_message = resolved.get("messages", {}).get(target_id) if target_id else None
+
     async def send(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None):
         if self._worker_mode:
             return await self.followup(msg, content=content, ephemeral=ephemeral, embeds=embeds, components=components)

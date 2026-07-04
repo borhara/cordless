@@ -80,6 +80,51 @@ def _deploy(args):
     )
 
 
+def _logs(args):
+    import time
+    from ._aws import get_session
+
+    session = get_session(args.region)
+    cw = session.client("logs")
+    log_group = f"/aws/lambda/{args.function}"
+    start_ms = int((time.time() - args.since * 60) * 1000)
+    seen = set()
+
+    def fetch_and_print(since_ms):
+        latest = since_ms
+        kwargs = {"logGroupName": log_group, "startTime": since_ms, "interleaved": True}
+        while True:
+            try:
+                resp = cw.filter_log_events(**kwargs)
+            except cw.exceptions.ResourceNotFoundException:
+                raise SystemExit(
+                    f"Log group not found: {log_group}\n"
+                    "Has the function been invoked at least once?"
+                )
+            for e in resp.get("events", []):
+                eid = e["eventId"]
+                if eid not in seen:
+                    seen.add(eid)
+                    ts = time.strftime("%H:%M:%S", time.localtime(e["timestamp"] / 1000))
+                    print(f"  {ts}  {e['message'].rstrip()}")
+                    latest = max(latest, e["timestamp"])
+            token = resp.get("nextToken")
+            if not token:
+                break
+            kwargs["nextToken"] = token
+        return latest
+
+    latest_ms = fetch_and_print(start_ms)
+    if args.follow:
+        print("  --- following (Ctrl+C to stop) ---", flush=True)
+        try:
+            while True:
+                time.sleep(2)
+                latest_ms = fetch_and_print(latest_ms + 1)
+        except KeyboardInterrupt:
+            print()
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="cordless", description="cordless command-line tools")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -119,6 +164,14 @@ def main(argv=None):
     deploy_cmd.add_argument("--defer-handler", metavar="HANDLER", default=None, help="Worker handler string (default: lambda_function.worker_handler)")
     deploy_cmd.add_argument("--defer-timeout", metavar="SECONDS", default=None, help="Worker Lambda timeout in seconds (default: 30)")
     deploy_cmd.set_defaults(func=_deploy)
+
+    # logs
+    logs_cmd = subparsers.add_parser("logs", help="Tail CloudWatch logs for a deployed Lambda function")
+    logs_cmd.add_argument("--function", "-f", required=True, metavar="FUNCTION", help="Lambda function name")
+    logs_cmd.add_argument("--region", "-r", default=os.environ.get("AWS_DEFAULT_REGION"), metavar="REGION", help="AWS region")
+    logs_cmd.add_argument("--follow", action="store_true", help="Keep tailing (Ctrl+C to stop)")
+    logs_cmd.add_argument("--since", type=int, default=10, metavar="MINUTES", help="How many minutes back to start (default: 10)")
+    logs_cmd.set_defaults(func=_logs)
 
     args = parser.parse_args(argv)
     args.func(args)
