@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import inspect
 import json
 
 from .context import Context
@@ -149,6 +150,57 @@ class Cordless:
             return asyncio.run(self.router.dispatch(interaction, ctx))
         except CordlessError as exc:
             return _json_response(400, {"error": str(exc)})
+
+    def load_extension(self, name: str) -> None:
+        """Load a cog extension by dotted module path (e.g. 'cogs.game').
+        The module must define a setup(bot) function that calls bot.add_cog()."""
+        import importlib
+        module = importlib.import_module(name)
+        if not hasattr(module, "setup"):
+            raise ValueError(f"Extension '{name}' is missing a setup(bot) function")
+        module.setup(self)
+
+    def add_cog(self, cog):
+        """Register all decorated handlers from a Cog instance."""
+        for _, method in inspect.getmembers(cog, predicate=inspect.ismethod):
+            ctype = getattr(method, "_cog_type", None)
+            if ctype is None:
+                continue
+            if ctype == "command":
+                if method._cog_defer:
+                    method.__func__._defer = True
+                    try:
+                        from . import defer as _defer_mod  # noqa: F401
+                    except Exception:
+                        pass
+                self.router.register_command(
+                    method._cog_name, method,
+                    description=method._cog_description,
+                    options=method._cog_options,
+                    dm_permission=method._cog_dm_permission,
+                )
+            elif ctype == "button":
+                self.router.register_button(method._cog_custom_id, method)
+            elif ctype == "select":
+                self.router.register_select(method._cog_custom_id, method)
+            elif ctype == "modal":
+                self.router.register_modal(method._cog_custom_id, method)
+            elif ctype == "autocomplete":
+                self.router.register_autocomplete(method._cog_cmd_name, method._cog_option_name, method)
+            elif ctype == "user_command":
+                self.router.register_command(
+                    method._cog_name, method,
+                    description=None, options=[],
+                    dm_permission=method._cog_dm_permission,
+                    cmd_type=2,
+                )
+            elif ctype == "message_command":
+                self.router.register_command(
+                    method._cog_name, method,
+                    description=None, options=[],
+                    dm_permission=method._cog_dm_permission,
+                    cmd_type=3,
+                )
 
     def sync_commands(self, bot_token=None, client_id=None, client_secret=None, guild_id=None):
         """Push this bot's registered commands to Discord.
