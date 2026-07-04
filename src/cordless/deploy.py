@@ -59,7 +59,7 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                     zf.write(abs_path, os.path.relpath(abs_path, pkg_parent))
 
         if packages:
-            import subprocess, sys, shutil, os
+            import subprocess, sys, shutil
             abi = "cp" + python_version.replace(".", "")
             # uv venvs don't ship pip — search PATH excluding the active venv
             venv = os.environ.get("VIRTUAL_ENV", "")
