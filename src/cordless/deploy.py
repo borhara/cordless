@@ -60,6 +60,7 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
 
         if packages:
             import subprocess, sys
+            abi = "cp" + python_version.replace(".", "")
             with tempfile.TemporaryDirectory() as pkg_tmp:
                 subprocess.run(
                     [
@@ -67,12 +68,13 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                         "--target", pkg_tmp,
                         "--platform", "manylinux2014_x86_64",
                         "--python-version", python_version,
+                        "--implementation", "cp",
+                        "--abi", abi,
                         "--only-binary", ":all:",
                         "--no-compile",
                         *packages,
                     ],
                     check=True,
-                    capture_output=True,
                 )
                 for root, dirs, files in os.walk(pkg_tmp):
                     dirs[:] = [d for d in dirs if d != "__pycache__"]
