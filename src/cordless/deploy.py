@@ -67,7 +67,6 @@ def ensure_iam_role(iam, role_name):
     except iam.exceptions.NoSuchEntityException:
         pass
 
-    print(f"  Creating IAM role '{role_name}'...", flush=True)
     role_arn = iam.create_role(
         RoleName=role_name,
         AssumeRolePolicyDocument=_LAMBDA_TRUST_POLICY,
@@ -76,7 +75,6 @@ def ensure_iam_role(iam, role_name):
     iam.attach_role_policy(RoleName=role_name, PolicyArn=_LAMBDA_BASIC_EXECUTION_POLICY)
 
     # IAM is eventually consistent — Lambda rejects a brand-new role for ~10 s
-    print("  Waiting for IAM role to propagate...", flush=True)
     time.sleep(12)
 
     return role_arn
@@ -98,7 +96,6 @@ def _publish_cordless_layer(lam, layer_name):
         versions = lam.list_layer_versions(LayerName=layer_name).get("LayerVersions", [])
         for v in versions:
             if v.get("Description") == description:
-                print(f"  Layer already up to date ({description}), reusing.", flush=True)
                 return v["LayerVersionArn"]
     except lam.exceptions.ResourceNotFoundException:
         pass
@@ -230,6 +227,7 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
         raise SystemExit("Function name is required — pass --function or set [deploy] function in cordless.toml")
 
     from ._aws import get_session
+    from ._progress import Spinner, success
 
     session = get_session(region)
     iam = session.client("iam")
@@ -237,52 +235,50 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
     apigw = session.client("apigatewayv2")
     account_id = session.client("sts").get_caller_identity()["Account"]
 
-    print("Setting up IAM role...", flush=True)
-    role_arn = ensure_iam_role(iam, role_name)
-    print(f"  {role_arn}", flush=True)
+    print()
+
+    with Spinner("IAM role"):
+        role_arn = ensure_iam_role(iam, role_name)
 
     if bundle_cordless:
-        print("Bundling local cordless into function zip...", flush=True)
         layer_arn = None
     else:
-        print("Publishing cordless layer...", flush=True)
-        layer_arn = _publish_cordless_layer(lam, layer_name)
-        print(f"  {layer_arn}", flush=True)
+        with Spinner("cordless layer"):
+            layer_arn = _publish_cordless_layer(lam, layer_name)
 
-    print("Packaging function code...", flush=True)
-    zip_path = build_function_zip(source_dir, bundle_cordless=bundle_cordless)
+    with Spinner("packaging"):
+        zip_path = build_function_zip(source_dir, bundle_cordless=bundle_cordless)
 
     try:
         exists, function_arn = _function_exists(lam, function_name)
-        if exists:
-            print(f"Updating '{function_name}'...", flush=True)
-            _update_function(lam, function_name, zip_path, handler, layer_arn or "", env, timeout=timeout)
-        else:
-            print(f"Creating '{function_name}'...", flush=True)
-            function_arn = _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn or "", env, timeout=timeout)
+        verb = "updating" if exists else "creating"
+        with Spinner(f"{verb}  {function_name}"):
+            if exists:
+                _update_function(lam, function_name, zip_path, handler, layer_arn or "", env, timeout=timeout)
+            else:
+                function_arn = _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn or "", env, timeout=timeout)
 
-        print("Setting up API Gateway...", flush=True)
-        url = _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id)
+        with Spinner("API Gateway"):
+            url = _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id)
 
         if defer_worker:
-            print(f"Setting up deferred dispatch (worker Lambda)...", flush=True)
             w_exists, worker_arn = _function_exists(lam, defer_worker)
-            if w_exists:
-                print(f"  Updating worker '{defer_worker}'...", flush=True)
-                _update_function(lam, defer_worker, zip_path, defer_handler, layer_arn, {}, timeout=defer_timeout)
-            else:
-                print(f"  Creating worker '{defer_worker}'...", flush=True)
-                worker_arn = _create_function(lam, defer_worker, zip_path, role_arn, defer_handler, runtime, layer_arn, {}, timeout=defer_timeout)
+            w_verb = "updating" if w_exists else "creating"
+            with Spinner(f"{w_verb}  {defer_worker}"):
+                if w_exists:
+                    _update_function(lam, defer_worker, zip_path, defer_handler, layer_arn, {}, timeout=defer_timeout)
+                else:
+                    worker_arn = _create_function(lam, defer_worker, zip_path, role_arn, defer_handler, runtime, layer_arn, {}, timeout=defer_timeout)
     finally:
         os.unlink(zip_path)
 
     if defer_worker:
-        _allow_worker_invoke(iam, role_name, worker_arn)
-        lam.update_function_configuration(
-            FunctionName=function_name,
-            Environment=_env_vars({**env, "CORDLESS_WORKER_FUNCTION": defer_worker}),
-        )
-        lam.get_waiter("function_updated").wait(FunctionName=function_name)
-        print(f"  Worker ready.", flush=True)
+        with Spinner("wiring worker"):
+            _allow_worker_invoke(iam, role_name, worker_arn)
+            lam.update_function_configuration(
+                FunctionName=function_name,
+                Environment=_env_vars({**env, "CORDLESS_WORKER_FUNCTION": defer_worker}),
+            )
+            lam.get_waiter("function_updated").wait(FunctionName=function_name)
 
-    print(f"\nDeployed. Paste this into Discord as your Interactions Endpoint URL:\n\n  {url}\n", flush=True)
+    success(url)
