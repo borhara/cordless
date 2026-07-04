@@ -3,6 +3,7 @@ import json
 _CHANNEL_MESSAGE_WITH_SOURCE = 4
 _UPDATE_MESSAGE = 7
 _DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE = 5
+_DEFERRED_UPDATE_MESSAGE = 6
 _AUTOCOMPLETE_RESULT = 8
 _MODAL = 9
 
@@ -133,6 +134,11 @@ class Context:
 
     async def defer(self):
         self.response = _response({"type": _DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE})
+        return self.response
+
+    async def defer_edit(self):
+        """Defer a component interaction — tells Discord we'll update this message async (type 6)."""
+        self.response = _response({"type": _DEFERRED_UPDATE_MESSAGE})
         return self.response
 
     async def send_modal(self, modal):

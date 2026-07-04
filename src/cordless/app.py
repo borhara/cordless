@@ -180,6 +180,8 @@ class Cordless:
                     dm_permission=method._cog_dm_permission,
                 )
             elif ctype == "button":
+                if getattr(method, "_cog_defer", False):
+                    method.__func__._defer = True
                 self.router.register_button(method._cog_custom_id, method)
             elif ctype == "select":
                 self.router.register_select(method._cog_custom_id, method)

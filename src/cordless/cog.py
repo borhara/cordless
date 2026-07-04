@@ -35,10 +35,11 @@ def cog_command(name, description="No description provided.", options=None,
     return decorator
 
 
-def cog_button(custom_id):
+def cog_button(custom_id, defer=False):
     def decorator(func):
         func._cog_type = "button"
         func._cog_custom_id = custom_id
+        func._cog_defer = defer
         return func
     return decorator
 
