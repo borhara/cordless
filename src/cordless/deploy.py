@@ -59,12 +59,14 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                     zf.write(abs_path, os.path.relpath(abs_path, pkg_parent))
 
         if packages:
-            import subprocess, sys
+            import subprocess, sys, shutil
             abi = "cp" + python_version.replace(".", "")
+            # uv venvs don't ship pip — prefer system python3 which does
+            python = shutil.which("python3") or shutil.which("python") or sys.executable
             with tempfile.TemporaryDirectory() as pkg_tmp:
                 subprocess.run(
                     [
-                        sys.executable, "-m", "pip", "install",
+                        python, "-m", "pip", "install",
                         "--target", pkg_tmp,
                         "--platform", "manylinux2014_x86_64",
                         "--python-version", python_version,
