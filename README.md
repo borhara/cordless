@@ -36,8 +36,7 @@ bot = Cordless(public_key=os.environ["DISCORD_PUBLIC_KEY"])
 async def ping(ctx):
     await ctx.send("pong")
 
-def handler(event, context):
-    return bot.handle(event)
+handler = bot.handler()
 ```
 
 Your **public key** is in the Discord Developer Portal → General Information. Every incoming request is verified automatically — invalid signatures return 401 before your code runs. PING interactions (sent when you first save your endpoint URL) are answered automatically.
@@ -103,11 +102,28 @@ Discord requires a response within 3 seconds. Use `defer=True` for slow operatio
 async def report(ctx):
     data = await build_report()       # can take as long as needed
     await ctx.send(f"Report ready: {data}")
+```
 
-worker_handler = bot.worker_handler   # expose for the worker Lambda
+In `lambda_function.py`, expose the worker handler:
+
+```python
+from cordless.worker import make_worker_handler
+
+worker_handler = make_worker_handler(bot)
 ```
 
 Set `defer_worker` in `cordless.toml` so `cordless deploy` creates the worker and wires the invoke permission automatically.
+
+### deferred buttons
+
+Buttons can also be deferred — useful when the response takes time. Use `defer=True` on `@bot.button()` (or `@cog_button()`). cordless responds with a loading state immediately and lets the worker update the message.
+
+```python
+@bot.button("slow_action", defer=True)
+async def slow_action(ctx):
+    result = await do_work()
+    await ctx.edit(f"Done: {result}")
+```
 
 ---
 
@@ -325,11 +341,13 @@ Put a `cordless.toml` in your project root to avoid passing flags on every deplo
 
 ```toml
 [deploy]
-function     = "my-bot"
-region       = "eu-west-1"
-runtime      = "python3.12"
-handler      = "lambda_function.handler"
-defer_worker = "my-bot-worker"
+function      = "my-bot"
+region        = "eu-west-1"
+runtime       = "python3.12"
+handler       = "lambda_function.handler"
+defer_worker  = "my-bot-worker"
+defer_memory  = 256        # MB — increase if your worker does heavy work (e.g. image generation)
+packages      = ["pillow"] # extra pip packages to bundle into the zip
 
 [deploy.env]
 DISCORD_PUBLIC_KEY = "abc123..."
