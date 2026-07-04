@@ -69,7 +69,7 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
             )
             python = shutil.which("python3", path=search_path) or shutil.which("python", path=search_path) or sys.executable
             with tempfile.TemporaryDirectory() as pkg_tmp:
-                subprocess.run(
+                result = subprocess.run(
                     [
                         python, "-m", "pip", "install",
                         "--target", pkg_tmp,
@@ -81,8 +81,10 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                         "--no-compile",
                         *packages,
                     ],
-                    check=True,
+                    capture_output=True,
                 )
+                if result.returncode != 0:
+                    raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
                 for root, dirs, files in os.walk(pkg_tmp):
                     dirs[:] = [d for d in dirs if d != "__pycache__"]
                     for fname in files:
