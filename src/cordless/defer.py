@@ -16,11 +16,20 @@ except Exception:
     _lambda_client = None
 
 
+_NO_DEPLOY_MSG = (
+    "boto3 is required for deferred interactions.\n"
+    "Install it: pip install 'cordless[deploy]'"
+)
+
+
 def invoke_worker(function_name, interaction):
     client = _lambda_client
     if client is None:
-        import boto3
-        client = boto3.client("lambda")
+        try:
+            import boto3
+            client = boto3.client("lambda")
+        except Exception:
+            raise RuntimeError(_NO_DEPLOY_MSG)
     resp = client.invoke(
         FunctionName=function_name,
         InvocationType="Event",

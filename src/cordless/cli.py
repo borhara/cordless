@@ -269,7 +269,10 @@ def _logs(args):
             kwargs["nextToken"] = token
         return latest
 
-    from botocore.exceptions import NoCredentialsError
+    try:
+        from botocore.exceptions import NoCredentialsError
+    except ImportError:
+        raise SystemExit("boto3 is required for logs.\nInstall it: pip install 'cordless[deploy]'")
     try:
         latest_ms = fetch_and_print(start_ms)
     except NoCredentialsError:

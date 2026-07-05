@@ -29,8 +29,8 @@ def get_session(region=None, validate=True):
         from botocore.exceptions import ClientError, NoCredentialsError
     except ImportError:
         raise SystemExit(
-            "boto3 is required for AWS operations.\n"
-            "Install it: pip install boto3  or  uv add boto3"
+            "boto3 is required for deploy/destroy.\n"
+            "Install it: pip install 'cordless[deploy]'"
         )
 
     session = boto3.Session(region_name=region)
