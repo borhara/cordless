@@ -266,7 +266,7 @@ wheels = [
 
 [[package]]
 name = "cordless"
-version = "0.13.2"
+version = "1.0.0a4"
 source = { editable = "." }
 
 [package.optional-dependencies]
