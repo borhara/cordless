@@ -116,3 +116,41 @@ def patch_followup_with_files(app_id, token, payload, files):
 def patch_followup_with_file(app_id, token, payload, filename, file_bytes, content_type=None):
     """Back-compat single-file wrapper around patch_followup_with_files."""
     return patch_followup_with_files(app_id, token, payload, [(filename, file_bytes)])
+
+
+def post_followup(app_id, token, payload):
+    """POST a new followup message (creates an additional message, does not replace @original)."""
+    conn = HTTPSConnection("discord.com", timeout=_TIMEOUT)
+    try:
+        conn.request(
+            "POST",
+            f"/api/v10/webhooks/{app_id}/{token}",
+            json.dumps(payload).encode(),
+            {"Content-Type": "application/json", "User-Agent": "cordless"},
+        )
+        resp = conn.getresponse()
+        status = resp.status
+        body = resp.read()
+    finally:
+        conn.close()
+    if status >= 300:
+        print(f"[cordless] followup POST {status}: {body.decode(errors='replace')}")
+    return status, body
+
+
+def delete_original(app_id, token):
+    """DELETE the deferred @original message."""
+    conn = HTTPSConnection("discord.com", timeout=_TIMEOUT)
+    try:
+        conn.request(
+            "DELETE",
+            f"/api/v10/webhooks/{app_id}/{token}/messages/@original",
+            None,
+            {"User-Agent": "cordless"},
+        )
+        resp = conn.getresponse()
+        status = resp.status
+        resp.read()
+    finally:
+        conn.close()
+    return status
