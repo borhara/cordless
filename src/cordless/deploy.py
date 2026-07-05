@@ -410,7 +410,7 @@ def _wire_crons(events, lam, function_name, target_fn, target_arn, crons):
         )
 
 
-def destroy(function_name, role_name, region, defer_worker=None):
+def destroy(function_name, role_name, region, defer_worker=None, layer_name=None):
     if not function_name:
         raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
 
@@ -461,5 +461,11 @@ def destroy(function_name, role_name, region, defer_worker=None):
             iam.delete_role(RoleName=role_name)
         except iam.exceptions.NoSuchEntityException:
             pass
+
+    if layer_name:
+        with Spinner(f"Lambda layer  {layer_name}"):
+            versions = lam.list_layer_versions(LayerName=layer_name).get("LayerVersions", [])
+            for v in versions:
+                lam.delete_layer_version(LayerName=layer_name, VersionNumber=v["Version"])
 
     print(f"  ✓ destroyed {function_name}")

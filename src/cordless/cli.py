@@ -211,13 +211,25 @@ def _destroy(args):
     region = args.region or cfg.get("region") or os.environ.get("AWS_DEFAULT_REGION")
     defer_worker = args.defer_worker or cfg.get("defer_worker")
 
+    layer_name = None
+    if args.layer is not None:
+        # explicit --layer / --layer=name
+        layer_name = args.layer or cfg.get("layer_name", "cordless")
+    elif not args.yes:
+        default = cfg.get("layer_name", "cordless")
+        answer = input(f"Also delete Lambda layer '{default}' and all its versions? [y/N] ")
+        if answer.strip().lower() in ("y", "yes"):
+            layer_name = default
+
     if not args.yes:
         targets = f"function '{function_name}'" + (f", worker '{defer_worker}'" if defer_worker else "")
+        if layer_name:
+            targets += f", layer '{layer_name}'"
         answer = input(f"Delete {targets}, its API Gateway, logs, and role '{role_name}'? [y/N] ")
         if answer.strip().lower() not in ("y", "yes"):
             raise SystemExit("Aborted.")
 
-    destroy(function_name=function_name, role_name=role_name, region=region, defer_worker=defer_worker)
+    destroy(function_name=function_name, role_name=role_name, region=region, defer_worker=defer_worker, layer_name=layer_name)
 
 
 _INIT_LAMBDA = '''\
@@ -426,6 +438,7 @@ def main(argv=None):
     destroy_cmd.add_argument("--role-name", metavar="NAME", default=None, help="IAM role name (default: <function>-role)")
     destroy_cmd.add_argument("--region", "-r", default=None, metavar="REGION", help="AWS region")
     destroy_cmd.add_argument("--defer-worker", metavar="NAME", default=None, help="Worker Lambda to also delete")
+    destroy_cmd.add_argument("--layer", nargs="?", const="", default=None, metavar="NAME", help="Also delete the cordless Lambda layer (defaults to layer_name in cordless.toml, or 'cordless')")
     destroy_cmd.add_argument("--yes", "-y", action="store_true", help="Skip the confirmation prompt")
     destroy_cmd.set_defaults(func=_destroy)
 
