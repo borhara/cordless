@@ -74,6 +74,63 @@ def test_packages_cache_key_varies_by_inputs():
     assert _packages_cache_dir(["pillow>=10"], "3.12") != base
 
 
+# --- bundle_cordless dist-info ---
+
+def test_bundle_cordless_includes_dist_info(tmp_path, monkeypatch):
+    import cordless.deploy
+
+    pkg_root = tmp_path / "site-packages"
+    pkg_dir = pkg_root / "cordless"
+    dist_info = pkg_root / "cordless-1.0.0b2.dist-info"
+    _make_tree(pkg_dir, ["app.py", "__init__.py"])
+    _make_tree(dist_info, ["METADATA", "RECORD"])
+
+    monkeypatch.setattr(cordless.deploy, "_ensure_packages", lambda pkgs, v: str(tmp_path / "empty"))
+    (tmp_path / "empty").mkdir(exist_ok=True)
+
+    import cordless.upload
+    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "lambda_function.py").write_text("x")
+
+    zip_path = cordless.deploy.build_function_zip(str(src), bundle_cordless=True)
+    try:
+        names = _zip_names(zip_path)
+        assert "cordless-1.0.0b2.dist-info/METADATA" in names
+        assert "cordless-1.0.0b2.dist-info/RECORD" in names
+    finally:
+        os.unlink(zip_path)
+
+
+def test_bundle_cordless_includes_egg_info(tmp_path, monkeypatch):
+    import cordless.deploy
+
+    pkg_root = tmp_path / "site-packages"
+    pkg_dir = pkg_root / "cordless"
+    egg_info = pkg_root / "cordless.egg-info"
+    _make_tree(pkg_dir, ["app.py", "__init__.py"])
+    _make_tree(egg_info, ["PKG-INFO", "top_level.txt"])
+
+    monkeypatch.setattr(cordless.deploy, "_ensure_packages", lambda pkgs, v: str(tmp_path / "empty"))
+    (tmp_path / "empty").mkdir(exist_ok=True)
+
+    import cordless.upload
+    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "lambda_function.py").write_text("x")
+
+    zip_path = cordless.deploy.build_function_zip(str(src), bundle_cordless=True)
+    try:
+        names = _zip_names(zip_path)
+        assert "cordless.egg-info/PKG-INFO" in names
+    finally:
+        os.unlink(zip_path)
+
+
 # --- layer zip ---
 
 def test_layer_zip_bundles_pynacl_extras(tmp_path, monkeypatch):
@@ -116,5 +173,27 @@ def test_layer_zip_without_runtime_skips_extras(monkeypatch):
     zip_path = cordless.upload.build_layer_zip()
     try:
         assert called == []
+    finally:
+        os.unlink(zip_path)
+
+
+def test_layer_zip_includes_dist_info(tmp_path, monkeypatch):
+    import cordless.upload
+
+    site_dir = tmp_path / "site-packages"
+    pkg_dir = site_dir / "cordless"
+    dist_info = site_dir / "cordless-1.0.0b2.dist-info"
+    _make_tree(pkg_dir, ["app.py", "__init__.py"])
+    _make_tree(dist_info, ["METADATA", "RECORD"])
+
+    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
+    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v: None)
+
+    zip_path = cordless.upload.build_layer_zip("3.12")
+    try:
+        names = _zip_names(zip_path)
+        assert "python/cordless-1.0.0b2.dist-info/METADATA" in names
+        assert "python/cordless-1.0.0b2.dist-info/RECORD" in names
+        assert "python/cordless/app.py" in names
     finally:
         os.unlink(zip_path)

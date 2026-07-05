@@ -218,6 +218,15 @@ def test_wire_crons_creates_rules(aws_clients, tmp_path):
     assert rules[0]["ScheduleExpression"] == "rate(1 day)"
 
 
+def test_wire_crons_disables_retries(aws_clients, tmp_path):
+    iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    fn_arn = _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    _wire_crons(events, lam, "my-fn", "my-fn", fn_arn, {"tick": "rate(1 minute)"})
+    cfg = lam.get_function_event_invoke_config(FunctionName="my-fn")
+    assert cfg["MaximumRetryAttempts"] == 0
+
+
 def test_wire_crons_sets_input_payload(aws_clients, tmp_path):
     iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
     role_arn = _make_role(iam)

@@ -76,3 +76,33 @@ def test_register_rejects_bad_target_syntax():
 def test_register_rejects_missing_attribute():
     with pytest.raises(SystemExit):
         main(["register", "sample_app:missing", "--token", "tok"])
+
+
+def test_register_prefers_client_credentials_over_token(capsys, monkeypatch):
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "should-not-be-used")
+    responses = [FakeDiscordResponse({"access_token": "bearer-tok"}),
+                 FakeDiscordResponse([{"id": "1", "name": "ping"}])]
+
+    with patch("cordless.register.urllib.request.urlopen", side_effect=responses) as urlopen:
+        main(["register", "sample_app:bot", "--client-id", "cid", "--client-secret", "csecret"])
+
+    assert urlopen.call_args_list[1].args[0].get_header("Authorization") == "Bearer bearer-tok"
+
+
+# ---------------------------------------------------------------------------
+# cron
+# ---------------------------------------------------------------------------
+
+def test_cron_runs_handler(monkeypatch):
+    import sample_app
+    sample_app.cron_calls.clear()
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
+
+    main(["cron", "hourly", "sample_app:bot", "--source", FIXTURES_DIR])
+
+    assert sample_app.cron_calls == ["hourly"]
+
+
+def test_cron_rejects_unknown_name():
+    with pytest.raises(SystemExit, match="unknown_cron"):
+        main(["cron", "unknown_cron", "sample_app:bot", "--source", FIXTURES_DIR])
