@@ -94,7 +94,9 @@ class StringSelect:
         return d
 
 
-class UserSelect:
+class _EntitySelect:
+    _type = None
+
     def __init__(self, custom_id, placeholder=None, min_values=1, max_values=1, disabled=False):
         self.custom_id = custom_id
         self.placeholder = placeholder
@@ -103,7 +105,7 @@ class UserSelect:
         self.disabled = disabled
 
     def to_dict(self):
-        d = {"type": 5, "custom_id": self.custom_id, "min_values": self.min_values, "max_values": self.max_values}
+        d = {"type": self._type, "custom_id": self.custom_id, "min_values": self.min_values, "max_values": self.max_values}
         if self.placeholder is not None:
             d["placeholder"] = self.placeholder
         if self.disabled:
@@ -111,57 +113,29 @@ class UserSelect:
         return d
 
 
-class RoleSelect:
-    def __init__(self, custom_id, placeholder=None, min_values=1, max_values=1, disabled=False):
-        self.custom_id = custom_id
-        self.placeholder = placeholder
-        self.min_values = min_values
-        self.max_values = max_values
-        self.disabled = disabled
-
-    def to_dict(self):
-        d = {"type": 6, "custom_id": self.custom_id, "min_values": self.min_values, "max_values": self.max_values}
-        if self.placeholder is not None:
-            d["placeholder"] = self.placeholder
-        if self.disabled:
-            d["disabled"] = True
-        return d
+class UserSelect(_EntitySelect):
+    _type = 5
 
 
-class MentionableSelect:
-    def __init__(self, custom_id, placeholder=None, min_values=1, max_values=1, disabled=False):
-        self.custom_id = custom_id
-        self.placeholder = placeholder
-        self.min_values = min_values
-        self.max_values = max_values
-        self.disabled = disabled
-
-    def to_dict(self):
-        d = {"type": 7, "custom_id": self.custom_id, "min_values": self.min_values, "max_values": self.max_values}
-        if self.placeholder is not None:
-            d["placeholder"] = self.placeholder
-        if self.disabled:
-            d["disabled"] = True
-        return d
+class RoleSelect(_EntitySelect):
+    _type = 6
 
 
-class ChannelSelect:
+class MentionableSelect(_EntitySelect):
+    _type = 7
+
+
+class ChannelSelect(_EntitySelect):
+    _type = 8
+
     def __init__(self, custom_id, channel_types=None, placeholder=None, min_values=1, max_values=1, disabled=False):
-        self.custom_id = custom_id
+        super().__init__(custom_id, placeholder, min_values, max_values, disabled)
         self.channel_types = channel_types
-        self.placeholder = placeholder
-        self.min_values = min_values
-        self.max_values = max_values
-        self.disabled = disabled
 
     def to_dict(self):
-        d = {"type": 8, "custom_id": self.custom_id, "min_values": self.min_values, "max_values": self.max_values}
+        d = super().to_dict()
         if self.channel_types is not None:
             d["channel_types"] = self.channel_types
-        if self.placeholder is not None:
-            d["placeholder"] = self.placeholder
-        if self.disabled:
-            d["disabled"] = True
         return d
 
 
