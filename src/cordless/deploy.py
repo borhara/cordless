@@ -321,6 +321,7 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
     from ._progress import Spinner, success
 
     session = get_session(region)
+    region = region or session.region_name
     iam = session.client("iam")
     lam = session.client("lambda")
     apigw = session.client("apigatewayv2")
