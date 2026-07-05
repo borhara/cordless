@@ -59,16 +59,14 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                         continue
                     abs_path = os.path.join(root, fname)
                     zf.write(abs_path, os.path.relpath(abs_path, pkg_parent))
-            # bundle cordless dependencies alongside the source
-            deps_dir = _ensure_packages(["httpx"], python_version)
-            for root, dirs, files in os.walk(deps_dir):
-                dirs[:] = [d for d in dirs if d != "__pycache__"]
-                for fname in files:
-                    if fname.endswith(".pyc"):
-                        continue
-                    abs_path = os.path.join(root, fname)
-                    zf.write(abs_path, os.path.relpath(abs_path, deps_dir))
-
+            # include dist-info/egg-info so importlib.metadata works inside Lambda
+            import glob
+            for pattern in ("cordless-*.dist-info", "cordless.egg-info"):
+                for dist_info in glob.glob(os.path.join(pkg_parent, pattern)):
+                    for root, dirs, files in os.walk(dist_info):
+                        for fname in files:
+                            abs_path = os.path.join(root, fname)
+                            zf.write(abs_path, os.path.relpath(abs_path, pkg_parent))
         if packages:
             pkg_dir = _ensure_packages(packages, python_version)
             for root, dirs, files in os.walk(pkg_dir):
@@ -397,6 +395,9 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
 
 
 def _wire_crons(events, lam, function_name, target_fn, target_arn, crons):
+    # crons are fire-and-forget; retries would double/triple-send messages
+    lam.put_function_event_invoke_config(FunctionName=target_fn, MaximumRetryAttempts=0)
+
     for name, schedule in crons.items():
         rule_name = f"{function_name}-cron-{name}"
         rule_arn = events.put_rule(Name=rule_name, ScheduleExpression=schedule)["RuleArn"]
