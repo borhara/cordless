@@ -177,7 +177,15 @@ def run_dev(target, port=8787, tunnel=True, source_dir="."):
             print("  paste the public url into your app's Interactions Endpoint URL")
         else:
             print()
-            print("  (install cloudflared for a public tunnel: brew install cloudflared)")
+            import platform
+            _sys = platform.system()
+            if _sys == "Darwin":
+                _hint = "brew install cloudflared"
+            elif _sys == "Windows":
+                _hint = "winget install Cloudflare.cloudflared"
+            else:
+                _hint = "https://github.com/cloudflare/cloudflared/releases/latest"
+            print(f"  (install cloudflared for a public tunnel: {_hint})")
     print()
 
     if getattr(bot, "crons", None):
