@@ -352,7 +352,21 @@ def _logs(args):
             print()
 
 
+def _load_env(source_dir):
+    """Load .env and cordless.toml [deploy.env] into the environment (no clobber)."""
+    env_path = os.path.join(source_dir, ".env")
+    if os.path.exists(env_path):
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                os.environ.setdefault(key.strip(), value.strip())
+
+
 def main(argv=None):
+    _load_env(os.getcwd())
     parser = argparse.ArgumentParser(prog="cordless", description="cordless command-line tools")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
