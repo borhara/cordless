@@ -28,12 +28,23 @@ _LAMBDA_TRUST_POLICY = json.dumps({
 _LAMBDA_BASIC_EXECUTION_POLICY = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 
 
+_KNOWN_DEPLOY_KEYS = {
+    "bot", "setup", "env", "function", "runtime", "defer_worker", "role_name",
+    "handler", "layer_name", "region", "timeout", "memory", "bundle_cordless",
+    "packages", "defer_handler", "defer_timeout", "defer_memory", "policies",
+}
+
+
 def load_config(source_dir):
     path = os.path.join(source_dir, "cordless.toml")
     if not os.path.exists(path):
         return {}
     with open(path, "rb") as f:
-        return tomllib.load(f).get("deploy", {})
+        cfg = tomllib.load(f).get("deploy", {})
+    unknown = set(cfg) - _KNOWN_DEPLOY_KEYS
+    for key in sorted(unknown):
+        print(f"cordless: unknown [deploy] key {key!r} in cordless.toml (ignored)")
+    return cfg
 
 
 def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_version="3.12"):
