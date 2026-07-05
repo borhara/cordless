@@ -166,6 +166,39 @@ def test_autocomplete_dispatch():
     assert _body(result)["type"] == 8
 
 
+def test_subcommand_autocomplete_focused_value():
+    from cordless.context import Context
+
+    event = {
+        "type": 4,
+        "data": {
+            "name": "shop",
+            "options": [{"type": 1, "name": "buy", "options": [
+                {"name": "item", "value": "sw", "focused": True},
+            ]}],
+        },
+    }
+    ctx = Context(event)
+    assert ctx.focused_value == "sw"
+
+
+def test_subcommand_autocomplete_options():
+    from cordless.context import Context
+
+    event = {
+        "type": 4,
+        "data": {
+            "name": "shop",
+            "options": [{"type": 1, "name": "buy", "options": [
+                {"name": "qty", "value": 3},
+                {"name": "item", "value": "sw", "focused": True},
+            ]}],
+        },
+    }
+    ctx = Context(event)
+    assert ctx.options == {"qty": 3, "item": "sw"}
+
+
 # --- Subcommands ---
 
 def test_subcommand_dispatch():

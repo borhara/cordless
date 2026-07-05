@@ -84,6 +84,11 @@ def test_option_min_max_length():
     assert o["max_length"] == 100
 
 
+def test_option_raises_for_unknown_type_alias():
+    with pytest.raises(ValueError, match="strnig"):
+        option("x", type="strnig")
+
+
 def test_option_omits_unused_keys():
     o = option("text", "desc")
     assert "required" not in o

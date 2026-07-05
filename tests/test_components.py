@@ -37,6 +37,11 @@ def test_button_disabled():
     assert Button("X", custom_id="x", disabled=True).to_dict()["disabled"] is True
 
 
+def test_premium_button_omits_null_sku_id():
+    d = Button(style=ButtonStyle.PREMIUM).to_dict()
+    assert "sku_id" not in d
+
+
 # --- ActionRow ---
 
 def test_action_row_wraps_buttons():

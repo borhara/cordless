@@ -236,6 +236,18 @@ def test_wire_crons_sets_input_payload(aws_clients, tmp_path):
     assert json.loads(targets[0]["Input"]) == {"_cordless_cron": "tick"}
 
 
+def test_wire_crons_removes_stale_rules(aws_clients, tmp_path):
+    iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    fn_arn = _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+
+    _wire_crons(events, lam, "my-fn", "my-fn", fn_arn, {"daily": "rate(1 day)"})
+    _wire_crons(events, lam, "my-fn", "my-fn", fn_arn, {"weekly": "rate(7 days)"})
+
+    rules = {r["Name"] for r in events.list_rules(NamePrefix="my-fn-cron-")["Rules"]}
+    assert rules == {"my-fn-cron-weekly"}
+
+
 def test_wire_crons_is_idempotent(aws_clients, tmp_path):
     iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
     role_arn = _make_role(iam)

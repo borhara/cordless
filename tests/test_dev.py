@@ -29,6 +29,23 @@ def bot_project(tmp_path):
 
 # --- Reloader ---
 
+def test_defer_import_survives_no_region(monkeypatch):
+    import importlib
+    import sys
+    import botocore.exceptions
+
+    def _no_region(*a, **kw):
+        raise botocore.exceptions.NoRegionError()
+
+    monkeypatch.setattr("boto3.client", _no_region)
+    sys.modules.pop("cordless.defer", None)
+    try:
+        import cordless.defer as defer_mod
+        assert defer_mod._lambda_client is None
+    finally:
+        sys.modules.pop("cordless.defer", None)
+
+
 def test_reloader_loads_bot(bot_project):
     reloader = Reloader("mybot:bot", str(bot_project))
     bot = reloader.get()
@@ -116,6 +133,20 @@ def test_local_invoke_runs_worker_thread(bot_project, monkeypatch):
 
 
 # --- env loading ---
+
+def test_load_env_strips_double_quotes(tmp_path, monkeypatch):
+    monkeypatch.delenv("QUOTED", raising=False)
+    (tmp_path / ".env").write_text('QUOTED="my-token"\n')
+    _load_env(str(tmp_path))
+    assert os.environ.pop("QUOTED") == "my-token"
+
+
+def test_load_env_strips_single_quotes(tmp_path, monkeypatch):
+    monkeypatch.delenv("QUOTED", raising=False)
+    (tmp_path / ".env").write_text("QUOTED='my-token'\n")
+    _load_env(str(tmp_path))
+    assert os.environ.pop("QUOTED") == "my-token"
+
 
 def test_load_env_reads_toml_and_dotenv(tmp_path, monkeypatch):
     monkeypatch.delenv("FROM_TOML", raising=False)

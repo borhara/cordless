@@ -294,6 +294,35 @@ def test_attachments_resolved_from_interaction():
     assert got["attachment"]["filename"] == "cat.png"
 
 
+def test_empty_public_key_rejects_invalid_signature():
+    bot = Cordless(public_key="")
+
+    @bot.command("ping")
+    async def ping(ctx):
+        await ctx.send("pong")
+
+    result = bot.handle({
+        "body": json.dumps({"type": 2, "data": {"name": "ping"}}),
+        "headers": {
+            "x-signature-ed25519": "a" * 128,
+            "x-signature-timestamp": "1234567890",
+        },
+    })
+    assert result["statusCode"] == 401
+
+
+def test_raw_dict_uikit_component_sets_flag():
+    bot = Cordless()
+
+    @bot.command("test")
+    async def test_cmd(ctx):
+        await ctx.send(components=[{"type": 17, "components": []}])
+
+    result = _handle(bot, {"type": 2, "data": {"name": "test"}, "id": "1", "token": "t"})
+    flags = _body(result)["data"].get("flags", 0)
+    assert flags & 32768
+
+
 # --- load_extension ---
 
 def test_load_extension_without_setup_raises():
