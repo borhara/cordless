@@ -401,7 +401,7 @@ cordless deploy --defer-worker my-bot-worker
 cordless deploy --register
 ```
 
-`--register` auto-detects your `Cordless()` instance and reads credentials from `$DISCORD_BOT_TOKEN`, or `$DISCORD_CLIENT_ID` + `$DISCORD_CLIENT_SECRET`.
+`--register` auto-detects your `Cordless()` instance and reads credentials from `$DISCORD_BOT_TOKEN`, or `$DISCORD_CLIENT_ID` + `$DISCORD_CLIENT_SECRET` (from env or `.env`).
 
 ### cordless destroy
 
@@ -450,8 +450,10 @@ function      = "my-bot"
 region        = "eu-west-1"
 runtime       = "python3.12"
 handler       = "lambda_function.handler"
+timeout       = 10         # seconds (default: 10)
 memory        = 256        # MB — main function (default: 256)
 defer_worker  = "my-bot-worker"
+defer_timeout = 30         # seconds (default: 30)
 defer_memory  = 256        # MB
 packages      = ["pillow"] # extra pip packages to bundle into the zip
 policies      = ["arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"]
@@ -493,9 +495,10 @@ Every handler receives a `ctx` object.
 
 | method | description |
 |---|---|
-| `await ctx.send(msg, *, content, ephemeral, embeds, components)` | Reply with a new message |
-| `await ctx.edit(msg, *, content, embeds, components)` | Edit the original message (buttons / selects) |
+| `await ctx.send(msg, *, content, ephemeral, embeds, components, files)` | Reply with a new message |
+| `await ctx.edit(msg, *, content, embeds, components, files)` | Edit the original message (buttons / selects) |
 | `await ctx.defer(ephemeral=False)` | ACK within 3 s; respond later via the worker |
+| `await ctx.defer_edit()` | ACK a component interaction without editing the message |
 | `await ctx.send_modal(modal)` | Open a modal form |
 | `await ctx.respond_autocomplete(choices)` | Return autocomplete suggestions |
 | `await ctx.followup(msg, …, files=[(name, bytes), …])` | Send a followup message (deferred worker, post-ACK) |
