@@ -68,6 +68,49 @@ Verification runs at C speed automatically — `cordless deploy` bundles PyNaCl 
 
 ---
 
+## Local development
+
+### cordless dev
+
+Run your bot locally with hot reload, no deploy needed:
+
+```bash
+cordless dev
+```
+
+cordless scans your source directory for a `Cordless()` instance automatically. Pass `MODULE:ATTRIBUTE` explicitly if you have multiple bots or a non-standard layout.
+
+If [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) is installed, dev opens a free public tunnel and prints the URL. Paste it into your app's Interactions Endpoint URL and Discord talks to your local code with real, signed interactions. Edit a file, save, run the command again in Discord: changes apply instantly.
+
+Install cloudflared:
+- **macOS**: `brew install cloudflared`
+- **Windows**: `winget install Cloudflare.cloudflared`
+- **Linux**: download from the [releases page](https://github.com/cloudflare/cloudflared/releases/latest)
+
+Deferred handlers (`defer=True`) run in-process on a background thread, so the full defer flow works without a worker Lambda. `.env` is loaded automatically.
+
+```
+cordless dev
+  local   http://127.0.0.1:8787
+  public  https://random-words.trycloudflare.com
+
+  paste the public url into your app's Interactions Endpoint URL
+  watching for changes (ctrl+c to stop)
+```
+
+### .env
+
+All cordless commands read a `.env` file in the project root. Values are loaded automatically and merged into your Lambda's environment on deploy — so you only need to define credentials once.
+
+```
+DISCORD_PUBLIC_KEY=abc123...
+DISCORD_BOT_TOKEN=your_bot_token
+DISCORD_CLIENT_ID=123456789
+DISCORD_CLIENT_SECRET=your_secret
+```
+
+---
+
 ## Commands
 
 ### Options
@@ -351,49 +394,6 @@ def admin_only(ctx):
 @bot.guard(admin_only)
 @bot.command("ban", description="Ban a user")
 async def ban(ctx): ...
-```
-
----
-
-## Local development
-
-### cordless dev
-
-Run your bot locally with hot reload, no deploy needed:
-
-```bash
-cordless dev
-```
-
-cordless scans your source directory for a `Cordless()` instance automatically. Pass `MODULE:ATTRIBUTE` explicitly if you have multiple bots or a non-standard layout.
-
-If [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) is installed, dev opens a free public tunnel and prints the URL. Paste it into your app's Interactions Endpoint URL and Discord talks to your local code with real, signed interactions. Edit a file, save, run the command again in Discord: changes apply instantly.
-
-Install cloudflared:
-- **macOS**: `brew install cloudflared`
-- **Windows**: `winget install Cloudflare.cloudflared`
-- **Linux**: download from the [releases page](https://github.com/cloudflare/cloudflared/releases/latest)
-
-Deferred handlers (`defer=True`) run in-process on a background thread, so the full defer flow works without a worker Lambda. `.env` and `[deploy.env]` are loaded automatically.
-
-```
-cordless dev
-  local   http://127.0.0.1:8787
-  public  https://random-words.trycloudflare.com
-
-  paste the public url into your app's Interactions Endpoint URL
-  watching for changes (ctrl+c to stop)
-```
-
-### .env
-
-All cordless commands read a `.env` file in the project root. Values are loaded automatically and merged into your Lambda's environment on deploy — so you only need to define credentials once.
-
-```
-DISCORD_PUBLIC_KEY=abc123...
-DISCORD_BOT_TOKEN=your_bot_token
-DISCORD_CLIENT_ID=123456789
-DISCORD_CLIENT_SECRET=your_secret
 ```
 
 ---
