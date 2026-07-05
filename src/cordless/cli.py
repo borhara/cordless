@@ -365,7 +365,7 @@ def _load_env(source_dir):
                 if not line or line.startswith("#") or "=" not in line:
                     continue
                 key, _, value = line.partition("=")
-                os.environ.setdefault(key.strip(), value.strip())
+                os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
 
 
 def main(argv=None):
