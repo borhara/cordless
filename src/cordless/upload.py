@@ -41,6 +41,15 @@ def build_layer_zip(python_version=None):
                 rel_path = os.path.relpath(abs_path, site_dir)
                 zf.write(abs_path, os.path.join("python", rel_path))
 
+        import glob
+        for pattern in ("cordless-*.dist-info", "cordless.egg-info"):
+            for dist_info in glob.glob(os.path.join(site_dir, pattern)):
+                for root, dirs, files in os.walk(dist_info):
+                    for fname in files:
+                        abs_path = os.path.join(root, fname)
+                        rel_path = os.path.relpath(abs_path, site_dir)
+                        zf.write(abs_path, os.path.join("python", rel_path))
+
         extras_dir = _layer_extras_dir(python_version) if python_version else None
         if extras_dir:
             for root, dirs, files in os.walk(extras_dir):
