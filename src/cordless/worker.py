@@ -17,6 +17,6 @@ def make_worker_handler(bot):
             asyncio.run(bot.router.dispatch(event, ctx))
         except Exception:
             traceback.print_exc()
-            raise  # re-raise so Lambda sees a failure and can retry
+            raise  # surface the failure in Lambda error metrics; retries are disabled at deploy
 
     return handler
