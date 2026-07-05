@@ -366,7 +366,7 @@ cordless dev
 
 ### .env
 
-All cordless commands read a `.env` file in the project root. Values are loaded into the environment before any command runs, and are also merged into your Lambda's environment variables on deploy — so you only need to define them once.
+All cordless commands read a `.env` file in the project root. Values are loaded automatically and merged into your Lambda's environment on deploy — so you only need to define credentials once.
 
 ```
 DISCORD_PUBLIC_KEY=abc123...
@@ -374,8 +374,6 @@ DISCORD_BOT_TOKEN=your_bot_token
 DISCORD_CLIENT_ID=123456789
 DISCORD_CLIENT_SECRET=your_secret
 ```
-
-`cordless.toml [deploy.env]` takes precedence over `.env` if the same key appears in both. The `--env KEY=VALUE` flag takes precedence over both.
 
 ---
 
