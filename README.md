@@ -150,7 +150,7 @@ async def slow_action(ctx):
 
 ### scheduled handlers
 
-Run code on a schedule with `@bot.cron()` — daily rewards, cleanup jobs, anything that shouldn't wait for an interaction. `cordless deploy` wires each schedule to an EventBridge rule automatically (set `bot = "lambda_function:bot"` in `cordless.toml` so deploy can find them).
+Run code on a schedule with `@bot.cron()` — daily rewards, cleanup jobs, anything that shouldn't wait for an interaction. `cordless deploy` wires each schedule to an EventBridge rule automatically.
 
 ```python
 @bot.cron("rate(1 day)")
@@ -341,13 +341,19 @@ async def ban(ctx): ...
 Run your bot locally with hot reload, no deploy needed:
 
 ```bash
-cordless dev                       # uses `bot` from cordless.toml
-cordless dev lambda_function:bot   # or pass the target directly
+cordless dev
 ```
 
-If [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) is installed (`brew install cloudflared`), dev opens a free public tunnel and prints the URL. Paste it into your app's Interactions Endpoint URL and Discord talks to your local code with real, signed interactions. Edit a file, save, run the command again in Discord: changes apply instantly.
+cordless scans your source directory for a `Cordless()` instance automatically. Pass `MODULE:ATTRIBUTE` explicitly if you have multiple bots or a non-standard layout.
 
-Deferred handlers (`defer=True`) run in-process on a background thread, so the full defer flow works without a worker Lambda. `[deploy.env]` and any `.env` file are loaded into the environment automatically.
+If [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) is installed, dev opens a free public tunnel and prints the URL. Paste it into your app's Interactions Endpoint URL and Discord talks to your local code with real, signed interactions. Edit a file, save, run the command again in Discord: changes apply instantly.
+
+Install cloudflared:
+- **macOS**: `brew install cloudflared`
+- **Windows**: `winget install Cloudflare.cloudflared`
+- **Linux**: download from the [releases page](https://github.com/cloudflare/cloudflared/releases/latest)
+
+Deferred handlers (`defer=True`) run in-process on a background thread, so the full defer flow works without a worker Lambda. `.env` and `[deploy.env]` are loaded automatically.
 
 ```
 cordless dev
@@ -357,6 +363,19 @@ cordless dev
   paste the public url into your app's Interactions Endpoint URL
   watching for changes (ctrl+c to stop)
 ```
+
+### .env
+
+All cordless commands read a `.env` file in the project root. Values are loaded into the environment before any command runs, and are also merged into your Lambda's environment variables on deploy — so you only need to define them once.
+
+```
+DISCORD_PUBLIC_KEY=abc123...
+DISCORD_BOT_TOKEN=your_bot_token
+DISCORD_CLIENT_ID=123456789
+DISCORD_CLIENT_SECRET=your_secret
+```
+
+`cordless.toml [deploy.env]` takes precedence over `.env` if the same key appears in both. The `--env KEY=VALUE` flag takes precedence over both.
 
 ---
 
@@ -375,16 +394,16 @@ cordless init my-bot
 Packages your source directory, creates (or updates) the Lambda function and a cordless layer, sets up API Gateway, and returns the endpoint URL.
 
 ```bash
-cordless deploy --function my-bot --source .
+cordless deploy
 
 # with a deferred worker Lambda
-cordless deploy --function my-bot --defer-worker my-bot-worker
+cordless deploy --defer-worker my-bot-worker
 
 # deploy and register slash commands in one step
-cordless deploy --register lambda_function:bot
+cordless deploy --register
 ```
 
-`--register` reads credentials from `$DISCORD_BOT_TOKEN`, or `$DISCORD_CLIENT_ID` + `$DISCORD_CLIENT_SECRET` (client id/secret also fall back to `[deploy.env]`).
+`--register` auto-detects your `Cordless()` instance and reads credentials from `$DISCORD_BOT_TOKEN`, or `$DISCORD_CLIENT_ID` + `$DISCORD_CLIENT_SECRET`.
 
 ### cordless destroy
 
@@ -392,35 +411,35 @@ Deletes everything `cordless deploy` created: the function(s), API Gateway, Even
 
 ```bash
 cordless destroy
-cordless destroy --yes
+
+# also delete the cordless Lambda layer
+cordless destroy --layer
+
+# specify a layer name
+cordless destroy --layer my-layer-name
 ```
 
 ### cordless register
 
-Pushes your bot's registered commands to Discord. Run this once after deploying, and again whenever you add or change commands.
+Pushes your bot's slash commands to Discord. Run this once after deploying, and again whenever you add or change commands. cordless auto-detects your `Cordless()` instance — no need to pass it explicitly.
 
 ```bash
-cordless register lambda_function:bot --token $DISCORD_BOT_TOKEN
+cordless register
 
 # guild-specific (instant — no propagation delay)
-cordless register lambda_function:bot --guild-id 123456789
-
-# without a bot user, via client credentials
-cordless register lambda_function:bot \
-  --client-id $DISCORD_CLIENT_ID \
-  --client-secret $DISCORD_CLIENT_SECRET
+cordless register --guild-id 123456789
 ```
 
-Pass `MODULE:ATTRIBUTE` pointing at your `Cordless()` instance. Environment variables `DISCORD_BOT_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and `DISCORD_GUILD_ID` are read automatically if set.
+Credentials are read from `$DISCORD_BOT_TOKEN`, or `$DISCORD_CLIENT_ID` + `$DISCORD_CLIENT_SECRET` (from env or `.env`).
 
 ### cordless logs
 
 Tail CloudWatch logs for your deployed function.
 
 ```bash
-cordless logs --function my-bot
-cordless logs --function my-bot --follow
-cordless logs --function my-bot --since 30    # last 30 minutes
+cordless logs
+cordless logs --follow
+cordless logs --since 30    # last 30 minutes
 ```
 
 ### cordless.toml
@@ -433,18 +452,17 @@ function      = "my-bot"
 region        = "eu-west-1"
 runtime       = "python3.12"
 handler       = "lambda_function.handler"
-bot           = "lambda_function:bot"  # lets deploy find cron schedules (and is the --register target)
 memory        = 256        # MB — main function (default: 256)
 defer_worker  = "my-bot-worker"
-defer_memory  = 256        # MB — increase if your worker does heavy work (e.g. image generation)
-packages      = ["pillow"] # extra pip packages to bundle into the zip (cached between deploys)
-policies      = ["arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"]  # extra IAM policies for the role
+defer_memory  = 256        # MB
+packages      = ["pillow"] # extra pip packages to bundle into the zip
+policies      = ["arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"]
 
 [deploy.env]
 DISCORD_PUBLIC_KEY = "abc123..."
 ```
 
-> AWS credentials are read from the standard chain — environment variables, `~/.aws/credentials`, or an instance role. No credentials are ever prompted for on the terminal.
+> AWS credentials are read from the standard chain — environment variables, `~/.aws/credentials`, or an instance role.
 
 ---
 
