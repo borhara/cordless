@@ -161,7 +161,7 @@ def _deploy(args):
         source_dir=source_dir,
         runtime=runtime,
         layer_name=args.layer_name or cfg.get("layer_name", "cordless"),
-        env={**cfg.get("env", {}), **env},
+        env={**_read_dot_env(source_dir), **cfg.get("env", {}), **env},
         region=args.region or cfg.get("region") or os.environ.get("AWS_DEFAULT_REGION"),
         timeout=int(_pick(args.timeout, cfg.get("timeout"), 10)),
         memory=int(cfg.get("memory", 256)),
@@ -355,8 +355,9 @@ def _logs(args):
             print()
 
 
-def _load_env(source_dir):
-    """Load .env and cordless.toml [deploy.env] into the environment (no clobber)."""
+def _read_dot_env(source_dir):
+    """Return a dict of KEY=VALUE pairs from .env (quotes stripped, comments ignored)."""
+    result = {}
     env_path = os.path.join(source_dir, ".env")
     if os.path.exists(env_path):
         with open(env_path) as f:
@@ -365,7 +366,14 @@ def _load_env(source_dir):
                 if not line or line.startswith("#") or "=" not in line:
                     continue
                 key, _, value = line.partition("=")
-                os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+                result[key.strip()] = value.strip().strip("\"'")
+    return result
+
+
+def _load_env(source_dir):
+    """Load .env into the process environment (no clobber)."""
+    for key, value in _read_dot_env(source_dir).items():
+        os.environ.setdefault(key, value)
 
 
 def main(argv=None):
