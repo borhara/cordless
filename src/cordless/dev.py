@@ -189,8 +189,8 @@ def run_dev(target, port=8787, tunnel=True, source_dir="."):
     print()
 
     if getattr(bot, "crons", None):
-        names = ", ".join(bot.crons)
-        print(f"  crons registered (run manually with bot.run_cron): {names}")
+        for name in bot.crons:
+            print(f"  cron    cordless cron {name}")
         print()
 
     print("  watching for changes (ctrl+c to stop)")

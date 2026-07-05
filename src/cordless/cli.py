@@ -83,9 +83,10 @@ def _register(args):
     cfg = load_config(source_dir)
     toml_env = cfg.get("env", {})
 
-    token = args.token
     client_id = args.client_id or toml_env.get("DISCORD_CLIENT_ID")
     client_secret = args.client_secret or toml_env.get("DISCORD_CLIENT_SECRET")
+    # only fall back to bot token when client credentials aren't available
+    token = args.token if not (client_id and client_secret) else None
 
     if not token and not (client_id and client_secret):
         raise SystemExit(
@@ -300,6 +301,25 @@ def _dev(args):
     run_dev(target, port=args.port, tunnel=not args.no_tunnel, source_dir=source_dir)
 
 
+def _cron(args):
+    from .deploy import load_config
+
+    source_dir = os.path.abspath(args.source)
+    _load_env(source_dir)
+    cfg = load_config(source_dir)
+    target = _resolve_bot(args.bot, source_dir, cfg)
+    if not target:
+        raise SystemExit(
+            "Bot location required: pass it as an argument or add `bot` to [deploy] in cordless.toml."
+        )
+    bot = _load_bot(target, source_dir)
+    if args.name not in bot.crons:
+        available = ", ".join(bot.crons) if bot.crons else "(none registered)"
+        raise SystemExit(f"Unknown cron {args.name!r}. Available: {available}")
+    import asyncio
+    asyncio.run(bot.crons[args.name]["handler"]())
+
+
 def _logs(args):
     import time
     from ._aws import get_session
@@ -456,6 +476,12 @@ def main(argv=None):
     dev_cmd.set_defaults(func=_dev)
 
     # logs
+    cron_cmd = subparsers.add_parser("cron", help="Run a cron handler locally by name")
+    cron_cmd.add_argument("name", metavar="NAME", help="Cron handler name (e.g. daily_rewards)")
+    cron_cmd.add_argument("bot", nargs="?", metavar="BOT", help="MODULE:ATTRIBUTE (auto-detected if omitted)")
+    cron_cmd.add_argument("--source", default=".", metavar="DIR", help="Source directory (default: .)")
+    cron_cmd.set_defaults(func=_cron)
+
     logs_cmd = subparsers.add_parser("logs", help="Tail CloudWatch logs for a deployed Lambda function")
     logs_cmd.add_argument("--function", "-f", default=None, metavar="FUNCTION", help="Lambda function name (defaults to `function` in cordless.toml)")
     logs_cmd.add_argument("--region", "-r", default=os.environ.get("AWS_DEFAULT_REGION"), metavar="REGION", help="AWS region")

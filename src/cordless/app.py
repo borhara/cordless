@@ -2,6 +2,7 @@ import asyncio
 import base64
 import inspect
 import json
+import os
 import re
 
 from .context import Context
@@ -109,6 +110,67 @@ class Cordless:
             return func
 
         return decorator
+
+    async def send_message(self, channel_id, content=None, *, embeds=None, components=None):
+        """Send a message to a channel."""
+        import httpx
+        payload = {}
+        if content is not None:
+            payload["content"] = content
+        if embeds is not None:
+            payload["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
+        if components is not None:
+            payload["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
+        async with httpx.AsyncClient() as client:
+            (await client.post(
+                f"https://discord.com/api/v10/channels/{channel_id}/messages",
+                headers={"Authorization": f"Bot {os.environ['DISCORD_BOT_TOKEN']}"},
+                json=payload,
+            )).raise_for_status()
+
+    async def edit_message(self, channel_id, message_id, content=None, *, embeds=None, components=None):
+        """Edit an existing message."""
+        import httpx
+        payload = {}
+        if content is not None:
+            payload["content"] = content
+        if embeds is not None:
+            payload["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
+        if components is not None:
+            payload["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
+        async with httpx.AsyncClient() as client:
+            (await client.patch(
+                f"https://discord.com/api/v10/channels/{channel_id}/messages/{message_id}",
+                headers={"Authorization": f"Bot {os.environ['DISCORD_BOT_TOKEN']}"},
+                json=payload,
+            )).raise_for_status()
+
+    async def delete_message(self, channel_id, message_id):
+        """Delete a message."""
+        import httpx
+        async with httpx.AsyncClient() as client:
+            (await client.delete(
+                f"https://discord.com/api/v10/channels/{channel_id}/messages/{message_id}",
+                headers={"Authorization": f"Bot {os.environ['DISCORD_BOT_TOKEN']}"},
+            )).raise_for_status()
+
+    async def add_role(self, guild_id, user_id, role_id):
+        """Add a role to a guild member."""
+        import httpx
+        async with httpx.AsyncClient() as client:
+            (await client.put(
+                f"https://discord.com/api/v10/guilds/{guild_id}/members/{user_id}/roles/{role_id}",
+                headers={"Authorization": f"Bot {os.environ['DISCORD_BOT_TOKEN']}"},
+            )).raise_for_status()
+
+    async def remove_role(self, guild_id, user_id, role_id):
+        """Remove a role from a guild member."""
+        import httpx
+        async with httpx.AsyncClient() as client:
+            (await client.delete(
+                f"https://discord.com/api/v10/guilds/{guild_id}/members/{user_id}/roles/{role_id}",
+                headers={"Authorization": f"Bot {os.environ['DISCORD_BOT_TOKEN']}"},
+            )).raise_for_status()
 
     @property
     def worker_handler(self):
