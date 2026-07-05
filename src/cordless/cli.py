@@ -76,6 +76,16 @@ def _resolve_bot(explicit, source_dir, cfg=None):
     return _detect_bot_target(source_dir)
 
 
+def _run_register(bot, token, client_id, client_secret, guild_id=None):
+    commands = bot.sync_commands(
+        bot_token=token,
+        client_id=client_id,
+        client_secret=client_secret,
+        guild_id=guild_id,
+    )
+    return commands, ", ".join(c["name"] for c in commands) or "(none)"
+
+
 def _register(args):
     from .deploy import load_config
 
@@ -102,15 +112,8 @@ def _register(args):
         )
 
     bot = _load_bot(target, path=source_dir)
-    commands = bot.sync_commands(
-        bot_token=token,
-        client_id=client_id,
-        client_secret=client_secret,
-        guild_id=args.guild_id,
-    )
-
+    commands, names = _run_register(bot, token, client_id, client_secret, guild_id=args.guild_id)
     scope = f"guild {args.guild_id}" if args.guild_id else "globally"
-    names = ", ".join(c["name"] for c in commands) or "(none)"
     print(f"Registered {len(commands)} command(s) {scope}: {names}")
 
 
@@ -199,12 +202,7 @@ def _deploy(args):
                 "--register requires $DISCORD_BOT_TOKEN, "
                 "or both $DISCORD_CLIENT_ID and $DISCORD_CLIENT_SECRET"
             )
-        commands = bot.sync_commands(
-            bot_token=token,
-            client_id=client_id,
-            client_secret=client_secret,
-        )
-        names = ", ".join(c["name"] for c in commands) or "(none)"
+        commands, names = _run_register(bot, token, client_id, client_secret)
         print(f"  ✓ registered {len(commands)} command(s): {names}")
 
 
