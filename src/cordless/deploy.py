@@ -383,7 +383,8 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
             )
             lam.get_waiter("function_updated").wait(FunctionName=function_name)
 
-    if crons:
+    # run even when crons is empty so rules for deleted crons get cleaned up
+    if crons is not None:
         cron_target = defer_worker or function_name
         _, cron_arn = _function_exists(lam, cron_target)
         events = session.client("events")
@@ -395,8 +396,23 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
 
 
 def _wire_crons(events, lam, function_name, target_fn, target_arn, crons):
-    # crons are fire-and-forget; retries would double/triple-send messages
-    lam.put_function_event_invoke_config(FunctionName=target_fn, MaximumRetryAttempts=0)
+    if crons:
+        # crons are fire-and-forget; retries would double/triple-send messages
+        lam.put_function_event_invoke_config(FunctionName=target_fn, MaximumRetryAttempts=0)
+
+    prefix = f"{function_name}-cron-"
+    wanted = {f"{prefix}{name}" for name in crons}
+    for rule in events.list_rules(NamePrefix=prefix).get("Rules", []):
+        if rule["Name"] in wanted:
+            continue
+        target_ids = [t["Id"] for t in events.list_targets_by_rule(Rule=rule["Name"]).get("Targets", [])]
+        if target_ids:
+            events.remove_targets(Rule=rule["Name"], Ids=target_ids)
+        events.delete_rule(Name=rule["Name"])
+        try:
+            lam.remove_permission(FunctionName=target_fn, StatementId=f"cordless-cron-{rule['Name'][len(prefix):]}")
+        except lam.exceptions.ResourceNotFoundException:
+            pass
 
     for name, schedule in crons.items():
         rule_name = f"{function_name}-cron-{name}"
