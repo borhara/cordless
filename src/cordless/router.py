@@ -30,7 +30,7 @@ class Router:
         self.autocompletes = {}   # (cmd_key, option_name) → handler
         self._error_handler = None
 
-    def register_command(self, name, handler, description="No description provided.", options=None, dm_permission=True, cmd_type=1):
+    def register_command(self, name, handler, description="No description provided.", options=None, dm_permission=True, cmd_type=1, default_member_permissions=None, nsfw=False):
         if cmd_type == 1:
             for existing, meta in self.commands.items():
                 if meta.get("cmd_type", 1) != 1:
@@ -49,6 +49,8 @@ class Router:
             "dm_permission": dm_permission,
             "cmd_type": cmd_type,
             "params": list(inspect.signature(handler).parameters)[1:],
+            "default_member_permissions": default_member_permissions,
+            "nsfw": nsfw,
         }
 
     def register_button(self, custom_id, handler):
@@ -101,6 +103,10 @@ class Router:
             }
             if not meta.get("dm_permission", True):
                 cmd["dm_permission"] = False
+            if meta.get("default_member_permissions") is not None:
+                cmd["default_member_permissions"] = str(meta["default_member_permissions"])
+            if meta.get("nsfw"):
+                cmd["nsfw"] = True
             result.append(cmd)
 
         for top, entries in subs.items():
@@ -173,7 +179,8 @@ class Router:
                 ctx.options = {opt["name"]: opt["value"] for opt in leaf_options if "value" in opt}
             handler = entry["handler"]
             if getattr(handler, "_defer", False) and not ctx._worker_mode:
-                return await _defer_to_worker(ctx, interaction, ctx.defer)
+                ephemeral = getattr(handler, "_defer_ephemeral", False)
+                return await _defer_to_worker(ctx, interaction, ctx.defer, ephemeral=ephemeral)
             return await _invoke(handler, ctx, f"Command '{key}'", params=entry["params"])
 
         if itype == MESSAGE_COMPONENT:
@@ -250,7 +257,7 @@ def _focused_option_name(data):
     return None
 
 
-async def _defer_to_worker(ctx, interaction, ack):
+async def _defer_to_worker(ctx, interaction, ack, **ack_kwargs):
     import os
     import traceback
 
@@ -262,7 +269,7 @@ async def _defer_to_worker(ctx, interaction, ack):
             "CORDLESS_WORKER_FUNCTION is not set: add defer_worker to cordless.toml and run cordless deploy"
         )
     # ACK Discord first so the deferred response still goes back even if the invoke fails
-    await ack()
+    await ack(**ack_kwargs)
     try:
         invoke_worker(worker_fn, interaction)
     except Exception:

@@ -4,6 +4,7 @@ import inspect
 import json
 import os
 import re
+from typing import Literal, Union, get_args, get_origin
 
 from .context import Context
 from .errors import CordlessError
@@ -38,23 +39,51 @@ def _validate_command_name(name):
             )
 
 
+def _unwrap_optional(annotation):
+    if get_origin(annotation) is Union:
+        inner = [a for a in get_args(annotation) if a is not type(None)]
+        if len(inner) == 1:
+            return inner[0], True
+    try:
+        import types
+        if isinstance(annotation, types.UnionType):
+            inner = [a for a in annotation.__args__ if a is not type(None)]
+            if len(inner) == 1:
+                return inner[0], True
+    except AttributeError:
+        pass
+    return annotation, False
+
+
 def options_from_signature(func):
     """Infer Discord option dicts from a handler's type hints.
 
     async def buy(ctx, item: str, qty: int = 1) →
     a required string option "item" and an optional integer option "qty".
+    Supports Literal["a", "b"] for choices and Optional[int] / int | None for
+    optional typed parameters.
     """
     params = list(inspect.signature(func).parameters.values())[1:]  # skip ctx
     options = []
     for p in params:
         if p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD):
             continue
-        opt = {
-            "name": p.name,
-            "description": "No description provided.",
-            "type": _ANNOTATION_TYPES.get(p.annotation, 3),
-        }
-        if p.default is inspect.Parameter.empty:
+        annotation = p.annotation
+        optional_from_default = p.default is not inspect.Parameter.empty
+
+        annotation, optional_from_type = _unwrap_optional(annotation)
+        is_optional = optional_from_default or optional_from_type
+
+        opt = {"name": p.name, "description": "No description provided."}
+
+        if get_origin(annotation) is Literal:
+            choices_vals = get_args(annotation)
+            opt["type"] = 4 if choices_vals and isinstance(choices_vals[0], int) else 3
+            opt["choices"] = [{"name": str(v), "value": v} for v in choices_vals]
+        else:
+            opt["type"] = _ANNOTATION_TYPES.get(annotation, 3)
+
+        if not is_optional:
             opt["required"] = True
         options.append(opt)
     return options
@@ -101,13 +130,16 @@ class Cordless:
                 "rejected with 401 until it is set"
             )
 
-    def command(self, name, description="No description provided.", options=None, defer=False, dm_permission=True):
+    def command(self, name, description="No description provided.", options=None, defer=False,
+                dm_permission=True, default_member_permissions=None, nsfw=False, ephemeral=False):
         _validate_command_name(name)
 
         def decorator(func):
             _options = options if options is not None else options_from_signature(func)
             if defer:
                 func._defer = True
+                if ephemeral:
+                    func._defer_ephemeral = True
                 # Importing defer.py here (at decorator-application time, i.e. Lambda INIT)
                 # causes boto3 to be imported and the Lambda client pre-created before
                 # Discord's 3-second response window opens on the first invocation.
@@ -115,7 +147,10 @@ class Cordless:
                     from . import defer as _defer_mod  # noqa: F401
                 except Exception:
                     pass
-            self.router.register_command(name, func, description=description, options=_options, dm_permission=dm_permission)
+            self.router.register_command(name, func, description=description, options=_options,
+                                         dm_permission=dm_permission,
+                                         default_member_permissions=default_member_permissions,
+                                         nsfw=nsfw)
             return func
 
         return decorator
@@ -346,6 +381,8 @@ class Cordless:
             if ctype == "command":
                 if kwargs["defer"]:
                     func._defer = True
+                    if kwargs.get("ephemeral"):
+                        func._defer_ephemeral = True
                     try:
                         from . import defer as _defer_mod  # noqa: F401
                     except Exception:
@@ -359,6 +396,8 @@ class Cordless:
                     description=kwargs["description"],
                     options=resolved_options,
                     dm_permission=kwargs["dm_permission"],
+                    default_member_permissions=kwargs.get("default_member_permissions"),
+                    nsfw=kwargs.get("nsfw", False),
                 )
             elif ctype == "button":
                 if kwargs.get("defer"):

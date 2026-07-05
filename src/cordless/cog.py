@@ -25,7 +25,7 @@ class Cog:
         self._handlers = []
 
     def command(self, name, description="No description provided.", options=None,
-                defer=False, dm_permission=True):
+                defer=False, dm_permission=True, default_member_permissions=None, nsfw=False, ephemeral=False):
         def decorator(func):
             self._handlers.append(("command", func, {
                 "name": name,
@@ -33,6 +33,9 @@ class Cog:
                 "options": options,
                 "defer": defer,
                 "dm_permission": dm_permission,
+                "default_member_permissions": default_member_permissions,
+                "nsfw": nsfw,
+                "ephemeral": ephemeral,
             }))
             return func
         return decorator
