@@ -226,17 +226,23 @@ class Cordless:
             return _json_response(400, {"error": str(exc)})
 
     def load_extension(self, name: str) -> None:
-        """Load a cog extension by dotted module path (e.g. 'cogs.game').
-        The module must define a setup(bot) function that calls bot.add_cog()."""
+        """Load a cog module by dotted path (e.g. 'cogs.game').
+        Discovers all Cog instances defined in the module automatically.
+        Alternatively, define setup(bot) for manual control."""
         import importlib
+        from .cog import Cog as _Cog
         module = importlib.import_module(name)
-        if not hasattr(module, "setup"):
-            raise ValueError(f"Extension '{name}' is missing a setup(bot) function")
-        module.setup(self)
+        if hasattr(module, "setup"):
+            module.setup(self)
+            return
+        cogs = [v for v in vars(module).values() if isinstance(v, _Cog)]
+        if not cogs:
+            raise ValueError(f"Extension '{name}' must define a Cog instance or a setup(bot) function")
+        for cog in cogs:
+            self.add_cog(cog)
 
     def load_extensions(self, package: str) -> None:
-        """Load all cog modules in a package (e.g. 'cogs').
-        Each module must define a setup(bot) function. Files starting with '_' are skipped."""
+        """Load all cog modules in a package (e.g. 'cogs'). Files starting with '_' are skipped."""
         import importlib
         import pkgutil
         pkg = importlib.import_module(package)

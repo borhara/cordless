@@ -418,16 +418,11 @@ async def greet(ctx):
 @cog.button("wave")
 async def wave(ctx):
     await ctx.edit("👋")
-
-def setup(bot):
-    bot.add_cog(cog)
 ```
-
-Load all cogs in a package with one call:
 
 ```python
 # lambda_function.py
-bot.load_extensions("cogs")  # loads every module in cogs/
+bot.load_extensions("cogs")  # auto-discovers all Cog instances in the package
 ```
 
 `cogs/` needs an `__init__.py` (can be empty). Files starting with `_` are skipped.
