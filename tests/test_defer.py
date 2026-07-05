@@ -109,7 +109,7 @@ class FakeHTTPSConnection:
         self.timeout = timeout
 
     def request(self, method, url, body, headers):
-        FakeHTTPSConnection.requests.append({"method": method, "url": url, "body": body, "headers": headers})
+        FakeHTTPSConnection.requests.append({"method": method, "url": url, "body": body, "headers": headers, "timeout": self.timeout})
 
     def getresponse(self):
         status, body = FakeHTTPSConnection.responses.pop(0) if FakeHTTPSConnection.responses else (200, b"{}")
@@ -179,8 +179,7 @@ def test_patch_gives_up_after_retries(fake_conn, monkeypatch):
 
 def test_connection_has_timeout(fake_conn):
     cordless.defer.patch_followup("app", "tok", {})
-    # instances record the timeout they were constructed with
-    assert FakeHTTPSConnection.requests  # request went through a timeout-bearing connection
+    assert fake_conn.requests[0]["timeout"] == cordless.defer._TIMEOUT
 
 
 # --- Crons ---
