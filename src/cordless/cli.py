@@ -248,8 +248,11 @@ DISCORD_PUBLIC_KEY = ""
 _INIT_ENV = '''\
 # Discord Developer Portal -> your app -> General Information
 DISCORD_PUBLIC_KEY=
-DISCORD_CLIENT_ID=
+# Bot -> Token  (used by cordless register / deploy --register)
 DISCORD_BOT_TOKEN=
+# OAuth2 -> Client ID / Client Secret  (alternative to bot token)
+DISCORD_CLIENT_ID=
+DISCORD_CLIENT_SECRET=
 '''
 
 
