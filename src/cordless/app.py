@@ -64,10 +64,14 @@ def option(name, description="No description provided.", *, type="string", requi
            autocomplete=False, choices=None, min_value=None, max_value=None,
            min_length=None, max_length=None):
     """Build a Discord application command option dict."""
+    if isinstance(type, str) and type not in _OPTION_TYPES:
+        raise ValueError(
+            f"Unknown option type {type!r}: expected one of {', '.join(_OPTION_TYPES)}"
+        )
     opt = {
         "name": name,
         "description": description,
-        "type": _OPTION_TYPES.get(type, type) if isinstance(type, str) else type,
+        "type": _OPTION_TYPES[type] if isinstance(type, str) else type,
     }
     if required:
         opt["required"] = True
@@ -91,6 +95,11 @@ class Cordless:
         self.router = Router()
         self.public_key = public_key
         self.crons = {}
+        if public_key is not None and not public_key:
+            print(
+                "cordless: DISCORD_PUBLIC_KEY is empty - all requests will be "
+                "rejected with 401 until it is set"
+            )
 
     def command(self, name, description="No description provided.", options=None, defer=False, dm_permission=True):
         _validate_command_name(name)
@@ -270,7 +279,9 @@ class Cordless:
     def handle(self, event, context=None):
         body = _extract_body(event)
 
-        if self.public_key:
+        # None means verification is deliberately off (local/testing); an empty
+        # string is a misconfiguration and must fail closed, not silently skip
+        if self.public_key is not None:
             headers = event.get("headers") or {}
             signature = _get_header(headers, "x-signature-ed25519")
             timestamp = _get_header(headers, "x-signature-timestamp")
