@@ -115,11 +115,14 @@ def _register(args):
 
 
 def _upload(args):
+    from .deploy import load_config
     from .upload import upload
+
+    cfg = load_config(os.getcwd())
     upload(
         function_name=args.function,
         layer_name=args.layer_name,
-        region=args.region,
+        region=args.region or cfg.get("region") or os.environ.get("AWS_DEFAULT_REGION"),
         python_version=args.runtime.replace("python", ""),
     )
 
@@ -149,6 +152,10 @@ def _deploy(args):
     runtime = args.runtime or cfg.get("runtime", "python3.12")
     defer_worker = args.defer_worker or cfg.get("defer_worker")
 
+    merged_env = {**_read_dot_env(source_dir), **cfg.get("env", {}), **env}
+    if not merged_env.get("DISCORD_PUBLIC_KEY"):
+        print("  warning: DISCORD_PUBLIC_KEY is empty or missing - Discord cannot validate the endpoint")
+
     # Loading the bot is only needed for cron schedules and --register;
     # resolved from toml or auto-detected from source files.
     bot_target = _resolve_bot(None, source_dir, cfg)
@@ -162,7 +169,7 @@ def _deploy(args):
         source_dir=source_dir,
         runtime=runtime,
         layer_name=args.layer_name or cfg.get("layer_name", "cordless"),
-        env={**_read_dot_env(source_dir), **cfg.get("env", {}), **env},
+        env=merged_env,
         region=args.region or cfg.get("region") or os.environ.get("AWS_DEFAULT_REGION"),
         timeout=int(_pick(args.timeout, cfg.get("timeout"), 10)),
         memory=int(cfg.get("memory", 256)),
@@ -329,7 +336,7 @@ def _logs(args):
     function = args.function or cfg.get("function")
     if not function:
         raise SystemExit("Function name required: pass --function or add `function` to [deploy] in cordless.toml.")
-    region = args.region or cfg.get("region")
+    region = args.region or cfg.get("region") or os.environ.get("AWS_DEFAULT_REGION")
     if not region:
         raise SystemExit(
             "Region is required. Pass --region, set AWS_DEFAULT_REGION, "
@@ -426,7 +433,7 @@ def main(argv=None):
     upload = subparsers.add_parser("upload", help="Package cordless as a Lambda layer and attach it to your function")
     upload.add_argument("--function", "-f", required=True, metavar="FUNCTION", help="Lambda function name or ARN")
     upload.add_argument("--layer-name", default="cordless", metavar="NAME", help="Layer name (default: cordless)")
-    upload.add_argument("--region", "-r", default=os.environ.get("AWS_DEFAULT_REGION"), metavar="REGION", help="AWS region")
+    upload.add_argument("--region", "-r", default=None, metavar="REGION", help="AWS region")
     upload.add_argument("--runtime", default="python3.12", metavar="RUNTIME", help="Lambda runtime the layer targets (default: python3.12)")
     upload.set_defaults(func=_upload)
 
@@ -484,7 +491,7 @@ def main(argv=None):
 
     logs_cmd = subparsers.add_parser("logs", help="Tail CloudWatch logs for a deployed Lambda function")
     logs_cmd.add_argument("--function", "-f", default=None, metavar="FUNCTION", help="Lambda function name (defaults to `function` in cordless.toml)")
-    logs_cmd.add_argument("--region", "-r", default=os.environ.get("AWS_DEFAULT_REGION"), metavar="REGION", help="AWS region")
+    logs_cmd.add_argument("--region", "-r", default=None, metavar="REGION", help="AWS region")
     logs_cmd.add_argument("--follow", action="store_true", help="Keep tailing (Ctrl+C to stop)")
     logs_cmd.add_argument("--since", type=int, default=10, metavar="MINUTES", help="How many minutes back to start (default: 10)")
     logs_cmd.set_defaults(func=_logs)
