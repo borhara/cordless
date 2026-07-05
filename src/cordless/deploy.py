@@ -32,6 +32,7 @@ _KNOWN_DEPLOY_KEYS = {
     "bot", "setup", "env", "function", "runtime", "defer_worker", "role_name",
     "handler", "layer_name", "region", "timeout", "memory", "bundle_cordless",
     "packages", "defer_handler", "defer_timeout", "defer_memory", "policies",
+    "architecture",
 }
 
 
@@ -47,7 +48,7 @@ def load_config(source_dir):
     return cfg
 
 
-def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_version="3.12"):
+def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_version="3.12", architecture="x86_64"):
     tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
     tmp.close()
     with zipfile.ZipFile(tmp.name, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -79,7 +80,7 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                             abs_path = os.path.join(root, fname)
                             zf.write(abs_path, os.path.relpath(abs_path, pkg_parent))
         if packages:
-            pkg_dir = _ensure_packages(packages, python_version)
+            pkg_dir = _ensure_packages(packages, python_version, architecture)
             for root, dirs, files in os.walk(pkg_dir):
                 dirs[:] = [d for d in dirs if d != "__pycache__"]
                 for fname in files:
@@ -91,19 +92,19 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
     return tmp.name
 
 
-def _packages_cache_dir(packages, python_version):
-    key = hashlib.sha256(json.dumps([sorted(packages), python_version]).encode()).hexdigest()[:16]
+def _packages_cache_dir(packages, python_version, architecture="x86_64"):
+    key = hashlib.sha256(json.dumps([sorted(packages), python_version, architecture]).encode()).hexdigest()[:16]
     return os.path.join(os.path.expanduser("~"), ".cache", "cordless", "packages", key)
 
 
-def _ensure_packages(packages, python_version):
+def _ensure_packages(packages, python_version, architecture="x86_64"):
     """pip-install Lambda-compatible wheels, cached across deploys.
 
     The cache key is the exact packages list + python version, so unpinned
     specs (e.g. "pillow") stay at whatever version was first installed until
     the list changes or ~/.cache/cordless is cleared.
     """
-    cache_dir = _packages_cache_dir(packages, python_version)
+    cache_dir = _packages_cache_dir(packages, python_version, architecture)
     if os.path.isdir(cache_dir) and os.listdir(cache_dir):
         return cache_dir
 
@@ -123,11 +124,12 @@ def _ensure_packages(packages, python_version):
     os.makedirs(os.path.dirname(cache_dir), exist_ok=True)
     staging = tempfile.mkdtemp(dir=os.path.dirname(cache_dir))
     try:
+        platform = "manylinux2014_aarch64" if architecture == "arm64" else "manylinux2014_x86_64"
         result = subprocess.run(
             [
                 python, "-m", "pip", "install",
                 "--target", staging,
-                "--platform", "manylinux2014_x86_64",
+                "--platform", platform,
                 "--python-version", python_version,
                 "--implementation", "cp",
                 "--abi", abi,
@@ -220,7 +222,7 @@ def _env_vars(env):
     return {"Variables": env or {}}
 
 
-def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn, env, timeout=10, memory_size=256):
+def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn, env, timeout=10, memory_size=256, architecture="x86_64"):
     with open(zip_path, "rb") as f:
         zip_bytes = f.read()
 
@@ -238,6 +240,7 @@ def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, l
                 Environment=_env_vars(env),
                 Timeout=timeout,
                 MemorySize=memory_size,
+                Architectures=[architecture],
             )
             break
         except lam.exceptions.InvalidParameterValueException as exc:
@@ -248,9 +251,9 @@ def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, l
     return resp["FunctionArn"]
 
 
-def _update_function(lam, function_name, zip_path, handler, runtime, layer_arn, env, timeout=10, memory_size=256):
+def _update_function(lam, function_name, zip_path, handler, runtime, layer_arn, env, timeout=10, memory_size=256, architecture="x86_64"):
     with open(zip_path, "rb") as f:
-        lam.update_function_code(FunctionName=function_name, ZipFile=f.read())
+        lam.update_function_code(FunctionName=function_name, ZipFile=f.read(), Architectures=[architecture])
     lam.get_waiter("function_updated").wait(FunctionName=function_name)
 
     lam.update_function_configuration(
@@ -331,7 +334,7 @@ def _allow_worker_invoke(iam, role_name, worker_arn):
 def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, env, region,
            timeout=10, memory=256, bundle_cordless=False, packages=None, python_version="3.12",
            defer_worker=None, defer_handler="lambda_function.worker_handler", defer_timeout=30, defer_memory=256,
-           policies=None, crons=None):
+           policies=None, crons=None, architecture="x86_64"):
     if not function_name:
         raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
 
@@ -358,16 +361,16 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
             layer_arn = _publish_cordless_layer(lam, layer_name, python_version)
 
     with Spinner("packaging"):
-        zip_path = build_function_zip(source_dir, bundle_cordless=bundle_cordless, packages=packages, python_version=python_version)
+        zip_path = build_function_zip(source_dir, bundle_cordless=bundle_cordless, packages=packages, python_version=python_version, architecture=architecture)
 
     try:
         exists, function_arn = _function_exists(lam, function_name)
         verb = "updating" if exists else "creating"
         with Spinner(f"{verb}  {function_name}"):
             if exists:
-                _update_function(lam, function_name, zip_path, handler, runtime, layer_arn or "", env, timeout=timeout, memory_size=memory)
+                _update_function(lam, function_name, zip_path, handler, runtime, layer_arn or "", env, timeout=timeout, memory_size=memory, architecture=architecture)
             else:
-                function_arn = _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn or "", env, timeout=timeout, memory_size=memory)
+                function_arn = _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn or "", env, timeout=timeout, memory_size=memory, architecture=architecture)
 
         with Spinner("API Gateway"):
             url = _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id)
@@ -377,9 +380,9 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
             w_verb = "updating" if w_exists else "creating"
             with Spinner(f"{w_verb}  {defer_worker}"):
                 if w_exists:
-                    _update_function(lam, defer_worker, zip_path, defer_handler, runtime, layer_arn, env, timeout=defer_timeout, memory_size=defer_memory)
+                    _update_function(lam, defer_worker, zip_path, defer_handler, runtime, layer_arn, env, timeout=defer_timeout, memory_size=defer_memory, architecture=architecture)
                 else:
-                    worker_arn = _create_function(lam, defer_worker, zip_path, role_arn, defer_handler, runtime, layer_arn, env, timeout=defer_timeout, memory_size=defer_memory)
+                    worker_arn = _create_function(lam, defer_worker, zip_path, role_arn, defer_handler, runtime, layer_arn, env, timeout=defer_timeout, memory_size=defer_memory, architecture=architecture)
                 # deferred handlers aren't idempotent, never let Lambda re-run them on error
                 lam.put_function_event_invoke_config(FunctionName=defer_worker, MaximumRetryAttempts=0)
     finally:

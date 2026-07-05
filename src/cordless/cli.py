@@ -185,6 +185,7 @@ def _deploy(args):
         defer_memory=int(cfg.get("defer_memory", 256)),
         policies=cfg.get("policies"),
         crons=crons,
+        architecture=args.architecture or cfg.get("architecture", "x86_64"),
     )
 
     if args.register:
@@ -331,9 +332,14 @@ def _logs(args):
     from .deploy import load_config
 
     cfg = load_config(os.getcwd())
-    function = args.function or cfg.get("function")
-    if not function:
-        raise SystemExit("Function name required: pass --function or add `function` to [deploy] in cordless.toml.")
+    if args.worker:
+        function = cfg.get("defer_worker")
+        if not function:
+            raise SystemExit("--worker: no defer_worker configured in cordless.toml")
+    else:
+        function = args.function or cfg.get("function")
+        if not function:
+            raise SystemExit("Function name required: pass --function or add `function` to [deploy] in cordless.toml.")
     region = args.region or cfg.get("region") or os.environ.get("AWS_DEFAULT_REGION")
     if not region:
         raise SystemExit(
@@ -454,6 +460,7 @@ def main(argv=None):
     deploy_cmd.add_argument("--defer-worker", metavar="NAME", help="Name of the worker Lambda for deferred commands (also set via cordless.toml defer_worker)")
     deploy_cmd.add_argument("--defer-handler", metavar="HANDLER", default=None, help="Worker handler string (default: lambda_function.worker_handler)")
     deploy_cmd.add_argument("--defer-timeout", metavar="SECONDS", default=None, help="Worker Lambda timeout in seconds (default: 30)")
+    deploy_cmd.add_argument("--architecture", default=None, choices=["x86_64", "arm64"], help="Lambda architecture (default: x86_64)")
     deploy_cmd.add_argument("--register", action="store_true", default=False, help="Register slash commands with Discord after deploy (auto-detects bot; reads credentials from $DISCORD_BOT_TOKEN or $DISCORD_CLIENT_ID/$DISCORD_CLIENT_SECRET)")
     deploy_cmd.set_defaults(func=_deploy)
 
@@ -489,6 +496,7 @@ def main(argv=None):
 
     logs_cmd = subparsers.add_parser("logs", help="Tail CloudWatch logs for a deployed Lambda function")
     logs_cmd.add_argument("--function", "-f", default=None, metavar="FUNCTION", help="Lambda function name (defaults to `function` in cordless.toml)")
+    logs_cmd.add_argument("--worker", action="store_true", help="Tail the worker Lambda's logs (reads defer_worker from cordless.toml)")
     logs_cmd.add_argument("--region", "-r", default=None, metavar="REGION", help="AWS region")
     logs_cmd.add_argument("--follow", action="store_true", help="Keep tailing (Ctrl+C to stop)")
     logs_cmd.add_argument("--since", type=int, default=10, metavar="MINUTES", help="How many minutes back to start (default: 10)")
