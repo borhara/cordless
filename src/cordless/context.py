@@ -41,7 +41,7 @@ def _leaf_options(data):
     return options
 
 
-def _build_message_data(msg, content, embeds, components, ephemeral=False):
+def _build_message_data(msg, content, embeds, components, ephemeral=False, allowed_mentions=None):
     _content = content if content is not None else msg
     data = {}
     if _content is not None:
@@ -50,6 +50,8 @@ def _build_message_data(msg, content, embeds, components, ephemeral=False):
         data["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
     if components is not None:
         data["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
+    if allowed_mentions is not None:
+        data["allowed_mentions"] = allowed_mentions
 
     flags = 0
     if ephemeral:
@@ -73,6 +75,10 @@ class Context:
         self.custom_id_args = []
         self.options = {opt["name"]: opt["value"] for opt in _leaf_options(data) if "value" in opt}
         self.user = (interaction.get("member") or {}).get("user") or interaction.get("user")
+        self.member = interaction.get("member")
+        self.message = interaction.get("message")
+        self.channel = interaction.get("channel")
+        self.locale = interaction.get("locale")
         self.guild_id = interaction.get("guild_id")
         self.channel_id = interaction.get("channel_id")
         self.interaction_id = interaction.get("id")
@@ -104,18 +110,18 @@ class Context:
         self.target_member = resolved.get("members", {}).get(target_id) if target_id else None
         self.target_message = resolved.get("messages", {}).get(target_id) if target_id else None
 
-    async def send(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, files=None):
+    async def send(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, files=None, allowed_mentions=None):
         if self._worker_mode:
-            return await self.followup(msg, content=content, ephemeral=ephemeral, embeds=embeds, components=components, files=files)
+            return await self.followup(msg, content=content, ephemeral=ephemeral, embeds=embeds, components=components, files=files, allowed_mentions=allowed_mentions)
 
-        data = _build_message_data(msg, content, embeds, components, ephemeral)
+        data = _build_message_data(msg, content, embeds, components, ephemeral, allowed_mentions)
         self.response = _response({"type": _CHANNEL_MESSAGE_WITH_SOURCE, "data": data})
         return self.response
 
-    async def followup(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, files=None):
+    async def followup(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, files=None, allowed_mentions=None):
         from .defer import patch_followup, patch_followup_with_files
 
-        data = _build_message_data(msg, content, embeds, components, ephemeral)
+        data = _build_message_data(msg, content, embeds, components, ephemeral, allowed_mentions)
         app_id = self.interaction.get("application_id")
 
         if files:
@@ -127,10 +133,20 @@ class Context:
         self.response = {"_cordless_followup": True}
         return self.response
 
-    async def edit(self, msg=None, *, content=None, embeds=None, components=None, files=None):
+    async def send_followup(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, allowed_mentions=None):
+        from .defer import post_followup
+        data = _build_message_data(msg, content, embeds, components, ephemeral, allowed_mentions)
+        post_followup(self.interaction.get("application_id"), self.token, data)
+        return {"_cordless_followup": True}
+
+    async def delete_original(self):
+        from .defer import delete_original as _delete
+        _delete(self.interaction.get("application_id"), self.token)
+
+    async def edit(self, msg=None, *, content=None, embeds=None, components=None, files=None, allowed_mentions=None):
         if self._worker_mode:
-            return await self.followup(msg, content=content, embeds=embeds, components=components, files=files)
-        data = _build_message_data(msg, content, embeds, components)
+            return await self.followup(msg, content=content, embeds=embeds, components=components, files=files, allowed_mentions=allowed_mentions)
+        data = _build_message_data(msg, content, embeds, components, allowed_mentions=allowed_mentions)
         self.response = _response({"type": _UPDATE_MESSAGE, "data": data})
         return self.response
 
