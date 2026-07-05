@@ -234,6 +234,16 @@ class Cordless:
             raise ValueError(f"Extension '{name}' is missing a setup(bot) function")
         module.setup(self)
 
+    def load_extensions(self, package: str) -> None:
+        """Load all cog modules in a package (e.g. 'cogs').
+        Each module must define a setup(bot) function. Files starting with '_' are skipped."""
+        import importlib
+        import pkgutil
+        pkg = importlib.import_module(package)
+        for module_info in pkgutil.iter_modules(pkg.__path__):
+            if not module_info.name.startswith("_"):
+                self.load_extension(f"{package}.{module_info.name}")
+
     def add_cog(self, cog):
         """Register all decorated handlers from a Cog instance."""
         for ctype, func, kwargs in cog._handlers:

@@ -398,6 +398,42 @@ async def ban(ctx): ...
 
 ---
 
+## Cogs
+
+Split related handlers into modules with `Cog`. The API mirrors `@bot.command` — just replace `bot` with a `Cog` instance:
+
+```python
+# cogs/greetings.py
+from cordless import Cog, ActionRow, Button
+
+cog = Cog()
+
+@cog.command("greet", description="Say hello")
+async def greet(ctx):
+    await ctx.send(
+        f"Hello, {ctx.user['username']}!",
+        components=[ActionRow([Button("Wave back", custom_id="wave")])]
+    )
+
+@cog.button("wave")
+async def wave(ctx):
+    await ctx.edit("👋")
+
+def setup(bot):
+    bot.add_cog(cog)
+```
+
+Load all cogs in a package with one call:
+
+```python
+# lambda_function.py
+bot.load_extensions("cogs")  # loads every module in cogs/
+```
+
+`cogs/` needs an `__init__.py` (can be empty). Files starting with `_` are skipped.
+
+---
+
 ## Deploying
 
 ### cordless init
