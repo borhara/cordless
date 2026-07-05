@@ -41,6 +41,26 @@ def _leaf_options(data):
     return options
 
 
+def _build_message_data(msg, content, embeds, components, ephemeral=False):
+    _content = content if content is not None else msg
+    data = {}
+    if _content is not None:
+        data["content"] = _content
+    if embeds is not None:
+        data["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
+    if components is not None:
+        data["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
+
+    flags = 0
+    if ephemeral:
+        flags |= _FLAG_EPHEMERAL
+    if _contains_uikit(components):
+        flags |= _FLAG_UI_KIT
+    if flags:
+        data["flags"] = flags
+    return data
+
+
 class Context:
     def __init__(self, interaction, *, _worker_mode=False):
         self.interaction = interaction
@@ -88,46 +108,14 @@ class Context:
         if self._worker_mode:
             return await self.followup(msg, content=content, ephemeral=ephemeral, embeds=embeds, components=components, files=files)
 
-        _content = content if content is not None else msg
-        data = {}
-        if _content is not None:
-            data["content"] = _content
-        if embeds is not None:
-            data["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
-        if components is not None:
-            data["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
-
-        flags = 0
-        if ephemeral:
-            flags |= _FLAG_EPHEMERAL
-        if _contains_uikit(components):
-            flags |= _FLAG_UI_KIT
-        if flags:
-            data["flags"] = flags
-
+        data = _build_message_data(msg, content, embeds, components, ephemeral)
         self.response = _response({"type": _CHANNEL_MESSAGE_WITH_SOURCE, "data": data})
         return self.response
 
     async def followup(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, files=None):
         from .defer import patch_followup, patch_followup_with_files
 
-        _content = content if content is not None else msg
-        data = {}
-        if _content is not None:
-            data["content"] = _content
-        if embeds is not None:
-            data["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
-        if components is not None:
-            data["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
-
-        flags = 0
-        if ephemeral:
-            flags |= _FLAG_EPHEMERAL
-        if _contains_uikit(components):
-            flags |= _FLAG_UI_KIT
-        if flags:
-            data["flags"] = flags
-
+        data = _build_message_data(msg, content, embeds, components, ephemeral)
         app_id = self.interaction.get("application_id")
 
         if files:
@@ -142,16 +130,7 @@ class Context:
     async def edit(self, msg=None, *, content=None, embeds=None, components=None, files=None):
         if self._worker_mode:
             return await self.followup(msg, content=content, embeds=embeds, components=components, files=files)
-        _content = content if content is not None else msg
-        data = {}
-        if _content is not None:
-            data["content"] = _content
-        if embeds is not None:
-            data["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
-        if components is not None:
-            data["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
-        if _contains_uikit(components):
-            data["flags"] = _FLAG_UI_KIT
+        data = _build_message_data(msg, content, embeds, components)
         self.response = _response({"type": _UPDATE_MESSAGE, "data": data})
         return self.response
 
