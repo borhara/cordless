@@ -59,6 +59,15 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                         continue
                     abs_path = os.path.join(root, fname)
                     zf.write(abs_path, os.path.relpath(abs_path, pkg_parent))
+            # bundle cordless dependencies alongside the source
+            deps_dir = _ensure_packages(["httpx"], python_version)
+            for root, dirs, files in os.walk(deps_dir):
+                dirs[:] = [d for d in dirs if d != "__pycache__"]
+                for fname in files:
+                    if fname.endswith(".pyc"):
+                        continue
+                    abs_path = os.path.join(root, fname)
+                    zf.write(abs_path, os.path.relpath(abs_path, deps_dir))
 
         if packages:
             pkg_dir = _ensure_packages(packages, python_version)

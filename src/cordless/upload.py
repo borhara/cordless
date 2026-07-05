@@ -14,12 +14,12 @@ def _cordless_package_dir():
 
 
 def _layer_extras_dir(python_version):
-    """Fetch pynacl (fast Ed25519 verify) for the layer; None means build without it."""
+    """Fetch cordless dependencies (httpx, pynacl) for the layer."""
     from .deploy import _ensure_packages
     try:
-        return _ensure_packages(["pynacl"], python_version)
+        return _ensure_packages(["httpx", "pynacl"], python_version)
     except Exception as exc:
-        print(f"  (pynacl unavailable, layer will use pure-python verify: {exc})")
+        print(f"  (layer extras unavailable, falling back: {exc})")
         return None
 
 
