@@ -21,7 +21,7 @@ cordless deploy --register
 
 ---
 
-## why cordless?
+## Why cordless?
 
 Most Discord bots run as long-lived processes — a VPS or container that sits idle 99% of the time, waiting for someone to type a command. You pay for uptime whether your bot is busy or not.
 
@@ -35,7 +35,7 @@ cordless flips this. Your bot is a Lambda function: it only runs when Discord se
 
 ---
 
-## install
+## Install
 
 ```bash
 pip install "cordless[deploy]"
@@ -43,7 +43,7 @@ pip install "cordless[deploy]"
 
 ---
 
-## quickstart
+## Quickstart
 
 Create `lambda_function.py`, deploy it to Lambda, and point Discord's **Interactions Endpoint URL** at your function URL.
 
@@ -68,9 +68,9 @@ Verification runs at C speed automatically — `cordless deploy` bundles PyNaCl 
 
 ---
 
-## commands
+## Commands
 
-### options
+### Options
 
 The simplest way: declare options as typed parameters. cordless infers the Discord option types from the annotations and passes the values as arguments.
 
@@ -107,7 +107,7 @@ async def inspect(ctx):
 
 Command names are validated at decoration time: 1-32 lowercase letters, digits, `-` or `_`.
 
-### subcommands
+### Subcommands
 
 Use `parent/sub` and `parent/group/sub` paths — cordless builds the Discord subcommand tree automatically.
 
@@ -119,7 +119,7 @@ async def info_bot(ctx): ...
 async def info_server(ctx): ...
 ```
 
-### autocomplete
+### Autocomplete
 
 Mark the option with `autocomplete=True`, then register a handler with `@bot.autocomplete`. The focused option's current value is on `ctx.focused_value`.
 
@@ -137,7 +137,7 @@ async def color_ac(ctx):
     await ctx.respond_autocomplete(matches[:25])
 ```
 
-### deferred replies
+### Deferred replies
 
 Discord requires a response within 3 seconds. Use `defer=True` for slow operations — cordless ACKs Discord immediately, invokes a second Lambda (the *worker*) in the background, and the worker calls `ctx.send()` when it's done.
 
@@ -158,7 +158,7 @@ worker_handler = make_worker_handler(bot)
 
 Set `defer_worker` in `cordless.toml` so `cordless deploy` creates the worker and wires the invoke permission automatically.
 
-### deferred buttons
+### Deferred buttons
 
 Buttons can also be deferred — useful when the response takes time. Use `defer=True` on `@bot.button()` (or `@cog_button()`). cordless responds with a loading state immediately and lets the worker update the message.
 
@@ -169,7 +169,7 @@ async def slow_action(ctx):
     await ctx.edit(f"Done: {result}")
 ```
 
-### scheduled handlers
+### Scheduled handlers
 
 Run code on a schedule with `@bot.cron()` — daily rewards, cleanup jobs, anything that shouldn't wait for an interaction. `cordless deploy` wires each schedule to an EventBridge rule automatically.
 
@@ -187,7 +187,7 @@ Schedules use EventBridge expressions (`rate(...)` or `cron(...)`). Handlers tak
 
 ---
 
-## context menu commands
+## Context menu commands
 
 Context menu commands appear when a user right-clicks a user or message → **Apps**. They have no slash-command syntax — just a name.
 
@@ -211,7 +211,7 @@ async def bookmark(ctx):
 
 ---
 
-## buttons
+## Buttons
 
 ```python
 from cordless import ActionRow, Button, ButtonStyle
@@ -236,7 +236,7 @@ Dynamic ids match by `:`-separated prefix — a handler registered as `"shop"` r
 
 ---
 
-## select menus
+## Select menus
 
 ```python
 from cordless import ActionRow, StringSelect, SelectOption
@@ -260,7 +260,7 @@ Selected values are on `ctx.values` as a list. Also available: `UserSelect`, `Ro
 
 ---
 
-## modals
+## Modals
 
 ```python
 from cordless import Modal, TextInput, TextInputStyle
@@ -284,7 +284,7 @@ Submission values land in `ctx.modal_values` as a `{custom_id: value}` dict.
 
 ---
 
-## embeds
+## Embeds
 
 ```python
 from cordless import Embed
@@ -302,7 +302,7 @@ await ctx.send(embeds=[embed])
 
 ---
 
-## components v2
+## Components v2
 
 Discord's UI Kit — richer layouts with `Container`, `Section`, `TextDisplay`, `Thumbnail`, and `Separator`. The `32768` flag is set automatically when any of these appear in your response.
 
@@ -325,7 +325,7 @@ await ctx.send(components=[
 
 ---
 
-## error handling
+## Error handling
 
 Register a single global handler with `@bot.error`. It catches any unhandled exception from any command, button, modal, or select handler.
 
@@ -337,7 +337,7 @@ async def on_error(ctx, exc):
 
 ---
 
-## guards
+## Guards
 
 Guards run before a handler. Raise `PermissionDeniedError` to block it — the error propagates to your `@bot.error` handler.
 
@@ -355,7 +355,7 @@ async def ban(ctx): ...
 
 ---
 
-## local development
+## Local development
 
 ### cordless dev
 
@@ -398,7 +398,7 @@ DISCORD_CLIENT_SECRET=your_secret
 
 ---
 
-## deploying
+## Deploying
 
 ### cordless init
 
@@ -487,11 +487,11 @@ DISCORD_PUBLIC_KEY = "abc123..."
 
 ---
 
-## context reference
+## Context reference
 
 Every handler receives a `ctx` object.
 
-### attributes
+### Attributes
 
 | attribute | description |
 |---|---|
@@ -512,7 +512,7 @@ Every handler receives a `ctx` object.
 | `ctx.token` | Interaction token |
 | `ctx.interaction` | Raw interaction payload |
 
-### methods
+### Methods
 
 | method | description |
 |---|---|
