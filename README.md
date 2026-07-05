@@ -425,7 +425,7 @@ async def wave(ctx):
 bot.load_extensions("cogs")  # auto-discovers all Cog instances in the package
 ```
 
-`cogs/` needs an `__init__.py` (can be empty). Files starting with `_` are skipped.
+Files starting with `_` are skipped.
 
 ---
 
