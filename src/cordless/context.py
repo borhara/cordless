@@ -11,17 +11,34 @@ _FLAG_EPHEMERAL = 64
 _FLAG_UI_KIT = 32768
 
 
+# Components v2 types: Section, TextDisplay, Thumbnail, MediaGallery, File, Separator, Container
+_UI_KIT_TYPES = {9, 10, 11, 12, 13, 14, 17}
+
+
 def _contains_uikit(components):
     if not components:
         return False
     for c in components:
         if getattr(c, "is_ui_kit", False):
             return True
+        if isinstance(c, dict):
+            if c.get("type") in _UI_KIT_TYPES:
+                return True
+            if _contains_uikit(c.get("components")):
+                return True
         # recurse into ActionRow children
-        if hasattr(c, "components") and not getattr(c, "is_ui_kit", False):
+        elif hasattr(c, "components"):
             if _contains_uikit(c.components):
                 return True
     return False
+
+
+def _leaf_options(data):
+    """Descend through subcommand/group wrappers to the actual value options."""
+    options = data.get("options", [])
+    while options and options[0].get("type") in (1, 2):
+        options = options[0].get("options", [])
+    return options
 
 
 class Context:
@@ -34,7 +51,7 @@ class Context:
         self.custom_id = data.get("custom_id")
         # Suffix segments when a handler matched by prefix, e.g. "shop:item1" → ["item1"]
         self.custom_id_args = []
-        self.options = {opt["name"]: opt["value"] for opt in data.get("options", []) if "value" in opt}
+        self.options = {opt["name"]: opt["value"] for opt in _leaf_options(data) if "value" in opt}
         self.user = (interaction.get("member") or {}).get("user") or interaction.get("user")
         self.guild_id = interaction.get("guild_id")
         self.channel_id = interaction.get("channel_id")
@@ -46,7 +63,7 @@ class Context:
 
         # Autocomplete: the value of the focused option
         self.focused_value = None
-        for opt in data.get("options", []):
+        for opt in _leaf_options(data):
             if opt.get("focused"):
                 self.focused_value = opt.get("value")
 
