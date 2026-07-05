@@ -199,7 +199,7 @@ def _function_exists(lam, function_name):
 
 
 def _env_vars(env):
-    return {"Variables": env} if env else {}
+    return {"Variables": env or {}}
 
 
 def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, layer_arn, env, timeout=10, memory_size=256):
