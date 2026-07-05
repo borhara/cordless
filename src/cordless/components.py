@@ -46,7 +46,8 @@ class Button:
         d = {"type": 2, "style": self.style}
         # premium buttons (style 6) only take sku_id, no label/custom_id/url
         if self.style == 6:
-            d["sku_id"] = self.sku_id
+            if self.sku_id is not None:
+                d["sku_id"] = self.sku_id
             return d
         if self.label is not None:
             d["label"] = self.label
