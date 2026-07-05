@@ -48,6 +48,7 @@ class Router:
             "options": options or [],
             "dm_permission": dm_permission,
             "cmd_type": cmd_type,
+            "params": list(inspect.signature(handler).parameters)[1:],
         }
 
     def register_button(self, custom_id, handler):
@@ -172,22 +173,8 @@ class Router:
                 ctx.options = {opt["name"]: opt["value"] for opt in leaf_options if "value" in opt}
             handler = entry["handler"]
             if getattr(handler, "_defer", False) and not ctx._worker_mode:
-                import os
-                import traceback
-                from .defer import invoke_worker
-                worker_fn = os.environ.get("CORDLESS_WORKER_FUNCTION")
-                if not worker_fn:
-                    raise CordlessError(
-                        "CORDLESS_WORKER_FUNCTION is not set: add defer_worker to cordless.toml and run cordless deploy"
-                    )
-                # ACK Discord first so type 5 still goes back even if the invoke fails
-                await ctx.defer()
-                try:
-                    invoke_worker(worker_fn, interaction)
-                except Exception:
-                    traceback.print_exc()
-                return ctx.response
-            return await _invoke(handler, ctx, f"Command '{key}'", pass_options=True)
+                return await _defer_to_worker(ctx, interaction, ctx.defer)
+            return await _invoke(handler, ctx, f"Command '{key}'", params=entry["params"])
 
         if itype == MESSAGE_COMPONENT:
             cid = interaction["data"]["custom_id"]
@@ -202,20 +189,7 @@ class Router:
                     raise UnknownComponentError(f"Unknown select: {cid}")
 
             if getattr(handler, "_defer", False) and not ctx._worker_mode:
-                import os
-                import traceback
-                from .defer import invoke_worker
-                worker_fn = os.environ.get("CORDLESS_WORKER_FUNCTION")
-                if not worker_fn:
-                    raise CordlessError(
-                        "CORDLESS_WORKER_FUNCTION is not set: add defer_worker to cordless.toml and run cordless deploy"
-                    )
-                await ctx.defer_edit()
-                try:
-                    invoke_worker(worker_fn, interaction)
-                except Exception:
-                    traceback.print_exc()
-                return ctx.response
+                return await _defer_to_worker(ctx, interaction, ctx.defer_edit)
 
             return await _invoke(handler, ctx, f"Component '{cid}'")
 
@@ -240,6 +214,8 @@ class Router:
             handler = _prefix_lookup(self.modals, cid, ctx)
             if not handler:
                 raise UnknownModalError(f"Unknown modal: {cid}")
+            if getattr(handler, "_defer", False) and not ctx._worker_mode:
+                return await _defer_to_worker(ctx, interaction, ctx.defer)
             return await _invoke(handler, ctx, f"Modal '{cid}'")
 
         raise UnsupportedInteractionError(f"Unsupported interaction type: {itype}")
@@ -274,6 +250,26 @@ def _focused_option_name(data):
     return None
 
 
+async def _defer_to_worker(ctx, interaction, ack):
+    import os
+    import traceback
+
+    from .defer import invoke_worker
+
+    worker_fn = os.environ.get("CORDLESS_WORKER_FUNCTION")
+    if not worker_fn:
+        raise CordlessError(
+            "CORDLESS_WORKER_FUNCTION is not set: add defer_worker to cordless.toml and run cordless deploy"
+        )
+    # ACK Discord first so the deferred response still goes back even if the invoke fails
+    await ack()
+    try:
+        invoke_worker(worker_fn, interaction)
+    except Exception:
+        traceback.print_exc()
+    return ctx.response
+
+
 def _prefix_lookup(registry, cid, ctx):
     """Match "shop:item1" to a "shop" handler; suffix segments land on ctx.custom_id_args."""
     handler = registry.get(cid)
@@ -285,7 +281,7 @@ def _prefix_lookup(registry, cid, ctx):
     return handler
 
 
-async def _invoke(handler, ctx, description, pass_options=False):
+async def _invoke(handler, ctx, description, params=None):
     guard = getattr(handler, "_guard", None)
     if guard is not None:
         result = guard(ctx)
@@ -293,10 +289,9 @@ async def _invoke(handler, ctx, description, pass_options=False):
             await result
 
     kwargs = {}
-    if pass_options and ctx.options:
+    if params and ctx.options:
         # Handlers may declare options as parameters: async def buy(ctx, item: str, qty: int = 1)
-        params = list(inspect.signature(handler).parameters)
-        kwargs = {name: ctx.options[name] for name in params[1:] if name in ctx.options}
+        kwargs = {name: ctx.options[name] for name in params if name in ctx.options}
 
     result = await handler(ctx, **kwargs)
     response = result if result is not None else ctx.response
