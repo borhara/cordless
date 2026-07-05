@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from cordless import Cog, cog_command
+from cordless import Cog
 from cordless.app import Cordless, options_from_signature
 
 
@@ -198,13 +198,14 @@ def test_ctx_only_handlers_unchanged():
 
 
 def test_cog_command_options_from_signature():
-    class Shop(Cog):
-        @cog_command("buy")
-        async def buy(self, ctx, item: str, qty: int = 2):
-            await ctx.send(f"{qty}x {item}")
+    shop = Cog()
+
+    @shop.command("buy")
+    async def buy(ctx, item: str, qty: int = 2):
+        await ctx.send(f"{qty}x {item}")
 
     bot = Cordless()
-    bot.add_cog(Shop())
+    bot.add_cog(shop)
 
     cmd = next(d for d in bot.router.command_definitions() if d["name"] == "buy")
     assert [o["name"] for o in cmd["options"]] == ["item", "qty"]

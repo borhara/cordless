@@ -203,7 +203,7 @@ Set `defer_worker` in `cordless.toml` so `cordless deploy` creates the worker an
 
 ### Deferred buttons
 
-Buttons can also be deferred — useful when the response takes time. Use `defer=True` on `@bot.button()` (or `@cog_button()`). cordless responds with a loading state immediately and lets the worker update the message.
+Buttons can also be deferred — useful when the response takes time. Use `defer=True` on `@bot.button()`. cordless responds with a loading state immediately and lets the worker update the message.
 
 ```python
 @bot.button("slow_action", defer=True)

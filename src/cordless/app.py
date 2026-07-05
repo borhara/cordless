@@ -236,49 +236,46 @@ class Cordless:
 
     def add_cog(self, cog):
         """Register all decorated handlers from a Cog instance."""
-        for _, method in inspect.getmembers(cog, predicate=inspect.ismethod):
-            ctype = getattr(method, "_cog_type", None)
-            if ctype is None:
-                continue
+        for ctype, func, kwargs in cog._handlers:
             if ctype == "command":
-                if method._cog_defer:
-                    method.__func__._defer = True
+                if kwargs["defer"]:
+                    func._defer = True
                     try:
                         from . import defer as _defer_mod  # noqa: F401
                     except Exception:
                         pass
-                _validate_command_name(method._cog_name)
-                cog_options = method._cog_options
-                if cog_options is None:
-                    cog_options = options_from_signature(method)
+                _validate_command_name(kwargs["name"])
+                resolved_options = kwargs["options"]
+                if resolved_options is None:
+                    resolved_options = options_from_signature(func)
                 self.router.register_command(
-                    method._cog_name, method,
-                    description=method._cog_description,
-                    options=cog_options,
-                    dm_permission=method._cog_dm_permission,
+                    kwargs["name"], func,
+                    description=kwargs["description"],
+                    options=resolved_options,
+                    dm_permission=kwargs["dm_permission"],
                 )
             elif ctype == "button":
-                if getattr(method, "_cog_defer", False):
-                    method.__func__._defer = True
-                self.router.register_button(method._cog_custom_id, method)
+                if kwargs.get("defer"):
+                    func._defer = True
+                self.router.register_button(kwargs["custom_id"], func)
             elif ctype == "select":
-                self.router.register_select(method._cog_custom_id, method)
+                self.router.register_select(kwargs["custom_id"], func)
             elif ctype == "modal":
-                self.router.register_modal(method._cog_custom_id, method)
+                self.router.register_modal(kwargs["custom_id"], func)
             elif ctype == "autocomplete":
-                self.router.register_autocomplete(method._cog_cmd_name, method._cog_option_name, method)
+                self.router.register_autocomplete(kwargs["cmd_name"], kwargs["option_name"], func)
             elif ctype == "user_command":
                 self.router.register_command(
-                    method._cog_name, method,
+                    kwargs["name"], func,
                     description=None, options=[],
-                    dm_permission=method._cog_dm_permission,
+                    dm_permission=kwargs["dm_permission"],
                     cmd_type=2,
                 )
             elif ctype == "message_command":
                 self.router.register_command(
-                    method._cog_name, method,
+                    kwargs["name"], func,
                     description=None, options=[],
-                    dm_permission=method._cog_dm_permission,
+                    dm_permission=kwargs["dm_permission"],
                     cmd_type=3,
                 )
 
