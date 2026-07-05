@@ -187,7 +187,6 @@ class Cordless:
             None, self._discord_request, "DELETE", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}"
         )
 
-    @property
     def worker_handler(self):
         from .worker import make_worker_handler
         return make_worker_handler(self)
@@ -230,15 +229,27 @@ class Cordless:
 
         return decorator
 
-    def select(self, custom_id):
+    def select(self, custom_id, defer=False):
         def decorator(func):
+            if defer:
+                func._defer = True
+                try:
+                    from . import defer as _defer_mod  # noqa: F401
+                except Exception:
+                    pass
             self.router.register_select(custom_id, func)
             return func
 
         return decorator
 
-    def modal(self, custom_id):
+    def modal(self, custom_id, defer=False):
         def decorator(func):
+            if defer:
+                func._defer = True
+                try:
+                    from . import defer as _defer_mod  # noqa: F401
+                except Exception:
+                    pass
             self.router.register_modal(custom_id, func)
             return func
 
@@ -354,8 +365,12 @@ class Cordless:
                     func._defer = True
                 self.router.register_button(kwargs["custom_id"], func)
             elif ctype == "select":
+                if kwargs.get("defer"):
+                    func._defer = True
                 self.router.register_select(kwargs["custom_id"], func)
             elif ctype == "modal":
+                if kwargs.get("defer"):
+                    func._defer = True
                 self.router.register_modal(kwargs["custom_id"], func)
             elif ctype == "autocomplete":
                 self.router.register_autocomplete(kwargs["cmd_name"], kwargs["option_name"], func)

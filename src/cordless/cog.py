@@ -43,15 +43,15 @@ class Cog:
             return func
         return decorator
 
-    def select(self, custom_id):
+    def select(self, custom_id, defer=False):
         def decorator(func):
-            self._handlers.append(("select", func, {"custom_id": custom_id}))
+            self._handlers.append(("select", func, {"custom_id": custom_id, "defer": defer}))
             return func
         return decorator
 
-    def modal(self, custom_id):
+    def modal(self, custom_id, defer=False):
         def decorator(func):
-            self._handlers.append(("modal", func, {"custom_id": custom_id}))
+            self._handlers.append(("modal", func, {"custom_id": custom_id, "defer": defer}))
             return func
         return decorator
 
