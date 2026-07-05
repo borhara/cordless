@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from cordless.app import Cordless
 from cordless.errors import PermissionDeniedError
 
@@ -166,6 +168,67 @@ def test_autocomplete_dispatch():
     assert _body(result)["type"] == 8
 
 
+def test_autocomplete_handler_may_return_choices_list():
+    bot = Cordless()
+
+    @bot.command("search", description="Search")
+    async def search(ctx):
+        await ctx.send("results")
+
+    @bot.autocomplete("search", "query")
+    async def search_autocomplete(ctx):
+        return [{"name": "foo", "value": "foo"}]
+
+    result = _handle(bot, {
+        "type": 4, "id": "1", "token": "tok",
+        "data": {"name": "search", "options": [{"name": "query", "value": "fo", "focused": True}]},
+    })
+    body = _body(result)
+    assert body["type"] == 8
+    assert body["data"]["choices"] == [{"name": "foo", "value": "foo"}]
+
+
+def test_autocomplete_string_choices_filtered_by_typed_value():
+    bot = Cordless()
+
+    @bot.command("shop", description="Shop")
+    async def shop(ctx):
+        await ctx.send("ok")
+
+    @bot.autocomplete("shop", "item")
+    async def item_autocomplete(ctx):
+        return ["sword", "shield", "potion"]
+
+    result = _handle(bot, {
+        "type": 4, "id": "1", "token": "tok",
+        "data": {"name": "shop", "options": [{"name": "item", "value": "s", "focused": True}]},
+    })
+    body = _body(result)
+    assert body["type"] == 8
+    assert body["data"]["choices"] == [
+        {"name": "sword", "value": "sword"},
+        {"name": "shield", "value": "shield"},
+    ]
+
+
+def test_autocomplete_string_choices_unfiltered_when_nothing_typed():
+    bot = Cordless()
+
+    @bot.command("shop", description="Shop")
+    async def shop(ctx):
+        await ctx.send("ok")
+
+    @bot.autocomplete("shop", "item")
+    async def item_autocomplete(ctx):
+        return ["sword", "shield"]
+
+    result = _handle(bot, {
+        "type": 4, "id": "1", "token": "tok",
+        "data": {"name": "shop", "options": [{"name": "item", "value": "", "focused": True}]},
+    })
+    assert len(_body(result)["data"]["choices"]) == 2
+
+
 def test_subcommand_autocomplete_focused_value():
     from cordless.context import Context
 
@@ -231,6 +294,28 @@ def test_subcommand_definitions_structure():
     assert parent["type"] == 1
     assert {o["name"] for o in parent["options"]} == {"ban", "kick"}
     assert all(o["type"] == 1 for o in parent["options"])
+
+
+def test_registering_parent_of_subcommand_raises():
+    bot = Cordless()
+
+    @bot.command("shop/buy", description="Buy an item")
+    async def shop_buy(ctx): pass
+
+    with pytest.raises(ValueError, match="created automatically"):
+        @bot.command("shop", description="Shop")
+        async def shop(ctx): pass
+
+
+def test_registering_subcommand_under_existing_command_raises():
+    bot = Cordless()
+
+    @bot.command("shop", description="Shop")
+    async def shop(ctx): pass
+
+    with pytest.raises(ValueError, match="created automatically"):
+        @bot.command("shop/buy", description="Buy an item")
+        async def shop_buy(ctx): pass
 
 
 def test_subcommand_group_definitions_structure():

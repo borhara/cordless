@@ -31,6 +31,17 @@ class Router:
         self._error_handler = None
 
     def register_command(self, name, handler, description="No description provided.", options=None, dm_permission=True, cmd_type=1):
+        if cmd_type == 1:
+            for existing, meta in self.commands.items():
+                if meta.get("cmd_type", 1) != 1:
+                    continue
+                if existing.startswith(f"{name}/") or name.startswith(f"{existing}/"):
+                    parent, child = sorted((name, existing), key=len)
+                    raise ValueError(
+                        f"Command {name!r} conflicts with {existing!r}: the parent "
+                        f"{parent!r} is created automatically from subcommand paths, "
+                        "so it must not be registered as a command itself"
+                    )
         self.commands[name] = {
             "handler": handler,
             "description": description,
@@ -214,7 +225,15 @@ class Router:
             handler = self.autocompletes.get((key, option_name))
             if not handler:
                 raise UnsupportedInteractionError(f"No autocomplete handler for ({key!r}, {option_name!r})")
-            return await _invoke(handler, ctx, f"Autocomplete '{key}/{option_name}'")
+            response = await _invoke(handler, ctx, f"Autocomplete '{key}/{option_name}'")
+            # handlers may simply return the choices: plain strings are
+            # filtered against the typed value, dicts are sent as-is
+            if isinstance(response, list):
+                if all(isinstance(c, str) for c in response):
+                    query = str(ctx.focused_value or "").lower()
+                    response = [{"name": c, "value": c} for c in response if query in c.lower()][:25]
+                return await ctx.respond_autocomplete(response)
+            return response
 
         if itype == MODAL_SUBMIT:
             cid = interaction["data"]["custom_id"]
