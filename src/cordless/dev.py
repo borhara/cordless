@@ -175,6 +175,9 @@ def run_dev(target, port=8787, tunnel=True, source_dir="."):
             print(f"  public  {url}")
             print()
             print("  paste the public url into your app's Interactions Endpoint URL")
+        elif tunnel_proc is not None:
+            print()
+            print("  (tunnel failed to start - check your network connection)")
         else:
             print()
             import platform
