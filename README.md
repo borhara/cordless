@@ -164,7 +164,7 @@ async def info_server(ctx): ...
 
 ### Autocomplete
 
-Mark the option with `autocomplete=True`, then register a handler with `@bot.autocomplete`. The focused option's current value is on `ctx.focused_value`.
+Mark the option with `autocomplete=True`, then register a handler with `@bot.autocomplete`. Return a list of strings — cordless filters them against what the user has typed and caps at Discord's limit of 25:
 
 ```python
 @bot.command("color", description="Look up a colour", options=[
@@ -175,9 +175,16 @@ async def color_cmd(ctx):
 
 @bot.autocomplete("color", "name")
 async def color_ac(ctx):
+    return ["red", "green", "blue"]
+```
+
+To show a different label than the value that gets sent, return choice dicts instead — these are sent exactly as returned, with the typed value available on `ctx.focused_value` for your own filtering:
+
+```python
+@bot.autocomplete("color", "name")
+async def color_ac(ctx):
     query = (ctx.focused_value or "").lower()
-    matches = [{"name": c.title(), "value": c} for c in COLORS if c.startswith(query)]
-    await ctx.respond_autocomplete(matches[:25])
+    return [{"name": c.title(), "value": c} for c in COLORS if c.startswith(query)]
 ```
 
 ### Deferred replies
