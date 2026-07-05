@@ -1,20 +1,41 @@
 # cordless
 
-Serverless Discord bots for AWS Lambda — no gateway, no WebSockets, just functions.
+Build Discord bots that run on AWS Lambda. Discord sends a request, Lambda wakes up, your handler runs, Lambda goes back to sleep. No server to keep alive, no idle cost.
 
+```python
+from cordless import Cordless
+
+bot = Cordless()
+
+@bot.command("ping", description="Say hello")
+async def ping(ctx):
+    await ctx.send("pong")
+
+handler = bot.handler()
 ```
-Discord → API Gateway → Lambda → cordless → your handlers → response
+
+```bash
+cordless deploy --register
+# → https://abc123.execute-api.eu-west-2.amazonaws.com/
 ```
 
 ---
 
+## why cordless?
+
+Most Discord bots run as long-lived processes — a VPS or container that sits idle 99% of the time, waiting for someone to type a command. You pay for uptime whether your bot is busy or not.
+
+cordless flips this. Your bot is a Lambda function: it only runs when Discord sends an interaction, takes milliseconds to respond, and costs essentially nothing to host. One command provisions everything on AWS — IAM role, Lambda function, API Gateway endpoint — and registers your commands with Discord.
+
+- **No server** — no EC2, no containers, no uptime monitoring, no SSH
+- **No idle cost** — Lambda charges per invocation, not per hour
+- **One command to ship** — `cordless deploy` handles all the AWS wiring
+- **Local dev** — `cordless dev` runs your bot on localhost with a live public tunnel
+- **Slow commands** — deferred interactions hand off to a worker Lambda so Discord's 3-second limit is never a problem
+
+---
+
 ## install
-
-```bash
-pip install cordless
-```
-
-For deploying to Lambda, also install the `deploy` extra which pulls in `boto3`:
 
 ```bash
 pip install "cordless[deploy]"
