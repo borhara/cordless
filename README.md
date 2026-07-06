@@ -3,9 +3,10 @@
 Build Discord bots that run on AWS Lambda. Discord sends a request, Lambda wakes up, your handler runs, Lambda goes back to sleep. No server to keep alive, no idle cost.
 
 ```python
+import os
 from cordless import Cordless
 
-bot = Cordless()
+bot = Cordless(public_key=os.environ.get("DISCORD_PUBLIC_KEY"))
 
 @bot.command("ping", description="Say hello")
 async def ping(ctx):
