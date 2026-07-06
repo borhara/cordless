@@ -138,7 +138,7 @@ def test_layer_zip_bundles_pynacl_extras(tmp_path, monkeypatch):
 
     extras = tmp_path / "extras"
     _make_tree(extras, ["nacl/signing.py", "nacl/_sodium.abi3.so"])
-    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v: str(extras))
+    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": str(extras))
 
     zip_path = cordless.upload.build_layer_zip("3.12")
     try:
@@ -153,7 +153,7 @@ def test_layer_zip_bundles_pynacl_extras(tmp_path, monkeypatch):
 def test_layer_zip_survives_pynacl_fetch_failure(monkeypatch):
     import cordless.upload
 
-    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v: None)
+    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": None)
 
     zip_path = cordless.upload.build_layer_zip("3.12")
     try:
@@ -187,7 +187,7 @@ def test_layer_zip_includes_dist_info(tmp_path, monkeypatch):
     _make_tree(dist_info, ["METADATA", "RECORD"])
 
     monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
-    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v: None)
+    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": None)
 
     zip_path = cordless.upload.build_layer_zip("3.12")
     try:

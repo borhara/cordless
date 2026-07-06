@@ -28,7 +28,7 @@ def invoke_worker(function_name, interaction):
         try:
             import boto3
             client = boto3.client("lambda")
-        except Exception:
+        except ImportError:
             raise RuntimeError(_NO_DEPLOY_MSG)
     resp = client.invoke(
         FunctionName=function_name,

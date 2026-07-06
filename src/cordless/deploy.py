@@ -177,7 +177,7 @@ def _cordless_version():
     return version("cordless")
 
 
-def _publish_cordless_layer(lam, layer_name, python_version=None):
+def _publish_cordless_layer(lam, layer_name, python_version=None, architecture="x86_64"):
     from .upload import build_layer_zip
 
     current_version = _cordless_version()
@@ -196,7 +196,7 @@ def _publish_cordless_layer(lam, layer_name, python_version=None):
     from .upload import _LAMBDA_RUNTIMES
     runtimes = [f"python{python_version}"] if python_version else _LAMBDA_RUNTIMES
 
-    zip_path = build_layer_zip(python_version)
+    zip_path = build_layer_zip(python_version, architecture)
     try:
         with open(zip_path, "rb") as f:
             resp = lam.publish_layer_version(
@@ -358,7 +358,7 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
             layer_arn = None
     else:
         with Spinner(f"cordless layer  {_cordless_version()}"):
-            layer_arn = _publish_cordless_layer(lam, layer_name, python_version)
+            layer_arn = _publish_cordless_layer(lam, layer_name, python_version, architecture)
 
     with Spinner("packaging"):
         zip_path = build_function_zip(source_dir, bundle_cordless=bundle_cordless, packages=packages, python_version=python_version, architecture=architecture)
@@ -397,8 +397,7 @@ def deploy(function_name, role_name, handler, source_dir, runtime, layer_name, e
             )
             lam.get_waiter("function_updated").wait(FunctionName=function_name)
 
-    # run even when crons is empty so rules for deleted crons get cleaned up
-    if crons is not None:
+    if crons:
         cron_target = defer_worker or function_name
         _, cron_arn = _function_exists(lam, cron_target)
         events = session.client("events")
@@ -419,14 +418,20 @@ def _wire_crons(events, lam, function_name, target_fn, target_arn, crons):
     for rule in events.list_rules(NamePrefix=prefix).get("Rules", []):
         if rule["Name"] in wanted:
             continue
-        target_ids = [t["Id"] for t in events.list_targets_by_rule(Rule=rule["Name"]).get("Targets", [])]
+        targets = events.list_targets_by_rule(Rule=rule["Name"]).get("Targets", [])
+        target_ids = [t["Id"] for t in targets]
         if target_ids:
             events.remove_targets(Rule=rule["Name"], Ids=target_ids)
         events.delete_rule(Name=rule["Name"])
-        try:
-            lam.remove_permission(FunctionName=target_fn, StatementId=f"cordless-cron-{rule['Name'][len(prefix):]}")
-        except lam.exceptions.ResourceNotFoundException:
-            pass
+        # remove the invoke permission from whichever function was actually targeted,
+        # which may differ from the current target_fn if defer_worker changed
+        cron_name = rule["Name"][len(prefix):]
+        for target in targets:
+            fn_name = target["Arn"].split(":")[-1]
+            try:
+                lam.remove_permission(FunctionName=fn_name, StatementId=f"cordless-cron-{cron_name}")
+            except lam.exceptions.ResourceNotFoundException:
+                pass
 
     for name, schedule in crons.items():
         rule_name = f"{function_name}-cron-{name}"
