@@ -51,6 +51,7 @@ def test_missing_body_returns_400():
 
 def test_defer_ephemeral_sets_flags():
     from asyncio import run
+
     from cordless.context import Context
 
     ctx = Context({"type": 2, "data": {"name": "x"}, "id": "1", "token": "t"})
@@ -62,6 +63,7 @@ def test_defer_ephemeral_sets_flags():
 
 def test_defer_plain_has_no_data():
     from asyncio import run
+
     from cordless.context import Context
 
     ctx = Context({"type": 2, "data": {"name": "x"}, "id": "1", "token": "t"})
@@ -384,7 +386,8 @@ def test_raw_dict_uikit_component_sets_flag():
 
 
 def test_load_extension_without_setup_raises():
-    import sys, os
+    import os
+    import sys
 
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "fixtures"))
     try:

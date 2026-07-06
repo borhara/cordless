@@ -3,10 +3,9 @@ import sys
 from unittest.mock import patch
 
 import pytest
+from conftest import FakeDiscordResponse
 
 from cordless.cli import _pick, main
-
-from conftest import FakeDiscordResponse
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 

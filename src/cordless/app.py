@@ -392,6 +392,7 @@ class Cordless:
         Discovers all Cog instances defined in the module automatically.
         Alternatively, define setup(bot) for manual control."""
         import importlib
+
         from .cog import Cog as _Cog
 
         module = importlib.import_module(name)

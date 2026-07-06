@@ -156,7 +156,7 @@ def _deploy(args):
         sys.path.insert(0, source_dir)
         setup_fn = _load_bot(setup_target)
         setup_fn()
-        print(f"  ✓ setup")
+        print("  ✓ setup")
 
     env = {}
     for pair in args.env or []:
@@ -305,7 +305,7 @@ def _init(args):
         with open(fname, "w") as f:
             f.write(content)
         print(f"  ✓ {fname}")
-    print(f"\nNext: fill in .env, then run `cordless deploy`")
+    print("\nNext: fill in .env, then run `cordless deploy`")
 
 
 def _dev(args):
@@ -343,6 +343,7 @@ def _cron(args):
 
 def _logs(args):
     import time
+
     from ._aws import get_session
     from .deploy import load_config
 
@@ -534,7 +535,11 @@ def main(argv=None):
         "--register",
         action="store_true",
         default=False,
-        help="Register slash commands with Discord after deploy (auto-detects bot; reads credentials from $DISCORD_BOT_TOKEN or $DISCORD_CLIENT_ID/$DISCORD_CLIENT_SECRET)",
+        help=(
+            "Register slash commands with Discord after deploy"
+            " (auto-detects bot; reads credentials from"
+            " $DISCORD_BOT_TOKEN or $DISCORD_CLIENT_ID/$DISCORD_CLIENT_SECRET)"
+        ),
     )
     deploy_cmd.set_defaults(func=_deploy)
 

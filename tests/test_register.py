@@ -1,13 +1,10 @@
-import json
 from unittest.mock import patch
 
 import pytest
+from conftest import FakeDiscordResponse
 
 from cordless.app import Cordless, option
 from cordless.register import sync_commands
-
-from conftest import FakeDiscordResponse
-
 
 # --- command_definitions ---
 

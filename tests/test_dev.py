@@ -32,8 +32,8 @@ def bot_project(tmp_path):
 
 
 def test_defer_import_survives_no_region(monkeypatch):
-    import importlib
     import sys
+
     import botocore.exceptions
 
     def _no_region(*a, **kw):
