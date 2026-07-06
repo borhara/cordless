@@ -12,7 +12,7 @@ _TIMEOUT = 10
 try:
     import boto3 as _boto3
     _lambda_client = _boto3.client("lambda")
-except Exception:
+except ImportError:
     _lambda_client = None
 
 
