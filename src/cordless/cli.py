@@ -275,9 +275,6 @@ _INIT_TOML = '''\
 [deploy]
 function = "{name}"
 # region = "eu-west-2"
-
-[deploy.env]
-DISCORD_PUBLIC_KEY = ""
 '''
 
 _INIT_ENV = '''\
@@ -305,7 +302,7 @@ def _init(args):
         with open(fname, "w") as f:
             f.write(content)
         print(f"  ✓ {fname}")
-    print(f"\nNext: fill in DISCORD_PUBLIC_KEY in cordless.toml, then run `cordless deploy`")
+    print(f"\nNext: fill in .env, then run `cordless deploy`")
 
 
 def _dev(args):
