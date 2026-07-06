@@ -60,8 +60,8 @@ def options_from_signature(func):
 
     async def buy(ctx, item: str, qty: int = 1) →
     a required string option "item" and an optional integer option "qty".
-    Supports Literal["a", "b"] for choices and Optional[int] / int | None for
-    optional typed parameters.
+    Supports Literal["a", "b"] for choices, and Optional[int] / int | None to
+    unwrap the inner type (the option is non-required only when a default is also given).
     """
     params = list(inspect.signature(func).parameters.values())[1:]  # skip ctx
     options = []
@@ -71,8 +71,8 @@ def options_from_signature(func):
         annotation = p.annotation
         optional_from_default = p.default is not inspect.Parameter.empty
 
-        annotation, optional_from_type = _unwrap_optional(annotation)
-        is_optional = optional_from_default or optional_from_type
+        annotation, _ = _unwrap_optional(annotation)
+        is_optional = optional_from_default
 
         opt = {"name": p.name, "description": "No description provided."}
 
@@ -360,7 +360,12 @@ class Cordless:
         if hasattr(module, "setup"):
             module.setup(self)
             return
-        cogs = [v for v in vars(module).values() if isinstance(v, _Cog)]
+        seen = set()
+        cogs = []
+        for v in vars(module).values():
+            if isinstance(v, _Cog) and id(v) not in seen:
+                seen.add(id(v))
+                cogs.append(v)
         if not cogs:
             raise ValueError(f"Extension '{name}' must define a Cog instance or a setup(bot) function")
         for cog in cogs:
