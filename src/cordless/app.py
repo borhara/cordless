@@ -34,9 +34,7 @@ def _validate_command_name(name):
     """Fail at decoration time instead of with a cryptic Discord API error at register time."""
     for part in name.split("/"):
         if not _NAME_RE.fullmatch(part):
-            raise ValueError(
-                f"Invalid command name {name!r}: Discord requires 1-32 lowercase letters, digits, - or _"
-            )
+            raise ValueError(f"Invalid command name {name!r}: Discord requires 1-32 lowercase letters, digits, - or _")
 
 
 def _unwrap_optional(annotation):
@@ -46,6 +44,7 @@ def _unwrap_optional(annotation):
             return inner[0], True
     try:
         import types
+
         if isinstance(annotation, types.UnionType):
             inner = [a for a in annotation.__args__ if a is not type(None)]
             if len(inner) == 1:
@@ -89,14 +88,22 @@ def options_from_signature(func):
     return options
 
 
-def option(name, description="No description provided.", *, type="string", required=False,
-           autocomplete=False, choices=None, min_value=None, max_value=None,
-           min_length=None, max_length=None):
+def option(
+    name,
+    description="No description provided.",
+    *,
+    type="string",
+    required=False,
+    autocomplete=False,
+    choices=None,
+    min_value=None,
+    max_value=None,
+    min_length=None,
+    max_length=None,
+):
     """Build a Discord application command option dict."""
     if isinstance(type, str) and type not in _OPTION_TYPES:
-        raise ValueError(
-            f"Unknown option type {type!r}: expected one of {', '.join(_OPTION_TYPES)}"
-        )
+        raise ValueError(f"Unknown option type {type!r}: expected one of {', '.join(_OPTION_TYPES)}")
     opt = {
         "name": name,
         "description": description,
@@ -125,13 +132,19 @@ class Cordless:
         self.public_key = public_key
         self.crons = {}
         if public_key is not None and not public_key:
-            print(
-                "cordless: DISCORD_PUBLIC_KEY is empty - all requests will be "
-                "rejected with 401 until it is set"
-            )
+            print("cordless: DISCORD_PUBLIC_KEY is empty - all requests will be rejected with 401 until it is set")
 
-    def command(self, name, description="No description provided.", options=None, defer=False,
-                dm_permission=True, default_member_permissions=None, nsfw=False, ephemeral=False):
+    def command(
+        self,
+        name,
+        description="No description provided.",
+        options=None,
+        defer=False,
+        dm_permission=True,
+        default_member_permissions=None,
+        nsfw=False,
+        ephemeral=False,
+    ):
         _validate_command_name(name)
 
         def decorator(func):
@@ -147,10 +160,15 @@ class Cordless:
                     from . import defer as _defer_mod  # noqa: F401
                 except Exception:
                     pass
-            self.router.register_command(name, func, description=description, options=_options,
-                                         dm_permission=dm_permission,
-                                         default_member_permissions=default_member_permissions,
-                                         nsfw=nsfw)
+            self.router.register_command(
+                name,
+                func,
+                description=description,
+                options=_options,
+                dm_permission=dm_permission,
+                default_member_permissions=default_member_permissions,
+                nsfw=nsfw,
+            )
             return func
 
         return decorator
@@ -160,6 +178,7 @@ class Cordless:
         import urllib.error
         import urllib.request
         from importlib.metadata import version as _ver
+
         token = os.environ["DISCORD_BOT_TOKEN"]
         body = json.dumps(payload).encode() if payload is not None else None
         req = urllib.request.Request(
@@ -187,6 +206,7 @@ class Cordless:
         if components is not None:
             payload["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
         import asyncio
+
         await asyncio.get_event_loop().run_in_executor(
             None, self._discord_request, "POST", f"/channels/{channel_id}/messages", payload
         )
@@ -200,24 +220,28 @@ class Cordless:
         if components is not None:
             payload["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
         import asyncio
+
         await asyncio.get_event_loop().run_in_executor(
             None, self._discord_request, "PATCH", f"/channels/{channel_id}/messages/{message_id}", payload
         )
 
     async def delete_message(self, channel_id, message_id):
         import asyncio
+
         await asyncio.get_event_loop().run_in_executor(
             None, self._discord_request, "DELETE", f"/channels/{channel_id}/messages/{message_id}"
         )
 
     async def add_role(self, guild_id, user_id, role_id):
         import asyncio
+
         await asyncio.get_event_loop().run_in_executor(
             None, self._discord_request, "PUT", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}"
         )
 
     async def remove_role(self, guild_id, user_id, role_id):
         import asyncio
+
         await asyncio.get_event_loop().run_in_executor(
             None, self._discord_request, "DELETE", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}"
         )
@@ -225,6 +249,7 @@ class Cordless:
     @property
     def worker_handler(self):
         from .worker import make_worker_handler
+
         return make_worker_handler(self)
 
     def handler(self):
@@ -233,6 +258,7 @@ class Cordless:
             if cron_name:
                 return self.run_cron(cron_name)
             return self.handle(event, context)
+
         return _handler
 
     def cron(self, schedule, name=None):
@@ -241,9 +267,11 @@ class Cordless:
         `schedule` is an EventBridge expression, e.g. "rate(1 day)" or
         "cron(0 12 * * ? *)". The handler takes no arguments.
         """
+
         def decorator(func):
             self.crons[name or func.__name__] = {"schedule": schedule, "handler": func}
             return func
+
         return decorator
 
     def run_cron(self, name):
@@ -293,16 +321,24 @@ class Cordless:
 
     def user_command(self, name, dm_permission=True):
         """Register a User context menu command (right-click → Apps → name)."""
+
         def decorator(func):
-            self.router.register_command(name, func, description=None, options=[], dm_permission=dm_permission, cmd_type=2)
+            self.router.register_command(
+                name, func, description=None, options=[], dm_permission=dm_permission, cmd_type=2
+            )
             return func
+
         return decorator
 
     def message_command(self, name, dm_permission=True):
         """Register a Message context menu command (right-click message → Apps → name)."""
+
         def decorator(func):
-            self.router.register_command(name, func, description=None, options=[], dm_permission=dm_permission, cmd_type=3)
+            self.router.register_command(
+                name, func, description=None, options=[], dm_permission=dm_permission, cmd_type=3
+            )
             return func
+
         return decorator
 
     def autocomplete(self, cmd_name, option_name):
@@ -357,6 +393,7 @@ class Cordless:
         Alternatively, define setup(bot) for manual control."""
         import importlib
         from .cog import Cog as _Cog
+
         module = importlib.import_module(name)
         if hasattr(module, "setup"):
             module.setup(self)
@@ -376,6 +413,7 @@ class Cordless:
         """Load all cog modules in a package (e.g. 'cogs'). Files starting with '_' are skipped."""
         import importlib
         import pkgutil
+
         pkg = importlib.import_module(package)
         for module_info in pkgutil.iter_modules(pkg.__path__):
             if not module_info.name.startswith("_"):
@@ -398,7 +436,8 @@ class Cordless:
                 if resolved_options is None:
                     resolved_options = options_from_signature(func)
                 self.router.register_command(
-                    kwargs["name"], func,
+                    kwargs["name"],
+                    func,
                     description=kwargs["description"],
                     options=resolved_options,
                     dm_permission=kwargs["dm_permission"],
@@ -421,15 +460,19 @@ class Cordless:
                 self.router.register_autocomplete(kwargs["cmd_name"], kwargs["option_name"], func)
             elif ctype == "user_command":
                 self.router.register_command(
-                    kwargs["name"], func,
-                    description=None, options=[],
+                    kwargs["name"],
+                    func,
+                    description=None,
+                    options=[],
                     dm_permission=kwargs["dm_permission"],
                     cmd_type=2,
                 )
             elif ctype == "message_command":
                 self.router.register_command(
-                    kwargs["name"], func,
-                    description=None, options=[],
+                    kwargs["name"],
+                    func,
+                    description=None,
+                    options=[],
                     dm_permission=kwargs["dm_permission"],
                     cmd_type=3,
                 )

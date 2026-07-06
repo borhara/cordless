@@ -49,8 +49,10 @@ def test_register_uses_token_from_environment(monkeypatch, capsys):
 
 
 def test_register_via_client_credentials(capsys):
-    responses = [FakeDiscordResponse({"access_token": "bearer-tok"}),
-                 FakeDiscordResponse([{"id": "1", "name": "ping"}])]
+    responses = [
+        FakeDiscordResponse({"access_token": "bearer-tok"}),
+        FakeDiscordResponse([{"id": "1", "name": "ping"}]),
+    ]
 
     with patch("cordless.register.urllib.request.urlopen", side_effect=responses) as urlopen:
         main(["register", "sample_app:bot", "--client-id", "cid", "--client-secret", "csecret"])
@@ -80,8 +82,10 @@ def test_register_rejects_missing_attribute():
 
 def test_register_prefers_client_credentials_over_token(capsys, monkeypatch):
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "should-not-be-used")
-    responses = [FakeDiscordResponse({"access_token": "bearer-tok"}),
-                 FakeDiscordResponse([{"id": "1", "name": "ping"}])]
+    responses = [
+        FakeDiscordResponse({"access_token": "bearer-tok"}),
+        FakeDiscordResponse([{"id": "1", "name": "ping"}]),
+    ]
 
     with patch("cordless.register.urllib.request.urlopen", side_effect=responses) as urlopen:
         main(["register", "sample_app:bot", "--client-id", "cid", "--client-secret", "csecret"])
@@ -93,8 +97,10 @@ def test_register_prefers_client_credentials_over_token(capsys, monkeypatch):
 # cron
 # ---------------------------------------------------------------------------
 
+
 def test_cron_runs_handler(monkeypatch):
     import sample_app
+
     sample_app.cron_calls.clear()
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
 
@@ -112,6 +118,7 @@ def test_cron_rejects_unknown_name():
 # _pick
 # ---------------------------------------------------------------------------
 
+
 def test_pick_returns_first_non_none():
     assert _pick(None, 0, "x") == 0
     assert _pick(None, None, "x") == "x"
@@ -125,6 +132,7 @@ def test_pick_returns_none_when_all_none():
 # ---------------------------------------------------------------------------
 # init
 # ---------------------------------------------------------------------------
+
 
 def test_init_creates_scaffold(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -146,6 +154,7 @@ def test_init_skips_existing_files(tmp_path, monkeypatch, capsys):
 # ---------------------------------------------------------------------------
 # destroy
 # ---------------------------------------------------------------------------
+
 
 def test_destroy_yes_skips_prompt(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -170,11 +179,11 @@ def test_destroy_prompt_aborts_on_no(tmp_path, monkeypatch):
 # deploy arg->config precedence
 # ---------------------------------------------------------------------------
 
+
 def test_deploy_args_take_precedence_over_config(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "cordless.toml").write_text(
-        '[deploy]\nfunction = "from-toml"\nregion = "eu-west-1"\n'
-        '[deploy.env]\nDISCORD_PUBLIC_KEY = "key"\n'
+        '[deploy]\nfunction = "from-toml"\nregion = "eu-west-1"\n[deploy.env]\nDISCORD_PUBLIC_KEY = "key"\n'
     )
     with patch("cordless.deploy.deploy") as mock_deploy:
         main(["deploy", "--function", "from-arg", "--region", "us-east-1"])
@@ -186,8 +195,7 @@ def test_deploy_args_take_precedence_over_config(tmp_path, monkeypatch):
 def test_deploy_falls_back_to_config(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "cordless.toml").write_text(
-        '[deploy]\nfunction = "from-toml"\nregion = "eu-west-1"\n'
-        '[deploy.env]\nDISCORD_PUBLIC_KEY = "key"\n'
+        '[deploy]\nfunction = "from-toml"\nregion = "eu-west-1"\n[deploy.env]\nDISCORD_PUBLIC_KEY = "key"\n'
     )
     with patch("cordless.deploy.deploy") as mock_deploy:
         main(["deploy"])

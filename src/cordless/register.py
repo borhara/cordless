@@ -23,7 +23,9 @@ def _get_application_id(bot_token):
         with urllib.request.urlopen(request) as response:
             return json.loads(response.read())["id"]
     except urllib.error.HTTPError as exc:
-        raise RuntimeError(f"Failed to resolve application id from bot token ({exc.code}): {exc.read().decode()}") from exc
+        raise RuntimeError(
+            f"Failed to resolve application id from bot token ({exc.code}): {exc.read().decode()}"
+        ) from exc
 
 
 def _get_client_credentials_token(client_id, client_secret):

@@ -105,7 +105,12 @@ class _EntitySelect:
         self.disabled = disabled
 
     def to_dict(self):
-        d = {"type": self._type, "custom_id": self.custom_id, "min_values": self.min_values, "max_values": self.max_values}
+        d = {
+            "type": self._type,
+            "custom_id": self.custom_id,
+            "min_values": self.min_values,
+            "max_values": self.max_values,
+        }
         if self.placeholder is not None:
             d["placeholder"] = self.placeholder
         if self.disabled:
@@ -148,8 +153,9 @@ TextInputStyle = _TextInputStyle()
 
 
 class TextInput:
-    def __init__(self, custom_id, label, style=1, min_length=None, max_length=None,
-                 required=True, value=None, placeholder=None):
+    def __init__(
+        self, custom_id, label, style=1, min_length=None, max_length=None, required=True, value=None, placeholder=None
+    ):
         self.custom_id = custom_id
         self.label = label
         self.style = style
@@ -191,6 +197,7 @@ class Modal:
 
 
 # Discord UI Kit (Components v2). flag 32768 is set automatically when these are used
+
 
 class Container:
     is_ui_kit = True

@@ -27,10 +27,20 @@ class Router:
         self.buttons = {}
         self.selects = {}
         self.modals = {}
-        self.autocompletes = {}   # (cmd_key, option_name) → handler
+        self.autocompletes = {}  # (cmd_key, option_name) → handler
         self._error_handler = None
 
-    def register_command(self, name, handler, description="No description provided.", options=None, dm_permission=True, cmd_type=1, default_member_permissions=None, nsfw=False):
+    def register_command(
+        self,
+        name,
+        handler,
+        description="No description provided.",
+        options=None,
+        dm_permission=True,
+        cmd_type=1,
+        default_member_permissions=None,
+        nsfw=False,
+    ):
         if cmd_type == 1:
             for existing, meta in self.commands.items():
                 if meta.get("cmd_type", 1) != 1:
@@ -69,8 +79,8 @@ class Router:
         self._error_handler = handler
 
     def command_definitions(self):
-        flat = {}   # name → meta
-        subs = {}   # top-level name → {path → meta}
+        flat = {}  # name → meta
+        subs = {}  # top-level name → {path → meta}
 
         for key, meta in self.commands.items():
             # Context menu commands (type 2/3) never participate in subcommand grouping
@@ -115,12 +125,14 @@ class Router:
                 parts = path.split("/")
                 if len(parts) == 2:
                     # parent/sub
-                    options.append({
-                        "name": parts[1],
-                        "description": meta["description"],
-                        "type": _SUB_COMMAND,
-                        "options": meta["options"],
-                    })
+                    options.append(
+                        {
+                            "name": parts[1],
+                            "description": meta["description"],
+                            "type": _SUB_COMMAND,
+                            "options": meta["options"],
+                        }
+                    )
                 elif len(parts) == 3:
                     # parent/group/sub, grouped by group name
                     group_name = parts[1]
@@ -134,12 +146,14 @@ class Router:
                             "options": [],
                         }
                         options.append(group)
-                    group["options"].append({
-                        "name": sub_name,
-                        "description": meta["description"],
-                        "type": _SUB_COMMAND,
-                        "options": meta["options"],
-                    })
+                    group["options"].append(
+                        {
+                            "name": sub_name,
+                            "description": meta["description"],
+                            "type": _SUB_COMMAND,
+                            "options": meta["options"],
+                        }
+                    )
 
             first_desc = next(iter(entries.values()))["description"]
             cmd = {

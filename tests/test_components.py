@@ -1,13 +1,31 @@
 """Unit tests for component builders and embed helpers."""
+
 from cordless import (
-    ActionRow, Button, ButtonStyle, ChannelSelect, Container,
-    Embed, EmbedField, MediaGallery, MentionableSelect, Modal,
-    RoleSelect, Section, SelectOption, Separator, StringSelect,
-    TextDisplay, TextInput, TextInputStyle, Thumbnail, UserSelect,
+    ActionRow,
+    Button,
+    ButtonStyle,
+    ChannelSelect,
+    Container,
+    Embed,
+    EmbedField,
+    MediaGallery,
+    MentionableSelect,
+    Modal,
+    RoleSelect,
+    Section,
+    SelectOption,
+    Separator,
+    StringSelect,
+    TextDisplay,
+    TextInput,
+    TextInputStyle,
+    Thumbnail,
+    UserSelect,
 )
 
 
 # --- SelectOption ---
+
 
 def test_select_option_minimal():
     assert SelectOption("Label", "val").to_dict() == {"label": "Label", "value": "val"}
@@ -20,6 +38,7 @@ def test_select_option_full():
 
 
 # --- Button ---
+
 
 def test_button_primary():
     d = Button("Click me", custom_id="btn1").to_dict()
@@ -44,6 +63,7 @@ def test_premium_button_omits_null_sku_id():
 
 # --- ActionRow ---
 
+
 def test_action_row_wraps_buttons():
     d = ActionRow([Button("A", custom_id="a"), Button("B", custom_id="b")]).to_dict()
     assert d["type"] == 1
@@ -52,9 +72,9 @@ def test_action_row_wraps_buttons():
 
 # --- StringSelect ---
 
+
 def test_string_select():
-    d = StringSelect("color", [SelectOption("One", "1"), SelectOption("Two", "2")],
-                     placeholder="Pick one").to_dict()
+    d = StringSelect("color", [SelectOption("One", "1"), SelectOption("Two", "2")], placeholder="Pick one").to_dict()
     assert d["type"] == 3
     assert d["custom_id"] == "color"
     assert d["placeholder"] == "Pick one"
@@ -62,6 +82,7 @@ def test_string_select():
 
 
 # --- Other select types ---
+
 
 def test_user_select():
     assert UserSelect("u").to_dict()["type"] == 5
@@ -83,6 +104,7 @@ def test_channel_select():
 
 # --- TextInput / Modal ---
 
+
 def test_text_input():
     d = TextInput("name_input", "Your name", style=TextInputStyle.SHORT, placeholder="e.g. Alice").to_dict()
     assert d == {"type": 4, "custom_id": "name_input", "label": "Your name", "style": 1, "placeholder": "e.g. Alice"}
@@ -92,7 +114,7 @@ def test_modal_wraps_text_inputs_in_action_rows():
     d = Modal("feedback_modal", "Feedback", TextInput("q", "Question")).to_dict()
     assert d["custom_id"] == "feedback_modal"
     assert d["title"] == "Feedback"
-    assert d["components"][0]["type"] == 1      # ActionRow
+    assert d["components"][0]["type"] == 1  # ActionRow
     assert d["components"][0]["components"][0]["type"] == 4  # TextInput
 
 
@@ -102,6 +124,7 @@ def test_modal_accepts_pre_wrapped_action_rows():
 
 
 # --- Embed ---
+
 
 def test_embed_minimal():
     d = Embed(title="Hello", description="World", color=0xFF5733).to_dict()
@@ -129,6 +152,7 @@ def test_embed_field():
 
 
 # --- UI Kit components ---
+
 
 def test_text_display():
     assert TextDisplay("Hello world").to_dict() == {"type": 10, "content": "Hello world"}

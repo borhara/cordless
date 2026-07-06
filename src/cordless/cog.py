@@ -24,63 +24,103 @@ class Cog:
     def __init__(self):
         self._handlers = []
 
-    def command(self, name, description="No description provided.", options=None,
-                defer=False, dm_permission=True, default_member_permissions=None, nsfw=False, ephemeral=False):
+    def command(
+        self,
+        name,
+        description="No description provided.",
+        options=None,
+        defer=False,
+        dm_permission=True,
+        default_member_permissions=None,
+        nsfw=False,
+        ephemeral=False,
+    ):
         def decorator(func):
-            self._handlers.append(("command", func, {
-                "name": name,
-                "description": description,
-                "options": options,
-                "defer": defer,
-                "dm_permission": dm_permission,
-                "default_member_permissions": default_member_permissions,
-                "nsfw": nsfw,
-                "ephemeral": ephemeral,
-            }))
+            self._handlers.append(
+                (
+                    "command",
+                    func,
+                    {
+                        "name": name,
+                        "description": description,
+                        "options": options,
+                        "defer": defer,
+                        "dm_permission": dm_permission,
+                        "default_member_permissions": default_member_permissions,
+                        "nsfw": nsfw,
+                        "ephemeral": ephemeral,
+                    },
+                )
+            )
             return func
+
         return decorator
 
     def button(self, custom_id, defer=False):
         def decorator(func):
             self._handlers.append(("button", func, {"custom_id": custom_id, "defer": defer}))
             return func
+
         return decorator
 
     def select(self, custom_id, defer=False):
         def decorator(func):
             self._handlers.append(("select", func, {"custom_id": custom_id, "defer": defer}))
             return func
+
         return decorator
 
     def modal(self, custom_id, defer=False):
         def decorator(func):
             self._handlers.append(("modal", func, {"custom_id": custom_id, "defer": defer}))
             return func
+
         return decorator
 
     def autocomplete(self, cmd_name, option_name):
         def decorator(func):
-            self._handlers.append(("autocomplete", func, {
-                "cmd_name": cmd_name,
-                "option_name": option_name,
-            }))
+            self._handlers.append(
+                (
+                    "autocomplete",
+                    func,
+                    {
+                        "cmd_name": cmd_name,
+                        "option_name": option_name,
+                    },
+                )
+            )
             return func
+
         return decorator
 
     def user_command(self, name, dm_permission=True):
         def decorator(func):
-            self._handlers.append(("user_command", func, {
-                "name": name,
-                "dm_permission": dm_permission,
-            }))
+            self._handlers.append(
+                (
+                    "user_command",
+                    func,
+                    {
+                        "name": name,
+                        "dm_permission": dm_permission,
+                    },
+                )
+            )
             return func
+
         return decorator
 
     def message_command(self, name, dm_permission=True):
         def decorator(func):
-            self._handlers.append(("message_command", func, {
-                "name": name,
-                "dm_permission": dm_permission,
-            }))
+            self._handlers.append(
+                (
+                    "message_command",
+                    func,
+                    {
+                        "name": name,
+                        "dm_permission": dm_permission,
+                    },
+                )
+            )
             return func
+
         return decorator

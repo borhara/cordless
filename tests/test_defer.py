@@ -1,4 +1,5 @@
 """Deferred flow: router ACK + worker invoke, worker-mode dispatch, followup PATCH, crons."""
+
 import json
 
 import pytest
@@ -32,6 +33,7 @@ def patched(monkeypatch):
 
 
 # --- Router defer branch ---
+
 
 def test_deferred_command_acks_type_5_and_invokes_worker(invoked):
     bot = Cordless()
@@ -73,6 +75,7 @@ def test_deferred_command_without_worker_env_returns_400(monkeypatch):
 
 # --- Worker-mode dispatch ---
 
+
 def test_worker_dispatch_sends_via_followup(patched):
     bot = Cordless()
 
@@ -100,6 +103,7 @@ def test_worker_dispatch_reraises_handler_errors(patched):
 
 # --- Followup PATCH (mocked HTTPSConnection) ---
 
+
 class FakeHTTPSConnection:
     requests = []
     responses = []  # list of (status, body) consumed per request
@@ -109,7 +113,9 @@ class FakeHTTPSConnection:
         self.timeout = timeout
 
     def request(self, method, url, body, headers):
-        FakeHTTPSConnection.requests.append({"method": method, "url": url, "body": body, "headers": headers, "timeout": self.timeout})
+        FakeHTTPSConnection.requests.append(
+            {"method": method, "url": url, "body": body, "headers": headers, "timeout": self.timeout}
+        )
 
     def getresponse(self):
         status, body = FakeHTTPSConnection.responses.pop(0) if FakeHTTPSConnection.responses else (200, b"{}")
@@ -129,15 +135,17 @@ def fake_conn(monkeypatch):
 
 def test_followup_with_multiple_files_uploads_all(fake_conn):
     cordless.defer.patch_followup_with_files(
-        "app", "tok", {"content": "hi"},
+        "app",
+        "tok",
+        {"content": "hi"},
         [("card.png", b"png-bytes"), ("log.txt", b"text-bytes")],
     )
 
     body = fake_conn.requests[0]["body"]
     assert b'filename="card.png"' in body
-    assert b'Content-Type: image/png' in body
+    assert b"Content-Type: image/png" in body
     assert b'filename="log.txt"' in body
-    assert b'Content-Type: text/plain' in body
+    assert b"Content-Type: text/plain" in body
     assert b"png-bytes" in body and b"text-bytes" in body
 
 
@@ -184,6 +192,7 @@ def test_connection_has_timeout(fake_conn):
 
 # --- Crons ---
 
+
 def test_cron_runs_via_bot_handler():
     bot = Cordless()
     ran = []
@@ -212,6 +221,7 @@ def test_cron_runs_via_worker_handler():
 
 def test_unknown_cron_raises():
     from cordless.errors import CordlessError
+
     bot = Cordless()
     with pytest.raises(CordlessError):
         bot.run_cron("ghost")
@@ -221,10 +231,12 @@ def test_cron_schedules_exposed_for_deploy():
     bot = Cordless()
 
     @bot.cron("rate(1 day)")
-    async def daily(): pass
+    async def daily():
+        pass
 
     @bot.cron("cron(0 12 * * ? *)", name="noon")
-    async def noon_handler(): pass
+    async def noon_handler():
+        pass
 
     assert bot.crons["daily"]["schedule"] == "rate(1 day)"
     assert bot.crons["noon"]["schedule"] == "cron(0 12 * * ? *)"

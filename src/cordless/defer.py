@@ -1,4 +1,5 @@
 """Deferred interaction support: async Lambda invoke and Discord followup webhook."""
+
 import json
 import mimetypes
 import time
@@ -11,15 +12,13 @@ _TIMEOUT = 10
 # pay the boto3 initialisation cost inside Discord's 3-second response window.
 try:
     import boto3 as _boto3
+
     _lambda_client = _boto3.client("lambda")
 except ImportError:
     _lambda_client = None
 
 
-_NO_DEPLOY_MSG = (
-    "boto3 is required for deferred interactions.\n"
-    "Install it: pip install 'cordless[deploy]'"
-)
+_NO_DEPLOY_MSG = "boto3 is required for deferred interactions.\nInstall it: pip install 'cordless[deploy]'"
 
 
 def invoke_worker(function_name, interaction):
@@ -27,6 +26,7 @@ def invoke_worker(function_name, interaction):
     if client is None:
         try:
             import boto3
+
             client = boto3.client("lambda")
         except ImportError:
             raise RuntimeError(_NO_DEPLOY_MSG)
@@ -36,7 +36,9 @@ def invoke_worker(function_name, interaction):
         Payload=json.dumps(interaction).encode(),
     )
     if resp["StatusCode"] != 202:
-        raise RuntimeError(f"Lambda async invoke returned {resp['StatusCode']} (FunctionError: {resp.get('FunctionError')})")
+        raise RuntimeError(
+            f"Lambda async invoke returned {resp['StatusCode']} (FunctionError: {resp.get('FunctionError')})"
+        )
 
 
 def _patch(app_id, token, body, content_type):
@@ -92,20 +94,17 @@ def patch_followup_with_files(app_id, token, payload, files):
     sep = f"--{boundary}\r\n".encode()
 
     parts = [
-        sep +
-        b'Content-Disposition: form-data; name="payload_json"\r\n'
-        b'Content-Type: application/json\r\n\r\n' +
-        json.dumps(payload).encode() +
-        b"\r\n"
+        sep + b'Content-Disposition: form-data; name="payload_json"\r\n'
+        b"Content-Type: application/json\r\n\r\n" + json.dumps(payload).encode() + b"\r\n"
     ]
     for i, (filename, file_bytes) in enumerate(files):
         content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
         parts.append(
-            sep +
-            f'Content-Disposition: form-data; name="files[{i}]"; filename="{filename}"\r\n'.encode() +
-            f'Content-Type: {content_type}\r\n\r\n'.encode() +
-            file_bytes +
-            b"\r\n"
+            sep
+            + f'Content-Disposition: form-data; name="files[{i}]"; filename="{filename}"\r\n'.encode()
+            + f"Content-Type: {content_type}\r\n\r\n".encode()
+            + file_bytes
+            + b"\r\n"
         )
     parts.append(f"--{boundary}--\r\n".encode())
     body = b"".join(parts)

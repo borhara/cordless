@@ -16,6 +16,7 @@ def _cordless_package_dir():
 def _layer_extras_dir(python_version, architecture="x86_64"):
     """Fetch pynacl (fast Ed25519 verify) for the layer; None means build without it."""
     from .deploy import _ensure_packages
+
     try:
         return _ensure_packages(["pynacl"], python_version, architecture)
     except Exception as exc:
@@ -42,6 +43,7 @@ def build_layer_zip(python_version=None, architecture="x86_64"):
                 zf.write(abs_path, os.path.join("python", rel_path))
 
         import glob
+
         for pattern in ("cordless-*.dist-info", "cordless.egg-info"):
             for dist_info in glob.glob(os.path.join(site_dir, pattern)):
                 for root, dirs, files in os.walk(dist_info):

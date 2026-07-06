@@ -4,6 +4,7 @@ Wraps bot.handle() in a plain HTTP server, hot-reloads your code on change,
 and (when cloudflared is installed) opens a public tunnel so Discord can
 reach it with real, signed interactions.
 """
+
 import importlib
 import json
 import os
@@ -62,16 +63,20 @@ class Reloader:
 
 def _local_invoke_worker(reloader):
     """Stand-in for the Lambda async invoke: run the worker handler on a thread."""
+
     def invoke(function_name, interaction):
         from .worker import make_worker_handler
+
         handler = make_worker_handler(reloader.get())
         threading.Thread(target=handler, args=(interaction,), daemon=True).start()
+
     return invoke
 
 
 def _load_env(source_dir):
     """Export [deploy.env] from cordless.toml and any .env file, without clobbering the shell."""
     from .deploy import load_config
+
     for key, value in load_config(source_dir).get("env", {}).items():
         os.environ.setdefault(key, str(value))
 
@@ -105,6 +110,7 @@ def _make_handler(reloader):
                 result = reloader.get().handle(event)
             except Exception as exc:
                 import traceback
+
                 traceback.print_exc()
                 result = {
                     "statusCode": 500,
@@ -157,6 +163,7 @@ def run_dev(target, port=8787, tunnel=True, source_dir="."):
     # deferred handlers run in-process, no worker Lambda locally
     os.environ.setdefault("CORDLESS_WORKER_FUNCTION", "cordless-dev-local")
     from . import defer as defer_mod
+
     reloader = Reloader(target, source_dir)
     defer_mod.invoke_worker = _local_invoke_worker(reloader)
 
@@ -181,6 +188,7 @@ def run_dev(target, port=8787, tunnel=True, source_dir="."):
         else:
             print()
             import platform
+
             _sys = platform.system()
             if _sys == "Darwin":
                 _hint = "brew install cloudflared"

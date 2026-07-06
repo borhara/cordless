@@ -104,6 +104,7 @@ def test_base64_encoded_body_is_decoded_before_verification():
 
 def test_pure_python_fallback_accepts_valid_signature(monkeypatch):
     import cordless.verify
+
     monkeypatch.setattr(cordless.verify, "VerifyKey", None)
 
     signing_key = SigningKey.generate()
@@ -118,6 +119,7 @@ def test_pure_python_fallback_accepts_valid_signature(monkeypatch):
 
 def test_pure_python_fallback_rejects_invalid_signature(monkeypatch):
     import cordless.verify
+
     monkeypatch.setattr(cordless.verify, "VerifyKey", None)
 
     signing_key = SigningKey.generate()
@@ -138,6 +140,7 @@ def test_pure_python_fallback_rejects_invalid_signature(monkeypatch):
 
 def test_nacl_fast_path_is_active_when_installed():
     import cordless.verify
+
     assert cordless.verify.VerifyKey is not None  # pynacl is a dev dep, fast path must be wired
 
 

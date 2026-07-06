@@ -1,4 +1,5 @@
 """cordless dev: hot reload, HTTP round-trip, in-process deferred handlers."""
+
 import json
 import os
 import sys
@@ -29,6 +30,7 @@ def bot_project(tmp_path):
 
 # --- Reloader ---
 
+
 def test_defer_import_survives_no_region(monkeypatch):
     import importlib
     import sys
@@ -41,6 +43,7 @@ def test_defer_import_survives_no_region(monkeypatch):
     sys.modules.pop("cordless.defer", None)
     try:
         import cordless.defer as defer_mod
+
         assert defer_mod._lambda_client is None
     finally:
         sys.modules.pop("cordless.defer", None)
@@ -70,6 +73,7 @@ def test_reloader_reloads_on_change(bot_project):
 
 
 # --- HTTP round-trip ---
+
 
 @pytest.fixture
 def dev_server(bot_project):
@@ -104,6 +108,7 @@ def test_get_health_check(dev_server):
 
 # --- in-process defer ---
 
+
 def test_local_invoke_runs_worker_thread(bot_project, monkeypatch):
     import cordless.defer
 
@@ -133,6 +138,7 @@ def test_local_invoke_runs_worker_thread(bot_project, monkeypatch):
 
 
 # --- env loading ---
+
 
 def test_load_env_strips_double_quotes(tmp_path, monkeypatch):
     monkeypatch.delenv("QUOTED", raising=False)

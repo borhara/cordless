@@ -1,14 +1,15 @@
 """Minimal terminal spinner, no external dependencies."""
+
 import sys
 import threading
 import time
 
 _FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-_GREEN  = "\033[32m"
-_RED    = "\033[31m"
-_DIM    = "\033[2m"
-_BOLD   = "\033[1m"
-_RESET  = "\033[0m"
+_GREEN = "\033[32m"
+_RED = "\033[31m"
+_DIM = "\033[2m"
+_BOLD = "\033[1m"
+_RESET = "\033[0m"
 
 _tty = sys.stdout.isatty()
 

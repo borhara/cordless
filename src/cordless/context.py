@@ -110,15 +110,43 @@ class Context:
         self.target_member = resolved.get("members", {}).get(target_id) if target_id else None
         self.target_message = resolved.get("messages", {}).get(target_id) if target_id else None
 
-    async def send(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, files=None, allowed_mentions=None):
+    async def send(
+        self,
+        msg=None,
+        *,
+        content=None,
+        ephemeral=False,
+        embeds=None,
+        components=None,
+        files=None,
+        allowed_mentions=None,
+    ):
         if self._worker_mode:
-            return await self.followup(msg, content=content, ephemeral=ephemeral, embeds=embeds, components=components, files=files, allowed_mentions=allowed_mentions)
+            return await self.followup(
+                msg,
+                content=content,
+                ephemeral=ephemeral,
+                embeds=embeds,
+                components=components,
+                files=files,
+                allowed_mentions=allowed_mentions,
+            )
 
         data = _build_message_data(msg, content, embeds, components, ephemeral, allowed_mentions)
         self.response = _response({"type": _CHANNEL_MESSAGE_WITH_SOURCE, "data": data})
         return self.response
 
-    async def followup(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, files=None, allowed_mentions=None):
+    async def followup(
+        self,
+        msg=None,
+        *,
+        content=None,
+        ephemeral=False,
+        embeds=None,
+        components=None,
+        files=None,
+        allowed_mentions=None,
+    ):
         from .defer import patch_followup, patch_followup_with_files
 
         data = _build_message_data(msg, content, embeds, components, ephemeral, allowed_mentions)
@@ -133,19 +161,30 @@ class Context:
         self.response = {"_cordless_followup": True}
         return self.response
 
-    async def send_followup(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, allowed_mentions=None):
+    async def send_followup(
+        self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, allowed_mentions=None
+    ):
         from .defer import post_followup
+
         data = _build_message_data(msg, content, embeds, components, ephemeral, allowed_mentions)
         post_followup(self.interaction.get("application_id"), self.token, data)
         return {"_cordless_followup": True}
 
     async def delete_original(self):
         from .defer import delete_original as _delete
+
         _delete(self.interaction.get("application_id"), self.token)
 
     async def edit(self, msg=None, *, content=None, embeds=None, components=None, files=None, allowed_mentions=None):
         if self._worker_mode:
-            return await self.followup(msg, content=content, embeds=embeds, components=components, files=files, allowed_mentions=allowed_mentions)
+            return await self.followup(
+                msg,
+                content=content,
+                embeds=embeds,
+                components=components,
+                files=files,
+                allowed_mentions=allowed_mentions,
+            )
         data = _build_message_data(msg, content, embeds, components, allowed_mentions=allowed_mentions)
         self.response = _response({"type": _UPDATE_MESSAGE, "data": data})
         return self.response

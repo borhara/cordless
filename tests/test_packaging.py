@@ -1,4 +1,5 @@
 """Deploy packaging: zip contents, excludes, config loading, package cache keys."""
+
 import os
 import zipfile
 
@@ -27,20 +28,23 @@ def test_zip_includes_source_files(tmp_path):
 
 
 def test_zip_excludes_junk(tmp_path):
-    _make_tree(tmp_path, [
-        "lambda_function.py",
-        ".env",
-        "cordless.toml",
-        ".DS_Store",
-        "app.pyc",
-        "__pycache__/app.cpython-312.pyc",
-        "mybot.egg-info/PKG-INFO",
-        ".pytest_cache/x",
-        ".venv/lib/thing.py",
-        "dist/pkg.whl",
-        "build/lib/x.py",
-        "node_modules/pkg/index.js",
-    ])
+    _make_tree(
+        tmp_path,
+        [
+            "lambda_function.py",
+            ".env",
+            "cordless.toml",
+            ".DS_Store",
+            "app.pyc",
+            "__pycache__/app.cpython-312.pyc",
+            "mybot.egg-info/PKG-INFO",
+            ".pytest_cache/x",
+            ".venv/lib/thing.py",
+            "dist/pkg.whl",
+            "build/lib/x.py",
+            "node_modules/pkg/index.js",
+        ],
+    )
     zip_path = build_function_zip(str(tmp_path))
     try:
         assert _zip_names(zip_path) == {"lambda_function.py"}
@@ -76,6 +80,7 @@ def test_packages_cache_key_varies_by_inputs():
 
 # --- bundle_cordless dist-info ---
 
+
 def test_bundle_cordless_includes_dist_info(tmp_path, monkeypatch):
     import cordless.deploy
 
@@ -89,6 +94,7 @@ def test_bundle_cordless_includes_dist_info(tmp_path, monkeypatch):
     (tmp_path / "empty").mkdir(exist_ok=True)
 
     import cordless.upload
+
     monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
 
     src = tmp_path / "src"
@@ -117,6 +123,7 @@ def test_bundle_cordless_includes_egg_info(tmp_path, monkeypatch):
     (tmp_path / "empty").mkdir(exist_ok=True)
 
     import cordless.upload
+
     monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
 
     src = tmp_path / "src"
@@ -132,6 +139,7 @@ def test_bundle_cordless_includes_egg_info(tmp_path, monkeypatch):
 
 
 # --- layer zip ---
+
 
 def test_layer_zip_bundles_pynacl_extras(tmp_path, monkeypatch):
     import cordless.upload
