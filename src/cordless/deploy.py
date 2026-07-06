@@ -253,7 +253,7 @@ def _create_function(lam, function_name, zip_path, role_arn, handler, runtime, l
 
 def _update_function(lam, function_name, zip_path, handler, runtime, layer_arn, env, timeout=10, memory_size=256, architecture="x86_64"):
     with open(zip_path, "rb") as f:
-        lam.update_function_code(FunctionName=function_name, ZipFile=f.read(), Architectures=[architecture])
+        lam.update_function_code(FunctionName=function_name, ZipFile=f.read())
     lam.get_waiter("function_updated").wait(FunctionName=function_name)
 
     lam.update_function_configuration(
@@ -264,6 +264,7 @@ def _update_function(lam, function_name, zip_path, handler, runtime, layer_arn, 
         Environment=_env_vars(env),
         Timeout=timeout,
         MemorySize=memory_size,
+        Architectures=[architecture],
     )
     lam.get_waiter("function_updated").wait(FunctionName=function_name)
 
