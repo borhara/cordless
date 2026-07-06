@@ -12,8 +12,12 @@ _TIMEOUT = 10
 # pay the boto3 initialisation cost inside Discord's 3-second response window.
 try:
     import boto3 as _boto3
+    from botocore.exceptions import NoRegionError as _NoRegionError
 
-    _lambda_client = _boto3.client("lambda")
+    try:
+        _lambda_client = _boto3.client("lambda")
+    except _NoRegionError:
+        _lambda_client = None
 except ImportError:
     _lambda_client = None
 
