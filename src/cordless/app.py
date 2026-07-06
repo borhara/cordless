@@ -222,6 +222,7 @@ class Cordless:
             None, self._discord_request, "DELETE", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}"
         )
 
+    @property
     def worker_handler(self):
         from .worker import make_worker_handler
         return make_worker_handler(self)
