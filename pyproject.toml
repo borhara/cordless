@@ -9,6 +9,8 @@ version = "1.0.0rc2"
 description = "Serverless Discord interactions framework for AWS Lambda"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+keywords = ["discord", "bot", "lambda", "serverless", "aws", "interactions"]
 dependencies = []
 
 authors = [
@@ -16,9 +18,12 @@ authors = [
 ]
 
 classifiers = [
-  "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
-  "Operating System :: OS Independent"
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
 ]
 
 
