@@ -212,8 +212,8 @@ class Router:
             if isinstance(response, list):
                 if all(isinstance(c, str) for c in response):
                     query = str(ctx.focused_value or "").lower()
-                    response = [{"name": c, "value": c} for c in response if query in c.lower()][:25]
-                return await ctx.respond_autocomplete(response)
+                    response = [{"name": c, "value": c} for c in response if query in c.lower()]
+                return await ctx.respond_autocomplete(response[:25])
             return response
 
         if itype == MODAL_SUBMIT:
