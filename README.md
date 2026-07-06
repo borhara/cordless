@@ -6,7 +6,7 @@ Build Discord bots that run on AWS Lambda. Discord sends a request, Lambda wakes
 import os
 from cordless import Cordless
 
-bot = Cordless(public_key=os.environ.get("DISCORD_PUBLIC_KEY"))
+bot = Cordless(public_key=os.environ["DISCORD_PUBLIC_KEY"])
 
 @bot.command("ping", description="Say hello")
 async def ping(ctx):
