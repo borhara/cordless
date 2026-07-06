@@ -23,22 +23,22 @@ cordless deploy --register
 
 ## Why cordless?
 
-Most Discord bots run as long-lived processes — a VPS or container that sits idle 99% of the time, waiting for someone to type a command. You pay for uptime whether your bot is busy or not.
+Most Discord bots run as long-lived processes, a VPS or container that sits idle 99% of the time, waiting for someone to type a command. You pay for uptime whether your bot is busy or not.
 
-cordless flips this. Your bot is a Lambda function: it only runs when Discord sends an interaction, takes milliseconds to respond, and costs essentially nothing to host. One command provisions everything on AWS — IAM role, Lambda function, API Gateway endpoint — and registers your commands with Discord.
+cordless flips this. Your bot is a Lambda function: it only runs when Discord sends an interaction, takes milliseconds to respond, and costs essentially nothing to host. One command provisions everything on AWS: IAM role, Lambda function, API Gateway endpoint and registers your commands with Discord.
 
-- **No server** — no EC2, no containers, no uptime monitoring, no SSH
-- **No idle cost** — Lambda charges per invocation, not per hour
-- **One command to ship** — `cordless deploy` handles all the AWS wiring
-- **Local dev** — `cordless dev` runs your bot on localhost with a live public tunnel
-- **Slow commands** — deferred interactions hand off to a worker Lambda so Discord's 3-second limit is never a problem
+- **No server:** no EC2, no containers, no uptime monitoring, no SSH
+- **No idle cost:** Lambda charges per invocation, not per hour
+- **One command to ship:** `cordless deploy` handles all the AWS wiring
+- **Local dev:** `cordless dev` runs your bot on localhost with a live public tunnel
+- **Slow commans:** deferred interactions hand off to a worker Lambda so Discord's 3-second limit is never a problem
 
 ---
 
 ## Install
 
 ```bash
-pip install "cordless[deploy]"
+uv add "cordless[deploy]"   # (we should ALL be using uv)
 ```
 
 ---
@@ -81,3 +81,6 @@ Paste the URL into your Discord app's **Interactions Endpoint URL** and your bot
 ## Documentation
 
 Full docs at **[cordless.dev](https://cordless.dev)** — commands, options, buttons, modals, deferred interactions, Components v2, scheduled handlers, and the full deploy reference.
+
+
+> Please note that this is a work in progress, I have found genuine interest in serverless development and wanted an easy way to provision AWS.
