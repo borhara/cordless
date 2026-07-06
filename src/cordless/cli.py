@@ -55,15 +55,24 @@ def _detect_bot_target(source_dir):
         except (SyntaxError, OSError):
             continue
         for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Assign)
-                and isinstance(node.value, ast.Call)
-                and isinstance(node.value.func, ast.Name)
-                and node.value.func.id == "Cordless"
-            ):
-                for target in node.targets:
-                    if isinstance(target, ast.Name):
-                        return f"{filename[:-3]}:{target.id}"
+            if isinstance(node, ast.Assign):
+                if (
+                    isinstance(node.value, ast.Call)
+                    and isinstance(node.value.func, ast.Name)
+                    and node.value.func.id == "Cordless"
+                ):
+                    for target in node.targets:
+                        if isinstance(target, ast.Name):
+                            return f"{filename[:-3]}:{target.id}"
+            elif isinstance(node, ast.AnnAssign):
+                if (
+                    node.value is not None
+                    and isinstance(node.value, ast.Call)
+                    and isinstance(node.value.func, ast.Name)
+                    and node.value.func.id == "Cordless"
+                    and isinstance(node.target, ast.Name)
+                ):
+                    return f"{filename[:-3]}:{node.target.id}"
     return None
 
 
@@ -95,8 +104,15 @@ def _register(args):
 
     client_id = args.client_id or toml_env.get("DISCORD_CLIENT_ID")
     client_secret = args.client_secret or toml_env.get("DISCORD_CLIENT_SECRET")
-    # only fall back to bot token when client credentials aren't available
-    token = args.token if not (client_id and client_secret) else None
+    # explicit --token always wins; client credentials win over $DISCORD_BOT_TOKEN env var
+    if args.token:
+        token = args.token
+        client_id = None
+        client_secret = None
+    elif client_id and client_secret:
+        token = None
+    else:
+        token = os.environ.get("DISCORD_BOT_TOKEN")
 
     if not token and not (client_id and client_secret):
         raise SystemExit(
@@ -427,7 +443,7 @@ def main(argv=None):
     # register
     register = subparsers.add_parser("register", help="Register this bot's slash commands with Discord")
     register.add_argument("bot", nargs="?", default=None, help="Location of your Cordless instance, as MODULE:ATTRIBUTE (e.g. app:bot); auto-detected if omitted")
-    register.add_argument("--token", default=os.environ.get("DISCORD_BOT_TOKEN"), help="Bot token (defaults to $DISCORD_BOT_TOKEN)")
+    register.add_argument("--token", default=None, help="Bot token (defaults to $DISCORD_BOT_TOKEN)")
     register.add_argument("--client-id", default=os.environ.get("DISCORD_CLIENT_ID"), help="App client id (defaults to $DISCORD_CLIENT_ID)")
     register.add_argument("--client-secret", default=os.environ.get("DISCORD_CLIENT_SECRET"), help="App client secret (defaults to $DISCORD_CLIENT_SECRET)")
     register.add_argument("--guild-id", default=os.environ.get("DISCORD_GUILD_ID"), help="Register to a single guild (defaults to $DISCORD_GUILD_ID)")
