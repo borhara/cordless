@@ -274,33 +274,33 @@ deploy = [
     { name = "boto3" },
     { name = "botocore", extra = ["crt"] },
 ]
+
+[package.dev-dependencies]
 dev = [
     { name = "boto3" },
     { name = "botocore", extra = ["crt"] },
     { name = "moto", extra = ["apigatewayv2", "awslambda", "events", "s3"] },
     { name = "pynacl" },
     { name = "pytest" },
-]
-
-[package.dev-dependencies]
-dev = [
     { name = "ruff" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "boto3", marker = "extra == 'deploy'", specifier = ">=1.20" },
-    { name = "boto3", marker = "extra == 'dev'", specifier = ">=1.20" },
     { name = "botocore", extras = ["crt"], marker = "extra == 'deploy'" },
-    { name = "botocore", extras = ["crt"], marker = "extra == 'dev'" },
-    { name = "moto", extras = ["iam", "awslambda", "apigatewayv2", "events", "logs", "s3"], marker = "extra == 'dev'", specifier = ">=5.0" },
-    { name = "pynacl", marker = "extra == 'dev'", specifier = ">=1.5" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
 ]
-provides-extras = ["dev", "deploy"]
+provides-extras = ["deploy"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "ruff", specifier = ">=0.15.20" }]
+dev = [
+    { name = "boto3", specifier = ">=1.20" },
+    { name = "botocore", extras = ["crt"] },
+    { name = "moto", extras = ["iam", "awslambda", "apigatewayv2", "events", "logs", "s3"], specifier = ">=5.0" },
+    { name = "pynacl", specifier = ">=1.5" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "ruff", specifier = ">=0.15.20" },
+]
 
 [[package]]
 name = "cryptography"
