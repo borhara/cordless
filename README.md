@@ -31,7 +31,7 @@ cordless flips this. Your bot is a Lambda function: it only runs when Discord se
 - **No idle cost:** Lambda charges per invocation, not per hour
 - **One command to ship:** `cordless deploy` handles all the AWS wiring
 - **Local dev:** `cordless dev` runs your bot on localhost with a live public tunnel
-- **Slow commans:** deferred interactions hand off to a worker Lambda so Discord's 3-second limit is never a problem
+- **Slow commands:** deferred interactions hand off to a worker Lambda so Discord's 3-second limit is never a problem
 
 ---
 
