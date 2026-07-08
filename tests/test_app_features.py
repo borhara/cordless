@@ -154,6 +154,39 @@ def test_unannotated_param_defaults_to_string():
     assert options_from_signature(f)[0]["type"] == 3
 
 
+def test_stringized_annotations_are_resolved():
+    # `from __future__ import annotations` turns every annotation into a
+    # string; the types must still resolve instead of falling back to string
+    src = "from __future__ import annotations\nasync def buy(ctx, item: str, qty: int = 1, ratio: float = 1.0): ..."
+    ns = {}
+    exec(compile(src, "<test>", "exec"), ns)
+
+    opts = {o["name"]: o for o in options_from_signature(ns["buy"])}
+    assert opts["item"]["type"] == 3
+    assert opts["qty"]["type"] == 4
+    assert opts["ratio"]["type"] == 10
+
+
+def test_stringized_literal_choices_are_resolved():
+    src = (
+        "from __future__ import annotations\n"
+        "from typing import Literal\n"
+        "async def f(ctx, size: Literal['small', 'large']): ..."
+    )
+    ns = {}
+    exec(compile(src, "<test>", "exec"), ns)
+
+    opt = options_from_signature(ns["f"])[0]
+    assert opt["choices"] == [{"name": "small", "value": "small"}, {"name": "large", "value": "large"}]
+
+
+def test_unresolvable_annotation_falls_back_to_string():
+    async def f(ctx, thing: "NotDefinedAnywhere"):  # noqa: F821
+        pass
+
+    assert options_from_signature(f)[0]["type"] == 3
+
+
 def test_string_literal_choices():
     async def f(ctx, size: Literal["small", "large"]):
         pass

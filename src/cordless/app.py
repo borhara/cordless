@@ -75,7 +75,14 @@ def options_from_signature(func):
     Supports Literal["a", "b"] for choices, and Optional[int] / int | None to
     unwrap the inner type (the option is non-required only when a default is also given).
     """
-    params = list(inspect.signature(func).parameters.values())[1:]  # skip ctx
+    # eval_str resolves PEP 563 stringized annotations ("int" → int), which
+    # `from __future__ import annotations` applies to the whole user module;
+    # without it every option silently falls back to type 3 (string)
+    try:
+        sig = inspect.signature(func, eval_str=True)
+    except NameError:
+        sig = inspect.signature(func)  # unresolvable forward ref: keep the string, option stays type 3
+    params = list(sig.parameters.values())[1:]  # skip ctx
     options = []
     for p in params:
         if p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD):
