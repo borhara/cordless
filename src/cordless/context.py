@@ -1,4 +1,7 @@
+import base64
 import json
+
+from ._multipart import build_multipart_body
 
 _CHANNEL_MESSAGE_WITH_SOURCE = 4
 _UPDATE_MESSAGE = 7
@@ -61,6 +64,11 @@ def _build_message_data(msg, content, embeds, components, ephemeral=False, allow
     if flags:
         data["flags"] = flags
     return data
+
+
+def _attach_files(data, files):
+    """Add the attachments metadata array Discord expects alongside a multipart body."""
+    data["attachments"] = [{"id": i, "filename": name} for i, (name, _) in enumerate(files)]
 
 
 class Context:
@@ -133,7 +141,12 @@ class Context:
             )
 
         data = _build_message_data(msg, content, embeds, components, ephemeral, allowed_mentions)
-        self.response = _response({"type": _CHANNEL_MESSAGE_WITH_SOURCE, "data": data})
+        payload = {"type": _CHANNEL_MESSAGE_WITH_SOURCE, "data": data}
+        if files:
+            _attach_files(data, files)
+            self.response = _multipart_response(payload, files)
+        else:
+            self.response = _response(payload)
         return self.response
 
     async def followup(
@@ -153,7 +166,7 @@ class Context:
         app_id = self.interaction.get("application_id")
 
         if files:
-            data["attachments"] = [{"id": i, "filename": name} for i, (name, _) in enumerate(files)]
+            _attach_files(data, files)
             patch_followup_with_files(app_id, self.token, data, files)
         else:
             patch_followup(app_id, self.token, data)
@@ -186,7 +199,12 @@ class Context:
                 allowed_mentions=allowed_mentions,
             )
         data = _build_message_data(msg, content, embeds, components, allowed_mentions=allowed_mentions)
-        self.response = _response({"type": _UPDATE_MESSAGE, "data": data})
+        payload = {"type": _UPDATE_MESSAGE, "data": data}
+        if files:
+            _attach_files(data, files)
+            self.response = _multipart_response(payload, files)
+        else:
+            self.response = _response(payload)
         return self.response
 
     async def defer(self, ephemeral=False):
@@ -215,4 +233,19 @@ def _response(payload):
         "statusCode": 200,
         "headers": {"Content-Type": "application/json"},
         "body": json.dumps(payload),
+    }
+
+
+def _multipart_response(payload, files):
+    """Like _response(), but for an interaction response that carries file
+    attachments. Discord accepts multipart/form-data for the initial response,
+    same as followup messages; API Gateway needs the body base64-encoded plus
+    isBase64Encoded=True to pass binary data through untouched.
+    """
+    body, content_type = build_multipart_body(payload, files)
+    return {
+        "statusCode": 200,
+        "headers": {"Content-Type": content_type},
+        "body": base64.b64encode(body).decode(),
+        "isBase64Encoded": True,
     }

@@ -1,3 +1,4 @@
+import base64
 import json
 from asyncio import run
 
@@ -94,6 +95,45 @@ def test_send_with_components():
     ctx = _make_ctx()
     run(ctx.send(components=[ActionRow([Button("Click", custom_id="c")])]))
     assert json.loads(ctx.response["body"])["data"]["components"][0]["type"] == 1
+
+
+# --- send/edit with files (initial response, non-worker) ---
+
+
+def test_send_with_files_returns_base64_multipart_body():
+    ctx = _make_ctx()
+    run(ctx.send("here", files=[("report.pdf", b"binary-data")]))
+
+    assert ctx.response["isBase64Encoded"] is True
+    assert ctx.response["headers"]["Content-Type"].startswith("multipart/form-data")
+
+    body = base64.b64decode(ctx.response["body"])
+    assert b'name="payload_json"' in body
+    assert b'name="files[0]"; filename="report.pdf"' in body
+    assert b"binary-data" in body
+
+    boundary = ctx.response["headers"]["Content-Type"].split("boundary=")[1]
+    payload_part = body.split(f"--{boundary}".encode())[1]
+    payload_json = json.loads(payload_part.split(b"\r\n\r\n", 1)[1].rsplit(b"\r\n", 1)[0])
+    assert payload_json["data"]["content"] == "here"
+    assert payload_json["data"]["attachments"] == [{"id": 0, "filename": "report.pdf"}]
+
+
+def test_send_without_files_is_plain_json():
+    ctx = _make_ctx()
+    run(ctx.send("hi"))
+    assert "isBase64Encoded" not in ctx.response
+    assert ctx.response["headers"]["Content-Type"] == "application/json"
+
+
+def test_edit_with_files_returns_base64_multipart_body():
+    ctx = _make_ctx()
+    run(ctx.edit("updated", files=[("img.png", b"\x89PNG...")]))
+
+    assert ctx.response["isBase64Encoded"] is True
+    body = base64.b64decode(ctx.response["body"])
+    assert b'filename="img.png"' in body
+    assert b"\x89PNG..." in body
 
 
 # --- send_modal ---

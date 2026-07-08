@@ -106,6 +106,35 @@ def test_get_health_check(dev_server):
         assert resp.status == 200
 
 
+def test_post_interaction_with_files_round_trips_raw_bytes(bot_project):
+    """isBase64Encoded responses (multipart file attachments) must be decoded
+    back to raw bytes before hitting the socket, same as real API Gateway."""
+    (bot_project / "mybot.py").write_text(
+        "from cordless import Cordless\n"
+        "bot = Cordless()\n"
+        "@bot.command('file')\n"
+        "async def file_cmd(ctx):\n"
+        "    await ctx.send('here', files=[('report.pdf', b'binary-data')])\n"
+    )
+    reloader = Reloader("mybot:bot", str(bot_project))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _make_handler(reloader))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f"http://127.0.0.1:{server.server_address[1]}"
+        payload = json.dumps({"type": 2, "data": {"name": "file"}}).encode()
+        req = urllib.request.Request(url, data=payload, method="POST")
+        with urllib.request.urlopen(req) as resp:
+            content_type = resp.headers.get("Content-Type")
+            body = resp.read()
+        assert content_type.startswith("multipart/form-data")
+        assert b"binary-data" in body
+        assert b'filename="report.pdf"' in body
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 # --- in-process defer ---
 
 

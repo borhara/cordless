@@ -5,6 +5,7 @@ and (when cloudflared is installed) opens a public tunnel so Discord can
 reach it with real, signed interactions.
 """
 
+import base64
 import importlib
 import json
 import os
@@ -118,7 +119,10 @@ def _make_handler(reloader):
                     "body": json.dumps({"error": f"{type(exc).__name__}: {exc}"}),
                 }
 
-            payload = result.get("body", "").encode()
+            body_out = result.get("body", "")
+            # mirrors API Gateway's Lambda proxy integration: a base64Encoded
+            # body carries binary data (e.g. multipart file attachments)
+            payload = base64.b64decode(body_out) if result.get("isBase64Encoded") else body_out.encode()
             self.send_response(result["statusCode"])
             for key, value in result.get("headers", {}).items():
                 self.send_header(key, value)

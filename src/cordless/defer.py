@@ -1,9 +1,7 @@
 """Deferred interaction support: async Lambda invoke and Discord followup webhook."""
 
 import json
-import mimetypes
 import time
-import uuid
 from http.client import HTTPSConnection
 
 _TIMEOUT = 10
@@ -94,26 +92,10 @@ def patch_followup_with_files(app_id, token, payload, files):
     `files` is a list of (filename, bytes) tuples; content types are guessed
     from the filename extension.
     """
-    boundary = "cordless-" + uuid.uuid4().hex
-    sep = f"--{boundary}\r\n".encode()
+    from ._multipart import build_multipart_body
 
-    parts = [
-        sep + b'Content-Disposition: form-data; name="payload_json"\r\n'
-        b"Content-Type: application/json\r\n\r\n" + json.dumps(payload).encode() + b"\r\n"
-    ]
-    for i, (filename, file_bytes) in enumerate(files):
-        content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
-        parts.append(
-            sep
-            + f'Content-Disposition: form-data; name="files[{i}]"; filename="{filename}"\r\n'.encode()
-            + f"Content-Type: {content_type}\r\n\r\n".encode()
-            + file_bytes
-            + b"\r\n"
-        )
-    parts.append(f"--{boundary}--\r\n".encode())
-    body = b"".join(parts)
-
-    return _patch(app_id, token, body, f"multipart/form-data; boundary={boundary}")
+    body, content_type = build_multipart_body(payload, files)
+    return _patch(app_id, token, body, content_type)
 
 
 def patch_followup_with_file(app_id, token, payload, filename, file_bytes, content_type=None):
