@@ -27,15 +27,18 @@ os.environ.setdefault("AWS_SECURITY_TOKEN", "testing")
 os.environ.setdefault("AWS_SESSION_TOKEN", "testing")
 os.environ.setdefault("AWS_DEFAULT_REGION", REGION)
 
-_BASIC_POLICY_DOC = json.dumps({
-    "Version": "2012-10-17",
-    "Statement": [{"Effect": "Allow", "Action": "logs:*", "Resource": "*"}],
-})
+_BASIC_POLICY_DOC = json.dumps(
+    {
+        "Version": "2012-10-17",
+        "Statement": [{"Effect": "Allow", "Action": "logs:*", "Resource": "*"}],
+    }
+)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _minimal_zip(tmp_path):
     p = tmp_path / "fn.zip"
@@ -45,10 +48,14 @@ def _minimal_zip(tmp_path):
 
 
 def _make_role(iam, name="test-role"):
-    trust = json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [{"Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}, "Action": "sts:AssumeRole"}],
-    })
+    trust = json.dumps(
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {"Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}, "Action": "sts:AssumeRole"}
+            ],
+        }
+    )
     return iam.create_role(RoleName=name, AssumeRolePolicyDocument=trust)["Role"]["Arn"]
 
 
@@ -76,6 +83,7 @@ def _seed_lambda_execution_policy(iam):
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def aws_clients():
     with mock_aws():
@@ -98,9 +106,11 @@ def aws_clients_with_policy(aws_clients, monkeypatch):
 @pytest.fixture
 def deploy_patches(monkeypatch, tmp_path):
     """Patch out filesystem/pip/upload; AWS calls go through moto."""
+
     def _fresh_zip(*a, **kw):
         # deploy() deletes the zip after use, so recreate it on each call
         return _minimal_zip(tmp_path)
+
     monkeypatch.setattr(cordless.deploy, "build_function_zip", _fresh_zip)
     monkeypatch.setattr(cordless.deploy, "_publish_cordless_layer", lambda *a, **kw: None)
     monkeypatch.setattr(cordless.deploy, "_cordless_version", lambda: "0.13.1")
@@ -125,6 +135,7 @@ def _base_deploy_kwargs(tmp_path, **overrides):
 # ---------------------------------------------------------------------------
 # ensure_iam_role
 # ---------------------------------------------------------------------------
+
 
 def test_ensure_iam_role_creates_role(aws_clients_with_policy):
     iam = aws_clients_with_policy["iam"]
@@ -152,6 +163,7 @@ def test_ensure_iam_role_attaches_extra_policies(aws_clients_with_policy):
 # _function_exists
 # ---------------------------------------------------------------------------
 
+
 def test_function_exists_returns_false_for_missing(aws_clients):
     exists, arn = _function_exists(aws_clients["lam"], "nonexistent")
     assert exists is False
@@ -170,6 +182,7 @@ def test_function_exists_returns_true_when_present(aws_clients, tmp_path):
 # ---------------------------------------------------------------------------
 # _ensure_api_gateway
 # ---------------------------------------------------------------------------
+
 
 def test_ensure_api_gateway_creates_api(aws_clients, tmp_path):
     iam, lam, apigw = aws_clients["iam"], aws_clients["lam"], aws_clients["apigw"]
@@ -191,8 +204,50 @@ def test_ensure_api_gateway_is_idempotent(aws_clients, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# _list_all_apis / _list_all_layer_versions (pagination)
+# ---------------------------------------------------------------------------
+
+
+class _FakePaginator:
+    def __init__(self, pages, result_key):
+        self._pages = pages
+        self._result_key = result_key
+
+    def paginate(self, **kwargs):
+        return self
+
+    def build_full_result(self):
+        merged = [item for page in self._pages for item in page]
+        return {self._result_key: merged}
+
+
+class _FakeClient:
+    def __init__(self, pages, result_key):
+        self._paginator = _FakePaginator(pages, result_key)
+
+    def get_paginator(self, name):
+        return self._paginator
+
+
+def test_list_all_apis_aggregates_every_page():
+    client = _FakeClient([[{"Name": "a"}], [{"Name": "b"}]], "Items")
+    assert cordless.deploy._list_all_apis(client) == [{"Name": "a"}, {"Name": "b"}]
+
+
+def test_list_all_layer_versions_aggregates_every_page():
+    client = _FakeClient([[{"Version": 1}], [{"Version": 2}]], "LayerVersions")
+    assert cordless.deploy._list_all_layer_versions(client, "cordless") == [{"Version": 1}, {"Version": 2}]
+
+
+def test_list_all_rules_aggregates_every_page():
+    client = _FakeClient([[{"Name": "fn-cron-a"}], [{"Name": "fn-cron-b"}]], "Rules")
+    assert cordless.deploy._list_all_rules(client, "fn-cron-") == [{"Name": "fn-cron-a"}, {"Name": "fn-cron-b"}]
+
+
+# ---------------------------------------------------------------------------
 # _allow_worker_invoke
 # ---------------------------------------------------------------------------
+
 
 def test_allow_worker_invoke_puts_inline_policy(aws_clients):
     iam = aws_clients["iam"]
@@ -208,6 +263,7 @@ def test_allow_worker_invoke_puts_inline_policy(aws_clients):
 # _wire_crons
 # ---------------------------------------------------------------------------
 
+
 def test_wire_crons_creates_rules(aws_clients, tmp_path):
     iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
     role_arn = _make_role(iam)
@@ -218,6 +274,15 @@ def test_wire_crons_creates_rules(aws_clients, tmp_path):
     assert rules[0]["ScheduleExpression"] == "rate(1 day)"
 
 
+def test_wire_crons_disables_retries(aws_clients, tmp_path):
+    iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    fn_arn = _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    _wire_crons(events, lam, "my-fn", "my-fn", fn_arn, {"tick": "rate(1 minute)"})
+    cfg = lam.get_function_event_invoke_config(FunctionName="my-fn")
+    assert cfg["MaximumRetryAttempts"] == 0
+
+
 def test_wire_crons_sets_input_payload(aws_clients, tmp_path):
     iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
     role_arn = _make_role(iam)
@@ -225,6 +290,18 @@ def test_wire_crons_sets_input_payload(aws_clients, tmp_path):
     _wire_crons(events, lam, "my-fn", "my-fn", fn_arn, {"tick": "rate(5 minutes)"})
     targets = events.list_targets_by_rule(Rule="my-fn-cron-tick")["Targets"]
     assert json.loads(targets[0]["Input"]) == {"_cordless_cron": "tick"}
+
+
+def test_wire_crons_removes_stale_rules(aws_clients, tmp_path):
+    iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    fn_arn = _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+
+    _wire_crons(events, lam, "my-fn", "my-fn", fn_arn, {"daily": "rate(1 day)"})
+    _wire_crons(events, lam, "my-fn", "my-fn", fn_arn, {"weekly": "rate(7 days)"})
+
+    rules = {r["Name"] for r in events.list_rules(NamePrefix="my-fn-cron-")["Rules"]}
+    assert rules == {"my-fn-cron-weekly"}
 
 
 def test_wire_crons_is_idempotent(aws_clients, tmp_path):
@@ -240,11 +317,11 @@ def test_wire_crons_is_idempotent(aws_clients, tmp_path):
 # deploy / destroy integration
 # ---------------------------------------------------------------------------
 
+
 @mock_aws
 def test_deploy_creates_function_and_returns_url(deploy_patches, monkeypatch):
     iam = boto3.client("iam", region_name=REGION)
-    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY",
-                        _seed_lambda_execution_policy(iam))
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
     url = deploy(**_base_deploy_kwargs(deploy_patches))
     assert url
     lam = boto3.client("lambda", region_name=REGION)
@@ -255,8 +332,7 @@ def test_deploy_creates_function_and_returns_url(deploy_patches, monkeypatch):
 @mock_aws
 def test_deploy_is_idempotent(deploy_patches, monkeypatch):
     iam = boto3.client("iam", region_name=REGION)
-    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY",
-                        _seed_lambda_execution_policy(iam))
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
     kwargs = _base_deploy_kwargs(deploy_patches)
     url1 = deploy(**kwargs)
     url2 = deploy(**kwargs)
@@ -266,8 +342,7 @@ def test_deploy_is_idempotent(deploy_patches, monkeypatch):
 @mock_aws
 def test_deploy_creates_worker_when_configured(deploy_patches, monkeypatch):
     iam = boto3.client("iam", region_name=REGION)
-    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY",
-                        _seed_lambda_execution_policy(iam))
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
     deploy(**_base_deploy_kwargs(deploy_patches, defer_worker="my-bot-worker"))
     lam = boto3.client("lambda", region_name=REGION)
     exists, _ = _function_exists(lam, "my-bot-worker")
@@ -277,8 +352,7 @@ def test_deploy_creates_worker_when_configured(deploy_patches, monkeypatch):
 @mock_aws
 def test_deploy_sets_worker_env_var_on_main_function(deploy_patches, monkeypatch):
     iam = boto3.client("iam", region_name=REGION)
-    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY",
-                        _seed_lambda_execution_policy(iam))
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
     deploy(**_base_deploy_kwargs(deploy_patches, defer_worker="my-bot-worker"))
     lam = boto3.client("lambda", region_name=REGION)
     env_vars = lam.get_function_configuration(FunctionName="my-bot").get("Environment", {}).get("Variables", {})
@@ -288,8 +362,7 @@ def test_deploy_sets_worker_env_var_on_main_function(deploy_patches, monkeypatch
 @mock_aws
 def test_deploy_worker_has_zero_retry_attempts(deploy_patches, monkeypatch):
     iam = boto3.client("iam", region_name=REGION)
-    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY",
-                        _seed_lambda_execution_policy(iam))
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
     deploy(**_base_deploy_kwargs(deploy_patches, defer_worker="my-bot-worker"))
     lam = boto3.client("lambda", region_name=REGION)
     config = lam.get_function_event_invoke_config(FunctionName="my-bot-worker")
@@ -299,12 +372,22 @@ def test_deploy_worker_has_zero_retry_attempts(deploy_patches, monkeypatch):
 @mock_aws
 def test_deploy_wires_crons(deploy_patches, monkeypatch):
     iam = boto3.client("iam", region_name=REGION)
-    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY",
-                        _seed_lambda_execution_policy(iam))
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
     deploy(**_base_deploy_kwargs(deploy_patches, crons={"daily": "rate(1 day)"}))
     events = boto3.client("events", region_name=REGION)
     rules = events.list_rules(NamePrefix="my-bot-cron-")["Rules"]
     assert any(r["Name"] == "my-bot-cron-daily" for r in rules)
+
+
+@mock_aws
+def test_deploy_removes_stale_cron_rules_when_last_cron_is_deleted(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches, crons={"daily": "rate(1 day)"}))
+    deploy(**_base_deploy_kwargs(deploy_patches, crons={}))
+    events = boto3.client("events", region_name=REGION)
+    rules = events.list_rules(NamePrefix="my-bot-cron-")["Rules"]
+    assert rules == []
 
 
 @mock_aws
@@ -316,8 +399,7 @@ def test_deploy_raises_without_function_name(deploy_patches):
 @mock_aws
 def test_destroy_removes_function_and_api(deploy_patches, monkeypatch):
     iam = boto3.client("iam", region_name=REGION)
-    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY",
-                        _seed_lambda_execution_policy(iam))
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
     deploy(**_base_deploy_kwargs(deploy_patches))
     destroy("my-bot", "my-bot-role", REGION)
     lam = boto3.client("lambda", region_name=REGION)
@@ -330,8 +412,7 @@ def test_destroy_removes_function_and_api(deploy_patches, monkeypatch):
 @mock_aws
 def test_destroy_removes_iam_role(deploy_patches, monkeypatch):
     iam = boto3.client("iam", region_name=REGION)
-    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY",
-                        _seed_lambda_execution_policy(iam))
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
     deploy(**_base_deploy_kwargs(deploy_patches))
     destroy("my-bot", "my-bot-role", REGION)
     with pytest.raises(iam.exceptions.NoSuchEntityException):
@@ -341,8 +422,7 @@ def test_destroy_removes_iam_role(deploy_patches, monkeypatch):
 @mock_aws
 def test_destroy_removes_cron_rules(deploy_patches, monkeypatch):
     iam = boto3.client("iam", region_name=REGION)
-    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY",
-                        _seed_lambda_execution_policy(iam))
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
     deploy(**_base_deploy_kwargs(deploy_patches, crons={"daily": "rate(1 day)"}))
     destroy("my-bot", "my-bot-role", REGION)
     events = boto3.client("events", region_name=REGION)
@@ -357,8 +437,7 @@ def test_destroy_is_safe_when_nothing_exists():
 @mock_aws
 def test_destroy_removes_worker(deploy_patches, monkeypatch):
     iam = boto3.client("iam", region_name=REGION)
-    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY",
-                        _seed_lambda_execution_policy(iam))
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
     deploy(**_base_deploy_kwargs(deploy_patches, defer_worker="my-bot-worker"))
     destroy("my-bot", "my-bot-role", REGION, defer_worker="my-bot-worker")
     lam = boto3.client("lambda", region_name=REGION)

@@ -13,17 +13,18 @@ def _cordless_package_dir():
     return os.path.dirname(spec.origin)
 
 
-def _layer_extras_dir(python_version):
+def _layer_extras_dir(python_version, architecture="x86_64"):
     """Fetch pynacl (fast Ed25519 verify) for the layer; None means build without it."""
     from .deploy import _ensure_packages
+
     try:
-        return _ensure_packages(["pynacl"], python_version)
+        return _ensure_packages(["pynacl"], python_version, architecture)
     except Exception as exc:
-        print(f"  (pynacl unavailable, layer will use pure-python verify: {exc})")
+        print(f"  (layer extras unavailable, falling back: {exc})")
         return None
 
 
-def build_layer_zip(python_version=None):
+def build_layer_zip(python_version=None, architecture="x86_64"):
     """Zip cordless (plus pynacl, when fetchable) in the python/ layout Lambda layers require."""
     pkg_dir = _cordless_package_dir()
     site_dir = os.path.dirname(pkg_dir)
@@ -41,7 +42,17 @@ def build_layer_zip(python_version=None):
                 rel_path = os.path.relpath(abs_path, site_dir)
                 zf.write(abs_path, os.path.join("python", rel_path))
 
-        extras_dir = _layer_extras_dir(python_version) if python_version else None
+        import glob
+
+        for pattern in ("cordless-*.dist-info", "cordless.egg-info"):
+            for dist_info in glob.glob(os.path.join(site_dir, pattern)):
+                for root, dirs, files in os.walk(dist_info):
+                    for fname in files:
+                        abs_path = os.path.join(root, fname)
+                        rel_path = os.path.relpath(abs_path, site_dir)
+                        zf.write(abs_path, os.path.join("python", rel_path))
+
+        extras_dir = _layer_extras_dir(python_version, architecture) if python_version else None
         if extras_dir:
             for root, dirs, files in os.walk(extras_dir):
                 dirs[:] = [d for d in dirs if d != "__pycache__"]

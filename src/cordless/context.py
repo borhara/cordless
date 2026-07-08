@@ -1,4 +1,7 @@
+import base64
 import json
+
+from ._multipart import build_multipart_body
 
 _CHANNEL_MESSAGE_WITH_SOURCE = 4
 _UPDATE_MESSAGE = 7
@@ -11,17 +14,61 @@ _FLAG_EPHEMERAL = 64
 _FLAG_UI_KIT = 32768
 
 
+# Components v2 types: Section, TextDisplay, Thumbnail, MediaGallery, File, Separator, Container
+_UI_KIT_TYPES = {9, 10, 11, 12, 13, 14, 17}
+
+
 def _contains_uikit(components):
     if not components:
         return False
     for c in components:
         if getattr(c, "is_ui_kit", False):
             return True
+        if isinstance(c, dict):
+            if c.get("type") in _UI_KIT_TYPES:
+                return True
+            if _contains_uikit(c.get("components")):
+                return True
         # recurse into ActionRow children
-        if hasattr(c, "components") and not getattr(c, "is_ui_kit", False):
+        elif hasattr(c, "components"):
             if _contains_uikit(c.components):
                 return True
     return False
+
+
+def _leaf_options(data):
+    """Descend through subcommand/group wrappers to the actual value options."""
+    options = data.get("options", [])
+    while options and options[0].get("type") in (1, 2):
+        options = options[0].get("options", [])
+    return options
+
+
+def _build_message_data(msg, content, embeds, components, ephemeral=False, allowed_mentions=None):
+    _content = content if content is not None else msg
+    data = {}
+    if _content is not None:
+        data["content"] = _content
+    if embeds is not None:
+        data["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
+    if components is not None:
+        data["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
+    if allowed_mentions is not None:
+        data["allowed_mentions"] = allowed_mentions
+
+    flags = 0
+    if ephemeral:
+        flags |= _FLAG_EPHEMERAL
+    if _contains_uikit(components):
+        flags |= _FLAG_UI_KIT
+    if flags:
+        data["flags"] = flags
+    return data
+
+
+def _attach_files(data, files):
+    """Add the attachments metadata array Discord expects alongside a multipart body."""
+    data["attachments"] = [{"id": i, "filename": name} for i, (name, _) in enumerate(files)]
 
 
 class Context:
@@ -34,8 +81,12 @@ class Context:
         self.custom_id = data.get("custom_id")
         # Suffix segments when a handler matched by prefix, e.g. "shop:item1" → ["item1"]
         self.custom_id_args = []
-        self.options = {opt["name"]: opt["value"] for opt in data.get("options", []) if "value" in opt}
+        self.options = {opt["name"]: opt["value"] for opt in _leaf_options(data) if "value" in opt}
         self.user = (interaction.get("member") or {}).get("user") or interaction.get("user")
+        self.member = interaction.get("member")
+        self.message = interaction.get("message")
+        self.channel = interaction.get("channel")
+        self.locale = interaction.get("locale")
         self.guild_id = interaction.get("guild_id")
         self.channel_id = interaction.get("channel_id")
         self.interaction_id = interaction.get("id")
@@ -46,7 +97,7 @@ class Context:
 
         # Autocomplete: the value of the focused option
         self.focused_value = None
-        for opt in data.get("options", []):
+        for opt in _leaf_options(data):
             if opt.get("focused"):
                 self.focused_value = opt.get("value")
 
@@ -67,54 +118,55 @@ class Context:
         self.target_member = resolved.get("members", {}).get(target_id) if target_id else None
         self.target_message = resolved.get("messages", {}).get(target_id) if target_id else None
 
-    async def send(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, files=None):
+    async def send(
+        self,
+        msg=None,
+        *,
+        content=None,
+        ephemeral=False,
+        embeds=None,
+        components=None,
+        files=None,
+        allowed_mentions=None,
+    ):
         if self._worker_mode:
-            return await self.followup(msg, content=content, ephemeral=ephemeral, embeds=embeds, components=components, files=files)
+            return await self.followup(
+                msg,
+                content=content,
+                ephemeral=ephemeral,
+                embeds=embeds,
+                components=components,
+                files=files,
+                allowed_mentions=allowed_mentions,
+            )
 
-        _content = content if content is not None else msg
-        data = {}
-        if _content is not None:
-            data["content"] = _content
-        if embeds is not None:
-            data["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
-        if components is not None:
-            data["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
-
-        flags = 0
-        if ephemeral:
-            flags |= _FLAG_EPHEMERAL
-        if _contains_uikit(components):
-            flags |= _FLAG_UI_KIT
-        if flags:
-            data["flags"] = flags
-
-        self.response = _response({"type": _CHANNEL_MESSAGE_WITH_SOURCE, "data": data})
+        data = _build_message_data(msg, content, embeds, components, ephemeral, allowed_mentions)
+        payload = {"type": _CHANNEL_MESSAGE_WITH_SOURCE, "data": data}
+        if files:
+            _attach_files(data, files)
+            self.response = _multipart_response(payload, files)
+        else:
+            self.response = _response(payload)
         return self.response
 
-    async def followup(self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, files=None):
+    async def followup(
+        self,
+        msg=None,
+        *,
+        content=None,
+        ephemeral=False,
+        embeds=None,
+        components=None,
+        files=None,
+        allowed_mentions=None,
+    ):
         from .defer import patch_followup, patch_followup_with_files
 
-        _content = content if content is not None else msg
-        data = {}
-        if _content is not None:
-            data["content"] = _content
-        if embeds is not None:
-            data["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
-        if components is not None:
-            data["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
-
-        flags = 0
-        if ephemeral:
-            flags |= _FLAG_EPHEMERAL
-        if _contains_uikit(components):
-            flags |= _FLAG_UI_KIT
-        if flags:
-            data["flags"] = flags
-
+        data = _build_message_data(msg, content, embeds, components, ephemeral, allowed_mentions)
         app_id = self.interaction.get("application_id")
 
         if files:
-            data["attachments"] = [{"id": i, "filename": name} for i, (name, _) in enumerate(files)]
+            _attach_files(data, files)
             patch_followup_with_files(app_id, self.token, data, files)
         else:
             patch_followup(app_id, self.token, data)
@@ -122,20 +174,37 @@ class Context:
         self.response = {"_cordless_followup": True}
         return self.response
 
-    async def edit(self, msg=None, *, content=None, embeds=None, components=None, files=None):
+    async def send_followup(
+        self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, allowed_mentions=None
+    ):
+        from .defer import post_followup
+
+        data = _build_message_data(msg, content, embeds, components, ephemeral, allowed_mentions)
+        post_followup(self.interaction.get("application_id"), self.token, data)
+        return {"_cordless_followup": True}
+
+    async def delete_original(self):
+        from .defer import delete_original as _delete
+
+        _delete(self.interaction.get("application_id"), self.token)
+
+    async def edit(self, msg=None, *, content=None, embeds=None, components=None, files=None, allowed_mentions=None):
         if self._worker_mode:
-            return await self.followup(msg, content=content, embeds=embeds, components=components, files=files)
-        _content = content if content is not None else msg
-        data = {}
-        if _content is not None:
-            data["content"] = _content
-        if embeds is not None:
-            data["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
-        if components is not None:
-            data["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
-        if _contains_uikit(components):
-            data["flags"] = _FLAG_UI_KIT
-        self.response = _response({"type": _UPDATE_MESSAGE, "data": data})
+            return await self.followup(
+                msg,
+                content=content,
+                embeds=embeds,
+                components=components,
+                files=files,
+                allowed_mentions=allowed_mentions,
+            )
+        data = _build_message_data(msg, content, embeds, components, allowed_mentions=allowed_mentions)
+        payload = {"type": _UPDATE_MESSAGE, "data": data}
+        if files:
+            _attach_files(data, files)
+            self.response = _multipart_response(payload, files)
+        else:
+            self.response = _response(payload)
         return self.response
 
     async def defer(self, ephemeral=False):
@@ -164,4 +233,19 @@ def _response(payload):
         "statusCode": 200,
         "headers": {"Content-Type": "application/json"},
         "body": json.dumps(payload),
+    }
+
+
+def _multipart_response(payload, files):
+    """Like _response(), but for an interaction response that carries file
+    attachments. Discord accepts multipart/form-data for the initial response,
+    same as followup messages; API Gateway needs the body base64-encoded plus
+    isBase64Encoded=True to pass binary data through untouched.
+    """
+    body, content_type = build_multipart_body(payload, files)
+    return {
+        "statusCode": 200,
+        "headers": {"Content-Type": content_type},
+        "body": base64.b64encode(body).decode(),
+        "isBase64Encoded": True,
     }

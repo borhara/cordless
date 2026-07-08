@@ -27,16 +27,40 @@ class Router:
         self.buttons = {}
         self.selects = {}
         self.modals = {}
-        self.autocompletes = {}   # (cmd_key, option_name) → handler
+        self.autocompletes = {}  # (cmd_key, option_name) → handler
         self._error_handler = None
 
-    def register_command(self, name, handler, description="No description provided.", options=None, dm_permission=True, cmd_type=1):
+    def register_command(
+        self,
+        name,
+        handler,
+        description="No description provided.",
+        options=None,
+        dm_permission=True,
+        cmd_type=1,
+        default_member_permissions=None,
+        nsfw=False,
+    ):
+        if cmd_type == 1:
+            for existing, meta in self.commands.items():
+                if meta.get("cmd_type", 1) != 1:
+                    continue
+                if existing.startswith(f"{name}/") or name.startswith(f"{existing}/"):
+                    parent, child = sorted((name, existing), key=len)
+                    raise ValueError(
+                        f"Command {name!r} conflicts with {existing!r}: the parent "
+                        f"{parent!r} is created automatically from subcommand paths, "
+                        "so it must not be registered as a command itself"
+                    )
         self.commands[name] = {
             "handler": handler,
             "description": description,
             "options": options or [],
             "dm_permission": dm_permission,
             "cmd_type": cmd_type,
+            "params": list(inspect.signature(handler).parameters)[1:],
+            "default_member_permissions": default_member_permissions,
+            "nsfw": nsfw,
         }
 
     def register_button(self, custom_id, handler):
@@ -55,8 +79,8 @@ class Router:
         self._error_handler = handler
 
     def command_definitions(self):
-        flat = {}   # name → meta
-        subs = {}   # top-level name → {path → meta}
+        flat = {}  # name → meta
+        subs = {}  # top-level name → {path → meta}
 
         for key, meta in self.commands.items():
             # Context menu commands (type 2/3) never participate in subcommand grouping
@@ -89,6 +113,10 @@ class Router:
             }
             if not meta.get("dm_permission", True):
                 cmd["dm_permission"] = False
+            if meta.get("default_member_permissions") is not None:
+                cmd["default_member_permissions"] = str(meta["default_member_permissions"])
+            if meta.get("nsfw"):
+                cmd["nsfw"] = True
             result.append(cmd)
 
         for top, entries in subs.items():
@@ -97,12 +125,14 @@ class Router:
                 parts = path.split("/")
                 if len(parts) == 2:
                     # parent/sub
-                    options.append({
-                        "name": parts[1],
-                        "description": meta["description"],
-                        "type": _SUB_COMMAND,
-                        "options": meta["options"],
-                    })
+                    options.append(
+                        {
+                            "name": parts[1],
+                            "description": meta["description"],
+                            "type": _SUB_COMMAND,
+                            "options": meta["options"],
+                        }
+                    )
                 elif len(parts) == 3:
                     # parent/group/sub, grouped by group name
                     group_name = parts[1]
@@ -116,12 +146,14 @@ class Router:
                             "options": [],
                         }
                         options.append(group)
-                    group["options"].append({
-                        "name": sub_name,
-                        "description": meta["description"],
-                        "type": _SUB_COMMAND,
-                        "options": meta["options"],
-                    })
+                    group["options"].append(
+                        {
+                            "name": sub_name,
+                            "description": meta["description"],
+                            "type": _SUB_COMMAND,
+                            "options": meta["options"],
+                        }
+                    )
 
             first_desc = next(iter(entries.values()))["description"]
             cmd = {
@@ -132,6 +164,16 @@ class Router:
             }
             if any(not m.get("dm_permission", True) for m in entries.values()):
                 cmd["dm_permission"] = False
+            # Discord only accepts these at the top level, so combine across
+            # subcommands: union the permission bits (most restrictive wins)
+            perms = 0
+            for m in entries.values():
+                if m.get("default_member_permissions") is not None:
+                    perms |= int(m["default_member_permissions"])
+            if perms:
+                cmd["default_member_permissions"] = str(perms)
+            if any(m.get("nsfw") for m in entries.values()):
+                cmd["nsfw"] = True
             result.append(cmd)
 
         return result
@@ -161,22 +203,9 @@ class Router:
                 ctx.options = {opt["name"]: opt["value"] for opt in leaf_options if "value" in opt}
             handler = entry["handler"]
             if getattr(handler, "_defer", False) and not ctx._worker_mode:
-                import os
-                import traceback
-                from .defer import invoke_worker
-                worker_fn = os.environ.get("CORDLESS_WORKER_FUNCTION")
-                if not worker_fn:
-                    raise CordlessError(
-                        "CORDLESS_WORKER_FUNCTION is not set: add defer_worker to cordless.toml and run cordless deploy"
-                    )
-                # ACK Discord first so type 5 still goes back even if the invoke fails
-                await ctx.defer()
-                try:
-                    invoke_worker(worker_fn, interaction)
-                except Exception:
-                    traceback.print_exc()
-                return ctx.response
-            return await _invoke(handler, ctx, f"Command '{key}'", pass_options=True)
+                ephemeral = getattr(handler, "_defer_ephemeral", False)
+                return await _defer_to_worker(ctx, interaction, ctx.defer, ephemeral=ephemeral)
+            return await _invoke(handler, ctx, f"Command '{key}'", params=entry["params"])
 
         if itype == MESSAGE_COMPONENT:
             cid = interaction["data"]["custom_id"]
@@ -191,20 +220,7 @@ class Router:
                     raise UnknownComponentError(f"Unknown select: {cid}")
 
             if getattr(handler, "_defer", False) and not ctx._worker_mode:
-                import os
-                import traceback
-                from .defer import invoke_worker
-                worker_fn = os.environ.get("CORDLESS_WORKER_FUNCTION")
-                if not worker_fn:
-                    raise CordlessError(
-                        "CORDLESS_WORKER_FUNCTION is not set: add defer_worker to cordless.toml and run cordless deploy"
-                    )
-                await ctx.defer_edit()
-                try:
-                    invoke_worker(worker_fn, interaction)
-                except Exception:
-                    traceback.print_exc()
-                return ctx.response
+                return await _defer_to_worker(ctx, interaction, ctx.defer_edit)
 
             return await _invoke(handler, ctx, f"Component '{cid}'")
 
@@ -214,13 +230,23 @@ class Router:
             handler = self.autocompletes.get((key, option_name))
             if not handler:
                 raise UnsupportedInteractionError(f"No autocomplete handler for ({key!r}, {option_name!r})")
-            return await _invoke(handler, ctx, f"Autocomplete '{key}/{option_name}'")
+            response = await _invoke(handler, ctx, f"Autocomplete '{key}/{option_name}'")
+            # handlers may simply return the choices: plain strings are
+            # filtered against the typed value, dicts are sent as-is
+            if isinstance(response, list):
+                if all(isinstance(c, str) for c in response):
+                    query = str(ctx.focused_value or "").lower()
+                    response = [{"name": c, "value": c} for c in response if query in c.lower()]
+                return await ctx.respond_autocomplete(response[:25])
+            return response
 
         if itype == MODAL_SUBMIT:
             cid = interaction["data"]["custom_id"]
             handler = _prefix_lookup(self.modals, cid, ctx)
             if not handler:
                 raise UnknownModalError(f"Unknown modal: {cid}")
+            if getattr(handler, "_defer", False) and not ctx._worker_mode:
+                return await _defer_to_worker(ctx, interaction, ctx.defer)
             return await _invoke(handler, ctx, f"Modal '{cid}'")
 
         raise UnsupportedInteractionError(f"Unsupported interaction type: {itype}")
@@ -255,6 +281,26 @@ def _focused_option_name(data):
     return None
 
 
+async def _defer_to_worker(ctx, interaction, ack, **ack_kwargs):
+    import os
+    import traceback
+
+    from .defer import invoke_worker
+
+    worker_fn = os.environ.get("CORDLESS_WORKER_FUNCTION")
+    if not worker_fn:
+        raise CordlessError(
+            "CORDLESS_WORKER_FUNCTION is not set: add defer_worker to cordless.toml and run cordless deploy"
+        )
+    # ACK Discord first so the deferred response still goes back even if the invoke fails
+    await ack(**ack_kwargs)
+    try:
+        invoke_worker(worker_fn, interaction)
+    except Exception:
+        traceback.print_exc()
+    return ctx.response
+
+
 def _prefix_lookup(registry, cid, ctx):
     """Match "shop:item1" to a "shop" handler; suffix segments land on ctx.custom_id_args."""
     handler = registry.get(cid)
@@ -266,7 +312,7 @@ def _prefix_lookup(registry, cid, ctx):
     return handler
 
 
-async def _invoke(handler, ctx, description, pass_options=False):
+async def _invoke(handler, ctx, description, params=None):
     guard = getattr(handler, "_guard", None)
     if guard is not None:
         result = guard(ctx)
@@ -274,10 +320,9 @@ async def _invoke(handler, ctx, description, pass_options=False):
             await result
 
     kwargs = {}
-    if pass_options and ctx.options:
+    if params and ctx.options:
         # Handlers may declare options as parameters: async def buy(ctx, item: str, qty: int = 1)
-        params = list(inspect.signature(handler).parameters)
-        kwargs = {name: ctx.options[name] for name in params[1:] if name in ctx.options}
+        kwargs = {name: ctx.options[name] for name in params if name in ctx.options}
 
     result = await handler(ctx, **kwargs)
     response = result if result is not None else ctx.response

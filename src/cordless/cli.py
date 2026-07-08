@@ -27,13 +27,90 @@ def _pick(*values):
     return None
 
 
+def _detect_bot_target(source_dir):
+    """Scan source_dir for a Cordless() assignment; returns 'module:attr' or None."""
+    import ast
+
+    try:
+        files = os.listdir(source_dir)
+    except OSError:
+        return None
+
+    # lambda_function.py first (conventional entry point), then other root-level .py files
+    candidates = []
+    if "lambda_function.py" in files:
+        candidates.append("lambda_function.py")
+    candidates.extend(
+        f
+        for f in sorted(files)
+        if f.endswith(".py") and f != "lambda_function.py" and not f.startswith("_") and not f.startswith("test_")
+    )
+
+    for filename in candidates:
+        try:
+            with open(os.path.join(source_dir, filename)) as fh:
+                tree = ast.parse(fh.read(), filename)
+        except (SyntaxError, OSError):
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                if (
+                    isinstance(node.value, ast.Call)
+                    and isinstance(node.value.func, ast.Name)
+                    and node.value.func.id == "Cordless"
+                ):
+                    for target in node.targets:
+                        if isinstance(target, ast.Name):
+                            return f"{filename[:-3]}:{target.id}"
+            elif isinstance(node, ast.AnnAssign):
+                if (
+                    node.value is not None
+                    and isinstance(node.value, ast.Call)
+                    and isinstance(node.value.func, ast.Name)
+                    and node.value.func.id == "Cordless"
+                    and isinstance(node.target, ast.Name)
+                ):
+                    return f"{filename[:-3]}:{node.target.id}"
+    return None
+
+
+def _resolve_bot(explicit, source_dir, cfg=None):
+    """Resolve bot target: explicit arg → cordless.toml → AST scan."""
+    if explicit:
+        return explicit
+    if cfg is not None and cfg.get("bot"):
+        return cfg["bot"]
+    return _detect_bot_target(source_dir)
+
+
+def _run_register(bot, token, client_id, client_secret, guild_id=None):
+    commands = bot.sync_commands(
+        bot_token=token,
+        client_id=client_id,
+        client_secret=client_secret,
+        guild_id=guild_id,
+    )
+    return commands, ", ".join(c["name"] for c in commands) or "(none)"
+
+
 def _register(args):
     from .deploy import load_config
-    toml_env = load_config(os.getcwd()).get("env", {})
 
-    token = args.token
+    source_dir = os.getcwd()
+    cfg = load_config(source_dir)
+    toml_env = cfg.get("env", {})
+
     client_id = args.client_id or toml_env.get("DISCORD_CLIENT_ID")
     client_secret = args.client_secret or toml_env.get("DISCORD_CLIENT_SECRET")
+    # explicit --token always wins; client credentials win over $DISCORD_BOT_TOKEN env var
+    if args.token:
+        token = args.token
+        client_id = None
+        client_secret = None
+    elif client_id and client_secret:
+        token = None
+    else:
+        token = os.environ.get("DISCORD_BOT_TOKEN")
 
     if not token and not (client_id and client_secret):
         raise SystemExit(
@@ -41,25 +118,28 @@ def _register(args):
             "or both --client-id/--client-secret (or $DISCORD_CLIENT_ID/$DISCORD_CLIENT_SECRET)"
         )
 
-    bot = _load_bot(args.bot)
-    commands = bot.sync_commands(
-        bot_token=token,
-        client_id=client_id,
-        client_secret=client_secret,
-        guild_id=args.guild_id,
-    )
+    target = _resolve_bot(args.bot, source_dir, cfg)
+    if not target:
+        raise SystemExit(
+            "Bot location required: pass it as an argument (e.g. `cordless register lambda_function:bot`) "
+            "or add `bot` to [deploy] in cordless.toml."
+        )
 
+    bot = _load_bot(target, path=source_dir)
+    commands, names = _run_register(bot, token, client_id, client_secret, guild_id=args.guild_id)
     scope = f"guild {args.guild_id}" if args.guild_id else "globally"
-    names = ", ".join(c["name"] for c in commands) or "(none)"
     print(f"Registered {len(commands)} command(s) {scope}: {names}")
 
 
 def _upload(args):
+    from .deploy import load_config
     from .upload import upload
+
+    cfg = load_config(os.getcwd())
     upload(
         function_name=args.function,
         layer_name=args.layer_name,
-        region=args.region,
+        region=args.region or cfg.get("region") or os.environ.get("AWS_DEFAULT_REGION"),
         python_version=args.runtime.replace("python", ""),
     )
 
@@ -74,12 +154,12 @@ def _deploy(args):
     if setup_target:
         print(f"  running setup {setup_target}...")
         sys.path.insert(0, source_dir)
-        setup_fn = _load_bot(setup_target)
+        setup_fn = _load_bot(setup_target, path=source_dir)
         setup_fn()
-        print(f"  ✓ setup")
+        print("  ✓ setup")
 
     env = {}
-    for pair in (args.env or []):
+    for pair in args.env or []:
         if "=" not in pair:
             raise SystemExit(f"--env values must be KEY=VALUE, got: {pair!r}")
         k, _, v = pair.partition("=")
@@ -89,9 +169,13 @@ def _deploy(args):
     runtime = args.runtime or cfg.get("runtime", "python3.12")
     defer_worker = args.defer_worker or cfg.get("defer_worker")
 
+    merged_env = {**_read_dot_env(source_dir), **cfg.get("env", {}), **env}
+    if not merged_env.get("DISCORD_PUBLIC_KEY"):
+        print("  warning: DISCORD_PUBLIC_KEY is empty or missing - Discord cannot validate the endpoint")
+
     # Loading the bot is only needed for cron schedules and --register;
-    # `bot` in cordless.toml (e.g. "lambda_function:bot") enables both.
-    bot_target = args.register or cfg.get("bot")
+    # resolved from toml or auto-detected from source files.
+    bot_target = _resolve_bot(None, source_dir, cfg)
     bot = _load_bot(bot_target, path=source_dir) if bot_target else None
     crons = {name: entry["schedule"] for name, entry in bot.crons.items()} if bot else None
 
@@ -102,7 +186,7 @@ def _deploy(args):
         source_dir=source_dir,
         runtime=runtime,
         layer_name=args.layer_name or cfg.get("layer_name", "cordless"),
-        env={**cfg.get("env", {}), **env},
+        env=merged_env,
         region=args.region or cfg.get("region") or os.environ.get("AWS_DEFAULT_REGION"),
         timeout=int(_pick(args.timeout, cfg.get("timeout"), 10)),
         memory=int(cfg.get("memory", 256)),
@@ -115,24 +199,24 @@ def _deploy(args):
         defer_memory=int(cfg.get("defer_memory", 256)),
         policies=cfg.get("policies"),
         crons=crons,
+        architecture=args.architecture or cfg.get("architecture", "x86_64"),
     )
 
     if args.register:
+        if not bot:
+            raise SystemExit(
+                "--register: could not find a Cordless() instance. "
+                "Add `bot` to [deploy] in cordless.toml or ensure lambda_function.py contains a Cordless() instance."
+            )
         toml_env = cfg.get("env", {})
         token = os.environ.get("DISCORD_BOT_TOKEN")
         client_id = os.environ.get("DISCORD_CLIENT_ID") or toml_env.get("DISCORD_CLIENT_ID")
         client_secret = os.environ.get("DISCORD_CLIENT_SECRET") or toml_env.get("DISCORD_CLIENT_SECRET")
         if not token and not (client_id and client_secret):
             raise SystemExit(
-                "--register requires $DISCORD_BOT_TOKEN, "
-                "or both $DISCORD_CLIENT_ID and $DISCORD_CLIENT_SECRET"
+                "--register requires $DISCORD_BOT_TOKEN, or both $DISCORD_CLIENT_ID and $DISCORD_CLIENT_SECRET"
             )
-        commands = bot.sync_commands(
-            bot_token=token,
-            client_id=client_id,
-            client_secret=client_secret,
-        )
-        names = ", ".join(c["name"] for c in commands) or "(none)"
+        commands, names = _run_register(bot, token, client_id, client_secret)
         print(f"  ✓ registered {len(commands)} command(s): {names}")
 
 
@@ -147,16 +231,34 @@ def _destroy(args):
     region = args.region or cfg.get("region") or os.environ.get("AWS_DEFAULT_REGION")
     defer_worker = args.defer_worker or cfg.get("defer_worker")
 
+    layer_name = None
+    if args.layer is not None:
+        # explicit --layer / --layer=name
+        layer_name = args.layer or cfg.get("layer_name", "cordless")
+    elif not args.yes:
+        default = cfg.get("layer_name", "cordless")
+        answer = input(f"Also delete Lambda layer '{default}' and all its versions? [y/N] ")
+        if answer.strip().lower() in ("y", "yes"):
+            layer_name = default
+
     if not args.yes:
         targets = f"function '{function_name}'" + (f", worker '{defer_worker}'" if defer_worker else "")
+        if layer_name:
+            targets += f", layer '{layer_name}'"
         answer = input(f"Delete {targets}, its API Gateway, logs, and role '{role_name}'? [y/N] ")
         if answer.strip().lower() not in ("y", "yes"):
             raise SystemExit("Aborted.")
 
-    destroy(function_name=function_name, role_name=role_name, region=region, defer_worker=defer_worker)
+    destroy(
+        function_name=function_name,
+        role_name=role_name,
+        region=region,
+        defer_worker=defer_worker,
+        layer_name=layer_name,
+    )
 
 
-_INIT_LAMBDA = '''\
+_INIT_LAMBDA = """\
 import os
 
 from cordless import Cordless
@@ -170,24 +272,27 @@ async def ping(ctx):
 
 
 handler = bot.handler()
-'''
 
-_INIT_TOML = '''\
+# For commands with defer=True (and defer_worker set in cordless.toml), the
+# worker Lambda needs its own entrypoint - uncomment this:
+# worker_handler = bot.worker_handler
+"""
+
+_INIT_TOML = """\
 [deploy]
 function = "{name}"
-bot = "lambda_function:bot"
 # region = "eu-west-2"
+"""
 
-[deploy.env]
-DISCORD_PUBLIC_KEY = ""
-'''
-
-_INIT_ENV = '''\
+_INIT_ENV = """\
 # Discord Developer Portal -> your app -> General Information
 DISCORD_PUBLIC_KEY=
-DISCORD_CLIENT_ID=
+# Bot -> Token  (used by cordless register / deploy --register)
 DISCORD_BOT_TOKEN=
-'''
+# OAuth2 -> Client ID / Client Secret  (alternative to bot token)
+DISCORD_CLIENT_ID=
+DISCORD_CLIENT_SECRET=
+"""
 
 
 def _init(args):
@@ -204,7 +309,7 @@ def _init(args):
         with open(fname, "w") as f:
             f.write(content)
         print(f"  ✓ {fname}")
-    print(f"\nNext: fill in DISCORD_PUBLIC_KEY in cordless.toml, then run `cordless deploy`")
+    print("\nNext: fill in .env, then run `cordless deploy`")
 
 
 def _dev(args):
@@ -212,7 +317,8 @@ def _dev(args):
     from .dev import run_dev
 
     source_dir = os.path.abspath(args.source)
-    target = args.bot or load_config(source_dir).get("bot")
+    cfg = load_config(source_dir)
+    target = _resolve_bot(args.bot, source_dir, cfg)
     if not target:
         raise SystemExit(
             "Bot location required: pass it as an argument (e.g. `cordless dev lambda_function:bot`) "
@@ -221,20 +327,43 @@ def _dev(args):
     run_dev(target, port=args.port, tunnel=not args.no_tunnel, source_dir=source_dir)
 
 
+def _cron(args):
+    from .deploy import load_config
+
+    source_dir = os.path.abspath(args.source)
+    _load_env(source_dir)
+    cfg = load_config(source_dir)
+    target = _resolve_bot(args.bot, source_dir, cfg)
+    if not target:
+        raise SystemExit("Bot location required: pass it as an argument or add `bot` to [deploy] in cordless.toml.")
+    bot = _load_bot(target, source_dir)
+    if args.name not in bot.crons:
+        available = ", ".join(bot.crons) if bot.crons else "(none registered)"
+        raise SystemExit(f"Unknown cron {args.name!r}. Available: {available}")
+    import asyncio
+
+    asyncio.run(bot.crons[args.name]["handler"]())
+
+
 def _logs(args):
     import time
+
     from ._aws import get_session
     from .deploy import load_config
 
     cfg = load_config(os.getcwd())
-    function = args.function or cfg.get("function")
-    if not function:
-        raise SystemExit("Function name required: pass --function or add `function` to [deploy] in cordless.toml.")
-    region = args.region or cfg.get("region")
+    if args.worker:
+        function = cfg.get("defer_worker")
+        if not function:
+            raise SystemExit("--worker: no defer_worker configured in cordless.toml")
+    else:
+        function = args.function or cfg.get("function")
+        if not function:
+            raise SystemExit("Function name required: pass --function or add `function` to [deploy] in cordless.toml.")
+    region = args.region or cfg.get("region") or os.environ.get("AWS_DEFAULT_REGION")
     if not region:
         raise SystemExit(
-            "Region is required. Pass --region, set AWS_DEFAULT_REGION, "
-            "or add `region` to [deploy] in cordless.toml."
+            "Region is required. Pass --region, set AWS_DEFAULT_REGION, or add `region` to [deploy] in cordless.toml."
         )
 
     # skip the STS validation round-trip, a credentials problem surfaces
@@ -252,10 +381,7 @@ def _logs(args):
             try:
                 resp = cw.filter_log_events(**kwargs)
             except cw.exceptions.ResourceNotFoundException:
-                raise SystemExit(
-                    f"Log group not found: {log_group}\n"
-                    "Has the function been invoked at least once?"
-                )
+                raise SystemExit(f"Log group not found: {log_group}\nHas the function been invoked at least once?")
             for e in resp.get("events", []):
                 eid = e["eventId"]
                 if eid not in seen:
@@ -269,11 +395,15 @@ def _logs(args):
             kwargs["nextToken"] = token
         return latest
 
-    from botocore.exceptions import NoCredentialsError
+    try:
+        from botocore.exceptions import NoCredentialsError
+    except ImportError:
+        raise SystemExit("boto3 is required for logs.\nInstall it: pip install 'cordless[deploy]'")
     try:
         latest_ms = fetch_and_print(start_ms)
     except NoCredentialsError:
         from ._aws import _NO_CREDENTIALS_MSG
+
         raise SystemExit(_NO_CREDENTIALS_MSG)
     if args.follow:
         print("  --- following (Ctrl+C to stop) ---", flush=True)
@@ -285,25 +415,69 @@ def _logs(args):
             print()
 
 
+def _read_dot_env(source_dir):
+    """Return a dict of KEY=VALUE pairs from .env (quotes stripped, comments ignored)."""
+    result = {}
+    env_path = os.path.join(source_dir, ".env")
+    if os.path.exists(env_path):
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                result[key.strip()] = value.strip().strip("\"'")
+    return result
+
+
+def _load_env(source_dir):
+    """Load .env into the process environment (no clobber)."""
+    for key, value in _read_dot_env(source_dir).items():
+        os.environ.setdefault(key, value)
+
+
 def main(argv=None):
+    _load_env(os.getcwd())
     parser = argparse.ArgumentParser(prog="cordless", description="cordless command-line tools")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # register
     register = subparsers.add_parser("register", help="Register this bot's slash commands with Discord")
-    register.add_argument("bot", help="Location of your Cordless instance, as MODULE:ATTRIBUTE (e.g. app:bot)")
-    register.add_argument("--token", default=os.environ.get("DISCORD_BOT_TOKEN"), help="Bot token (defaults to $DISCORD_BOT_TOKEN)")
-    register.add_argument("--client-id", default=os.environ.get("DISCORD_CLIENT_ID"), help="App client id (defaults to $DISCORD_CLIENT_ID)")
-    register.add_argument("--client-secret", default=os.environ.get("DISCORD_CLIENT_SECRET"), help="App client secret (defaults to $DISCORD_CLIENT_SECRET)")
-    register.add_argument("--guild-id", default=os.environ.get("DISCORD_GUILD_ID"), help="Register to a single guild (defaults to $DISCORD_GUILD_ID)")
+    register.add_argument(
+        "bot",
+        nargs="?",
+        default=None,
+        help="Location of your Cordless instance, as MODULE:ATTRIBUTE (e.g. app:bot); auto-detected if omitted",
+    )
+    register.add_argument("--token", default=None, help="Bot token (defaults to $DISCORD_BOT_TOKEN)")
+    register.add_argument(
+        "--client-id",
+        default=os.environ.get("DISCORD_CLIENT_ID"),
+        help="App client id (defaults to $DISCORD_CLIENT_ID)",
+    )
+    register.add_argument(
+        "--client-secret",
+        default=os.environ.get("DISCORD_CLIENT_SECRET"),
+        help="App client secret (defaults to $DISCORD_CLIENT_SECRET)",
+    )
+    register.add_argument(
+        "--guild-id",
+        default=os.environ.get("DISCORD_GUILD_ID"),
+        help="Register to a single guild (defaults to $DISCORD_GUILD_ID)",
+    )
     register.set_defaults(func=_register)
 
     # upload
     upload = subparsers.add_parser("upload", help="Package cordless as a Lambda layer and attach it to your function")
     upload.add_argument("--function", "-f", required=True, metavar="FUNCTION", help="Lambda function name or ARN")
     upload.add_argument("--layer-name", default="cordless", metavar="NAME", help="Layer name (default: cordless)")
-    upload.add_argument("--region", "-r", default=os.environ.get("AWS_DEFAULT_REGION"), metavar="REGION", help="AWS region")
-    upload.add_argument("--runtime", default="python3.12", metavar="RUNTIME", help="Lambda runtime the layer targets (default: python3.12)")
+    upload.add_argument("--region", "-r", default=None, metavar="REGION", help="AWS region")
+    upload.add_argument(
+        "--runtime",
+        default="python3.12",
+        metavar="RUNTIME",
+        help="Lambda runtime the layer targets (default: python3.12)",
+    )
     upload.set_defaults(func=_upload)
 
     # deploy
@@ -312,28 +486,91 @@ def main(argv=None):
         help="Package and deploy your bot to Lambda with the cordless layer attached",
     )
     deploy_cmd.add_argument("--function", "-f", metavar="FUNCTION", help="Lambda function name")
-    deploy_cmd.add_argument("--role-name", metavar="NAME", help="IAM role name to create or reuse (default: <function>-role)")
-    deploy_cmd.add_argument("--handler", metavar="HANDLER", help="Handler string, e.g. lambda_function.handler (default: lambda_function.handler)")
-    deploy_cmd.add_argument("--source", "-s", default=".", metavar="DIR", help="Source directory to package (default: current directory)")
+    deploy_cmd.add_argument(
+        "--role-name", metavar="NAME", help="IAM role name to create or reuse (default: <function>-role)"
+    )
+    deploy_cmd.add_argument(
+        "--handler",
+        metavar="HANDLER",
+        help="Handler string, e.g. lambda_function.handler (default: lambda_function.handler)",
+    )
+    deploy_cmd.add_argument(
+        "--source", "-s", default=".", metavar="DIR", help="Source directory to package (default: current directory)"
+    )
     deploy_cmd.add_argument("--runtime", metavar="RUNTIME", help="Lambda runtime (default: python3.12)")
-    deploy_cmd.add_argument("--layer-name", default=None, metavar="NAME", help="Cordless layer name (default: cordless)")
+    deploy_cmd.add_argument(
+        "--layer-name", default=None, metavar="NAME", help="Cordless layer name (default: cordless)"
+    )
     deploy_cmd.add_argument("--region", "-r", default=None, metavar="REGION", help="AWS region")
     deploy_cmd.add_argument("--env", metavar="KEY=VALUE", action="append", help="Environment variable (repeatable)")
-    deploy_cmd.add_argument("--timeout", metavar="SECONDS", default=None, help="Main Lambda timeout in seconds (default: 10)")
-    deploy_cmd.add_argument("--setup", metavar="MODULE:FUNCTION", default=None, help="Run a setup function before deploying (e.g. db:create_tables)")
-    deploy_cmd.add_argument("--bundle-cordless", action="store_true", default=False, help="Embed local cordless source in the zip instead of using a Lambda layer")
-    deploy_cmd.add_argument("--defer-worker", metavar="NAME", help="Name of the worker Lambda for deferred commands (also set via cordless.toml defer_worker)")
-    deploy_cmd.add_argument("--defer-handler", metavar="HANDLER", default=None, help="Worker handler string (default: lambda_function.worker_handler)")
-    deploy_cmd.add_argument("--defer-timeout", metavar="SECONDS", default=None, help="Worker Lambda timeout in seconds (default: 30)")
-    deploy_cmd.add_argument("--register", metavar="MODULE:ATTRIBUTE", default=None, help="Register slash commands after deploy (e.g. app:bot); reads credentials from $DISCORD_BOT_TOKEN or $DISCORD_CLIENT_ID/$DISCORD_CLIENT_SECRET")
+    deploy_cmd.add_argument(
+        "--timeout", metavar="SECONDS", default=None, help="Main Lambda timeout in seconds (default: 10)"
+    )
+    deploy_cmd.add_argument(
+        "--setup",
+        metavar="MODULE:FUNCTION",
+        default=None,
+        help="Run a setup function before deploying (e.g. db:create_tables)",
+    )
+    deploy_cmd.add_argument(
+        "--bundle-cordless",
+        action="store_true",
+        default=False,
+        help="Embed local cordless source in the zip instead of using a Lambda layer",
+    )
+    deploy_cmd.add_argument(
+        "--defer-worker",
+        metavar="NAME",
+        help="Name of the worker Lambda for deferred commands (also set via cordless.toml defer_worker)",
+    )
+    deploy_cmd.add_argument(
+        "--defer-handler",
+        metavar="HANDLER",
+        default=None,
+        help="Worker handler string (default: lambda_function.worker_handler)",
+    )
+    deploy_cmd.add_argument(
+        "--defer-timeout", metavar="SECONDS", default=None, help="Worker Lambda timeout in seconds (default: 30)"
+    )
+    deploy_cmd.add_argument(
+        "--architecture", default=None, choices=["x86_64", "arm64"], help="Lambda architecture (default: x86_64)"
+    )
+    deploy_cmd.add_argument(
+        "--register",
+        action="store_true",
+        default=False,
+        help=(
+            "Register slash commands with Discord after deploy"
+            " (auto-detects bot; reads credentials from"
+            " $DISCORD_BOT_TOKEN or $DISCORD_CLIENT_ID/$DISCORD_CLIENT_SECRET)"
+        ),
+    )
     deploy_cmd.set_defaults(func=_deploy)
 
     # destroy
-    destroy_cmd = subparsers.add_parser("destroy", help="Delete the Lambda function(s), API Gateway, cron rules, logs, and IAM role for a deployed bot")
-    destroy_cmd.add_argument("--function", "-f", default=None, metavar="FUNCTION", help="Lambda function name (defaults to `function` in cordless.toml)")
-    destroy_cmd.add_argument("--role-name", metavar="NAME", default=None, help="IAM role name (default: <function>-role)")
+    destroy_cmd = subparsers.add_parser(
+        "destroy", help="Delete the Lambda function(s), API Gateway, cron rules, logs, and IAM role for a deployed bot"
+    )
+    destroy_cmd.add_argument(
+        "--function",
+        "-f",
+        default=None,
+        metavar="FUNCTION",
+        help="Lambda function name (defaults to `function` in cordless.toml)",
+    )
+    destroy_cmd.add_argument(
+        "--role-name", metavar="NAME", default=None, help="IAM role name (default: <function>-role)"
+    )
     destroy_cmd.add_argument("--region", "-r", default=None, metavar="REGION", help="AWS region")
     destroy_cmd.add_argument("--defer-worker", metavar="NAME", default=None, help="Worker Lambda to also delete")
+    destroy_cmd.add_argument(
+        "--layer",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="NAME",
+        help="Also delete the cordless Lambda layer (defaults to layer_name in cordless.toml, or 'cordless')",
+    )
     destroy_cmd.add_argument("--yes", "-y", action="store_true", help="Skip the confirmation prompt")
     destroy_cmd.set_defaults(func=_destroy)
 
@@ -344,18 +581,39 @@ def main(argv=None):
 
     # dev
     dev_cmd = subparsers.add_parser("dev", help="Run your bot locally with hot reload and a public tunnel")
-    dev_cmd.add_argument("bot", nargs="?", default=None, help="Your Cordless instance as MODULE:ATTRIBUTE (defaults to `bot` in cordless.toml)")
+    dev_cmd.add_argument(
+        "bot", nargs="?", default=None, help="Your Cordless instance as MODULE:ATTRIBUTE (auto-detected if omitted)"
+    )
     dev_cmd.add_argument("--port", "-p", type=int, default=8787, help="Port to listen on (default: 8787)")
-    dev_cmd.add_argument("--source", "-s", default=".", metavar="DIR", help="Project directory (default: current directory)")
+    dev_cmd.add_argument(
+        "--source", "-s", default=".", metavar="DIR", help="Project directory (default: current directory)"
+    )
     dev_cmd.add_argument("--no-tunnel", action="store_true", help="Serve on localhost only, skip cloudflared")
     dev_cmd.set_defaults(func=_dev)
 
     # logs
+    cron_cmd = subparsers.add_parser("cron", help="Run a cron handler locally by name")
+    cron_cmd.add_argument("name", metavar="NAME", help="Cron handler name (e.g. daily_rewards)")
+    cron_cmd.add_argument("bot", nargs="?", metavar="BOT", help="MODULE:ATTRIBUTE (auto-detected if omitted)")
+    cron_cmd.add_argument("--source", default=".", metavar="DIR", help="Source directory (default: .)")
+    cron_cmd.set_defaults(func=_cron)
+
     logs_cmd = subparsers.add_parser("logs", help="Tail CloudWatch logs for a deployed Lambda function")
-    logs_cmd.add_argument("--function", "-f", default=None, metavar="FUNCTION", help="Lambda function name (defaults to `function` in cordless.toml)")
-    logs_cmd.add_argument("--region", "-r", default=os.environ.get("AWS_DEFAULT_REGION"), metavar="REGION", help="AWS region")
+    logs_cmd.add_argument(
+        "--function",
+        "-f",
+        default=None,
+        metavar="FUNCTION",
+        help="Lambda function name (defaults to `function` in cordless.toml)",
+    )
+    logs_cmd.add_argument(
+        "--worker", action="store_true", help="Tail the worker Lambda's logs (reads defer_worker from cordless.toml)"
+    )
+    logs_cmd.add_argument("--region", "-r", default=None, metavar="REGION", help="AWS region")
     logs_cmd.add_argument("--follow", action="store_true", help="Keep tailing (Ctrl+C to stop)")
-    logs_cmd.add_argument("--since", type=int, default=10, metavar="MINUTES", help="How many minutes back to start (default: 10)")
+    logs_cmd.add_argument(
+        "--since", type=int, default=10, metavar="MINUTES", help="How many minutes back to start (default: 10)"
+    )
     logs_cmd.set_defaults(func=_logs)
 
     args = parser.parse_args(argv)

@@ -1,25 +1,28 @@
-import json
 from unittest.mock import patch
 
 import pytest
+from conftest import FakeDiscordResponse
 
 from cordless.app import Cordless, option
 from cordless.register import sync_commands
 
-from conftest import FakeDiscordResponse
-
-
 # --- command_definitions ---
+
 
 def test_command_definitions_reflect_registered_commands():
     bot = Cordless()
 
     @bot.command("ping", description="Replies with pong")
-    async def ping(ctx): pass
+    async def ping(ctx):
+        pass
 
-    @bot.command("echo", description="Echoes text back",
-                 options=[{"name": "text", "description": "Text to echo", "type": 3, "required": True}])
-    async def echo(ctx): pass
+    @bot.command(
+        "echo",
+        description="Echoes text back",
+        options=[{"name": "text", "description": "Text to echo", "type": 3, "required": True}],
+    )
+    async def echo(ctx):
+        pass
 
     defs = bot.router.command_definitions()
     assert {"name": "ping", "description": "Replies with pong", "type": 1, "options": []} in defs
@@ -30,10 +33,12 @@ def test_context_menu_definitions_have_no_description_or_options():
     bot = Cordless()
 
     @bot.user_command("Inspect User")
-    async def inspect(ctx): pass
+    async def inspect(ctx):
+        pass
 
     @bot.message_command("Bookmark")
-    async def bookmark(ctx): pass
+    async def bookmark(ctx):
+        pass
 
     defs = {d["name"]: d for d in bot.router.command_definitions()}
     assert defs["Inspect User"] == {"name": "Inspect User", "type": 2}
@@ -41,6 +46,7 @@ def test_context_menu_definitions_have_no_description_or_options():
 
 
 # --- option() helper ---
+
 
 def test_option_defaults_to_string_type():
     assert option("text", "A text option")["type"] == 3
@@ -84,6 +90,11 @@ def test_option_min_max_length():
     assert o["max_length"] == 100
 
 
+def test_option_raises_for_unknown_type_alias():
+    with pytest.raises(ValueError, match="strnig"):
+        option("x", type="strnig")
+
+
 def test_option_omits_unused_keys():
     o = option("text", "desc")
     assert "required" not in o
@@ -94,12 +105,12 @@ def test_option_omits_unused_keys():
 
 # --- sync_commands ---
 
+
 def test_sync_commands_resolves_app_id_from_bot_token_and_hits_global_endpoint():
     responses = [FakeDiscordResponse({"id": "app-id"}), FakeDiscordResponse([{"id": "1"}])]
 
     with patch("cordless.register.urllib.request.urlopen", side_effect=responses) as urlopen:
-        result = sync_commands([{"name": "ping", "description": "x", "type": 1, "options": []}],
-                               bot_token="bot-token")
+        result = sync_commands([{"name": "ping", "description": "x", "type": 1, "options": []}], bot_token="bot-token")
 
     lookup, put = (call.args[0] for call in urlopen.call_args_list)
     assert lookup.full_url == "https://discord.com/api/v10/oauth2/applications/@me"
@@ -151,7 +162,8 @@ def test_bot_sync_commands_delegates_to_register_module():
     bot = Cordless()
 
     @bot.command("ping")
-    async def ping(ctx): pass
+    async def ping(ctx):
+        pass
 
     with patch("cordless.app.sync_commands", return_value=[{"id": "1"}]) as mock_sync:
         result = bot.sync_commands(bot_token="bot-token", guild_id="guild-id")
@@ -168,4 +180,5 @@ def test_bot_sync_commands_delegates_to_register_module():
 
 def _basic(client_id, client_secret):
     import base64
+
     return base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()

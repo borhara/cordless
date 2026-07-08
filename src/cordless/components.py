@@ -46,7 +46,8 @@ class Button:
         d = {"type": 2, "style": self.style}
         # premium buttons (style 6) only take sku_id, no label/custom_id/url
         if self.style == 6:
-            d["sku_id"] = self.sku_id
+            if self.sku_id is not None:
+                d["sku_id"] = self.sku_id
             return d
         if self.label is not None:
             d["label"] = self.label
@@ -93,7 +94,9 @@ class StringSelect:
         return d
 
 
-class UserSelect:
+class _EntitySelect:
+    _type = None
+
     def __init__(self, custom_id, placeholder=None, min_values=1, max_values=1, disabled=False):
         self.custom_id = custom_id
         self.placeholder = placeholder
@@ -102,7 +105,12 @@ class UserSelect:
         self.disabled = disabled
 
     def to_dict(self):
-        d = {"type": 5, "custom_id": self.custom_id, "min_values": self.min_values, "max_values": self.max_values}
+        d = {
+            "type": self._type,
+            "custom_id": self.custom_id,
+            "min_values": self.min_values,
+            "max_values": self.max_values,
+        }
         if self.placeholder is not None:
             d["placeholder"] = self.placeholder
         if self.disabled:
@@ -110,57 +118,29 @@ class UserSelect:
         return d
 
 
-class RoleSelect:
-    def __init__(self, custom_id, placeholder=None, min_values=1, max_values=1, disabled=False):
-        self.custom_id = custom_id
-        self.placeholder = placeholder
-        self.min_values = min_values
-        self.max_values = max_values
-        self.disabled = disabled
-
-    def to_dict(self):
-        d = {"type": 6, "custom_id": self.custom_id, "min_values": self.min_values, "max_values": self.max_values}
-        if self.placeholder is not None:
-            d["placeholder"] = self.placeholder
-        if self.disabled:
-            d["disabled"] = True
-        return d
+class UserSelect(_EntitySelect):
+    _type = 5
 
 
-class MentionableSelect:
-    def __init__(self, custom_id, placeholder=None, min_values=1, max_values=1, disabled=False):
-        self.custom_id = custom_id
-        self.placeholder = placeholder
-        self.min_values = min_values
-        self.max_values = max_values
-        self.disabled = disabled
-
-    def to_dict(self):
-        d = {"type": 7, "custom_id": self.custom_id, "min_values": self.min_values, "max_values": self.max_values}
-        if self.placeholder is not None:
-            d["placeholder"] = self.placeholder
-        if self.disabled:
-            d["disabled"] = True
-        return d
+class RoleSelect(_EntitySelect):
+    _type = 6
 
 
-class ChannelSelect:
+class MentionableSelect(_EntitySelect):
+    _type = 7
+
+
+class ChannelSelect(_EntitySelect):
+    _type = 8
+
     def __init__(self, custom_id, channel_types=None, placeholder=None, min_values=1, max_values=1, disabled=False):
-        self.custom_id = custom_id
+        super().__init__(custom_id, placeholder, min_values, max_values, disabled)
         self.channel_types = channel_types
-        self.placeholder = placeholder
-        self.min_values = min_values
-        self.max_values = max_values
-        self.disabled = disabled
 
     def to_dict(self):
-        d = {"type": 8, "custom_id": self.custom_id, "min_values": self.min_values, "max_values": self.max_values}
+        d = super().to_dict()
         if self.channel_types is not None:
             d["channel_types"] = self.channel_types
-        if self.placeholder is not None:
-            d["placeholder"] = self.placeholder
-        if self.disabled:
-            d["disabled"] = True
         return d
 
 
@@ -173,8 +153,9 @@ TextInputStyle = _TextInputStyle()
 
 
 class TextInput:
-    def __init__(self, custom_id, label, style=1, min_length=None, max_length=None,
-                 required=True, value=None, placeholder=None):
+    def __init__(
+        self, custom_id, label, style=1, min_length=None, max_length=None, required=True, value=None, placeholder=None
+    ):
         self.custom_id = custom_id
         self.label = label
         self.style = style
@@ -216,6 +197,7 @@ class Modal:
 
 
 # Discord UI Kit (Components v2). flag 32768 is set automatically when these are used
+
 
 class Container:
     is_ui_kit = True
@@ -270,6 +252,22 @@ class Thumbnail:
         d = {"type": 11, "media": {"url": self.url}}
         if self.description is not None:
             d["description"] = self.description
+        if self.spoiler:
+            d["spoiler"] = True
+        return d
+
+
+class File:
+    is_ui_kit = True
+
+    def __init__(self, url, spoiler=False):
+        # `url` must be an attachment reference, e.g. "attachment://report.pdf",
+        # matching a file uploaded alongside this message.
+        self.url = url
+        self.spoiler = spoiler
+
+    def to_dict(self):
+        d = {"type": 13, "file": {"url": self.url}}
         if self.spoiler:
             d["spoiler"] = True
         return d

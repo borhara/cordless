@@ -4,6 +4,8 @@ Wraps bot.handle() in a plain HTTP server, hot-reloads your code on change,
 and (when cloudflared is installed) opens a public tunnel so Discord can
 reach it with real, signed interactions.
 """
+
+import base64
 import importlib
 import json
 import os
@@ -62,16 +64,20 @@ class Reloader:
 
 def _local_invoke_worker(reloader):
     """Stand-in for the Lambda async invoke: run the worker handler on a thread."""
+
     def invoke(function_name, interaction):
         from .worker import make_worker_handler
+
         handler = make_worker_handler(reloader.get())
         threading.Thread(target=handler, args=(interaction,), daemon=True).start()
+
     return invoke
 
 
 def _load_env(source_dir):
     """Export [deploy.env] from cordless.toml and any .env file, without clobbering the shell."""
     from .deploy import load_config
+
     for key, value in load_config(source_dir).get("env", {}).items():
         os.environ.setdefault(key, str(value))
 
@@ -83,7 +89,7 @@ def _load_env(source_dir):
                 if not line or line.startswith("#") or "=" not in line:
                     continue
                 key, _, value = line.partition("=")
-                os.environ.setdefault(key.strip(), value.strip())
+                os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
 
 
 def _make_handler(reloader):
@@ -105,6 +111,7 @@ def _make_handler(reloader):
                 result = reloader.get().handle(event)
             except Exception as exc:
                 import traceback
+
                 traceback.print_exc()
                 result = {
                     "statusCode": 500,
@@ -112,7 +119,10 @@ def _make_handler(reloader):
                     "body": json.dumps({"error": f"{type(exc).__name__}: {exc}"}),
                 }
 
-            payload = result.get("body", "").encode()
+            body_out = result.get("body", "")
+            # mirrors API Gateway's Lambda proxy integration: a base64Encoded
+            # body carries binary data (e.g. multipart file attachments)
+            payload = base64.b64decode(body_out) if result.get("isBase64Encoded") else body_out.encode()
             self.send_response(result["statusCode"])
             for key, value in result.get("headers", {}).items():
                 self.send_header(key, value)
@@ -157,6 +167,7 @@ def run_dev(target, port=8787, tunnel=True, source_dir="."):
     # deferred handlers run in-process, no worker Lambda locally
     os.environ.setdefault("CORDLESS_WORKER_FUNCTION", "cordless-dev-local")
     from . import defer as defer_mod
+
     reloader = Reloader(target, source_dir)
     defer_mod.invoke_worker = _local_invoke_worker(reloader)
 
@@ -175,14 +186,26 @@ def run_dev(target, port=8787, tunnel=True, source_dir="."):
             print(f"  public  {url}")
             print()
             print("  paste the public url into your app's Interactions Endpoint URL")
+        elif tunnel_proc is not None:
+            print()
+            print("  (tunnel failed to start - check your network connection)")
         else:
             print()
-            print("  (install cloudflared for a public tunnel: brew install cloudflared)")
+            import platform
+
+            _sys = platform.system()
+            if _sys == "Darwin":
+                _hint = "brew install cloudflared"
+            elif _sys == "Windows":
+                _hint = "winget install Cloudflare.cloudflared"
+            else:
+                _hint = "https://github.com/cloudflare/cloudflared/releases/latest"
+            print(f"  (install cloudflared for a public tunnel: {_hint})")
     print()
 
     if getattr(bot, "crons", None):
-        names = ", ".join(bot.crons)
-        print(f"  crons registered (run manually with bot.run_cron): {names}")
+        for name in bot.crons:
+            print(f"  cron    cordless cron {name}")
         print()
 
     print("  watching for changes (ctrl+c to stop)")

@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from cordless.app import Cordless
 from cordless.errors import PermissionDeniedError
 
@@ -13,6 +15,7 @@ def _body(result):
 
 
 # --- Slash commands ---
+
 
 def test_slash_command_dispatch():
     bot = Cordless()
@@ -35,10 +38,13 @@ def test_command_options_exposed_on_context():
         received.update(ctx.options)
         return await ctx.send(ctx.options["text"])
 
-    result = _handle(bot, {
-        "type": 2,
-        "data": {"name": "echo", "options": [{"name": "text", "type": 3, "value": "hello"}]},
-    })
+    result = _handle(
+        bot,
+        {
+            "type": 2,
+            "data": {"name": "echo", "options": [{"name": "text", "type": 3, "value": "hello"}]},
+        },
+    )
     assert received == {"text": "hello"}
     assert _body(result)["data"]["content"] == "hello"
 
@@ -59,7 +65,8 @@ def test_handler_that_sends_nothing_returns_400():
     bot = Cordless()
 
     @bot.command("noop")
-    async def noop(ctx): pass
+    async def noop(ctx):
+        pass
 
     result = _handle(bot, {"type": 2, "data": {"name": "noop"}})
     assert result["statusCode"] == 400
@@ -73,6 +80,7 @@ def test_unknown_command_returns_400():
 
 
 # --- Buttons ---
+
 
 def test_button_dispatch():
     bot = Cordless()
@@ -95,6 +103,7 @@ def test_unknown_button_returns_400():
 
 # --- Select menus ---
 
+
 def test_select_dispatch():
     bot = Cordless()
 
@@ -102,23 +111,34 @@ def test_select_dispatch():
     async def on_select(ctx):
         await ctx.edit("You picked!")
 
-    result = _handle(bot, {
-        "type": 3, "id": "1", "token": "tok",
-        "data": {"custom_id": "color_select", "component_type": 3, "values": ["red"]},
-    })
+    result = _handle(
+        bot,
+        {
+            "type": 3,
+            "id": "1",
+            "token": "tok",
+            "data": {"custom_id": "color_select", "component_type": 3, "values": ["red"]},
+        },
+    )
     assert result["statusCode"] == 200
 
 
 def test_unknown_select_returns_400():
     bot = Cordless()
-    result = _handle(bot, {
-        "type": 3, "id": "1", "token": "tok",
-        "data": {"custom_id": "nope", "component_type": 3},
-    })
+    result = _handle(
+        bot,
+        {
+            "type": 3,
+            "id": "1",
+            "token": "tok",
+            "data": {"custom_id": "nope", "component_type": 3},
+        },
+    )
     assert result["statusCode"] == 400
 
 
 # --- Modals ---
+
 
 def test_modal_dispatch():
     bot = Cordless()
@@ -127,26 +147,37 @@ def test_modal_dispatch():
     async def on_modal(ctx):
         await ctx.send("Thanks!")
 
-    result = _handle(bot, {
-        "type": 5, "id": "1", "token": "tok",
-        "data": {
-            "custom_id": "feedback_modal",
-            "components": [{"type": 1, "components": [{"type": 4, "custom_id": "msg", "value": "Hi"}]}],
+    result = _handle(
+        bot,
+        {
+            "type": 5,
+            "id": "1",
+            "token": "tok",
+            "data": {
+                "custom_id": "feedback_modal",
+                "components": [{"type": 1, "components": [{"type": 4, "custom_id": "msg", "value": "Hi"}]}],
+            },
         },
-    })
+    )
     assert result["statusCode"] == 200
 
 
 def test_unknown_modal_returns_400():
     bot = Cordless()
-    result = _handle(bot, {
-        "type": 5, "id": "1", "token": "tok",
-        "data": {"custom_id": "ghost_modal", "components": []},
-    })
+    result = _handle(
+        bot,
+        {
+            "type": 5,
+            "id": "1",
+            "token": "tok",
+            "data": {"custom_id": "ghost_modal", "components": []},
+        },
+    )
     assert result["statusCode"] == 400
 
 
 # --- Autocomplete ---
+
 
 def test_autocomplete_dispatch():
     bot = Cordless()
@@ -159,14 +190,141 @@ def test_autocomplete_dispatch():
     async def search_autocomplete(ctx):
         await ctx.respond_autocomplete([{"name": "foo", "value": "foo"}])
 
-    result = _handle(bot, {
-        "type": 4, "id": "1", "token": "tok",
-        "data": {"name": "search", "options": [{"name": "query", "value": "fo", "focused": True}]},
-    })
+    result = _handle(
+        bot,
+        {
+            "type": 4,
+            "id": "1",
+            "token": "tok",
+            "data": {"name": "search", "options": [{"name": "query", "value": "fo", "focused": True}]},
+        },
+    )
     assert _body(result)["type"] == 8
 
 
+def test_autocomplete_handler_may_return_choices_list():
+    bot = Cordless()
+
+    @bot.command("search", description="Search")
+    async def search(ctx):
+        await ctx.send("results")
+
+    @bot.autocomplete("search", "query")
+    async def search_autocomplete(ctx):
+        return [{"name": "foo", "value": "foo"}]
+
+    result = _handle(
+        bot,
+        {
+            "type": 4,
+            "id": "1",
+            "token": "tok",
+            "data": {"name": "search", "options": [{"name": "query", "value": "fo", "focused": True}]},
+        },
+    )
+    body = _body(result)
+    assert body["type"] == 8
+    assert body["data"]["choices"] == [{"name": "foo", "value": "foo"}]
+
+
+def test_autocomplete_string_choices_filtered_by_typed_value():
+    bot = Cordless()
+
+    @bot.command("shop", description="Shop")
+    async def shop(ctx):
+        await ctx.send("ok")
+
+    @bot.autocomplete("shop", "item")
+    async def item_autocomplete(ctx):
+        return ["sword", "shield", "potion"]
+
+    result = _handle(
+        bot,
+        {
+            "type": 4,
+            "id": "1",
+            "token": "tok",
+            "data": {"name": "shop", "options": [{"name": "item", "value": "s", "focused": True}]},
+        },
+    )
+    body = _body(result)
+    assert body["type"] == 8
+    assert body["data"]["choices"] == [
+        {"name": "sword", "value": "sword"},
+        {"name": "shield", "value": "shield"},
+    ]
+
+
+def test_autocomplete_string_choices_unfiltered_when_nothing_typed():
+    bot = Cordless()
+
+    @bot.command("shop", description="Shop")
+    async def shop(ctx):
+        await ctx.send("ok")
+
+    @bot.autocomplete("shop", "item")
+    async def item_autocomplete(ctx):
+        return ["sword", "shield"]
+
+    result = _handle(
+        bot,
+        {
+            "type": 4,
+            "id": "1",
+            "token": "tok",
+            "data": {"name": "shop", "options": [{"name": "item", "value": "", "focused": True}]},
+        },
+    )
+    assert len(_body(result)["data"]["choices"]) == 2
+
+
+def test_subcommand_autocomplete_focused_value():
+    from cordless.context import Context
+
+    event = {
+        "type": 4,
+        "data": {
+            "name": "shop",
+            "options": [
+                {
+                    "type": 1,
+                    "name": "buy",
+                    "options": [
+                        {"name": "item", "value": "sw", "focused": True},
+                    ],
+                }
+            ],
+        },
+    }
+    ctx = Context(event)
+    assert ctx.focused_value == "sw"
+
+
+def test_subcommand_autocomplete_options():
+    from cordless.context import Context
+
+    event = {
+        "type": 4,
+        "data": {
+            "name": "shop",
+            "options": [
+                {
+                    "type": 1,
+                    "name": "buy",
+                    "options": [
+                        {"name": "qty", "value": 3},
+                        {"name": "item", "value": "sw", "focused": True},
+                    ],
+                }
+            ],
+        },
+    }
+    ctx = Context(event)
+    assert ctx.options == {"qty": 3, "item": "sw"}
+
+
 # --- Subcommands ---
+
 
 def test_subcommand_dispatch():
     bot = Cordless()
@@ -177,10 +335,15 @@ def test_subcommand_dispatch():
         called["cmd"] = "mod/ban"
         await ctx.send("Banned.")
 
-    result = _handle(bot, {
-        "type": 2, "id": "1", "token": "tok",
-        "data": {"name": "mod", "options": [{"name": "ban", "type": 1, "options": []}]},
-    })
+    result = _handle(
+        bot,
+        {
+            "type": 2,
+            "id": "1",
+            "token": "tok",
+            "data": {"name": "mod", "options": [{"name": "ban", "type": 1, "options": []}]},
+        },
+    )
     assert result["statusCode"] == 200
     assert called["cmd"] == "mod/ban"
 
@@ -189,10 +352,12 @@ def test_subcommand_definitions_structure():
     bot = Cordless()
 
     @bot.command("mod/ban", description="Ban a user")
-    async def mod_ban(ctx): pass
+    async def mod_ban(ctx):
+        pass
 
     @bot.command("mod/kick", description="Kick a user")
-    async def mod_kick(ctx): pass
+    async def mod_kick(ctx):
+        pass
 
     parent = next(d for d in bot.router.command_definitions() if d["name"] == "mod")
     assert parent["type"] == 1
@@ -200,11 +365,68 @@ def test_subcommand_definitions_structure():
     assert all(o["type"] == 1 for o in parent["options"])
 
 
+def test_registering_parent_of_subcommand_raises():
+    bot = Cordless()
+
+    @bot.command("shop/buy", description="Buy an item")
+    async def shop_buy(ctx):
+        pass
+
+    with pytest.raises(ValueError, match="created automatically"):
+
+        @bot.command("shop", description="Shop")
+        async def shop(ctx):
+            pass
+
+
+def test_registering_subcommand_under_existing_command_raises():
+    bot = Cordless()
+
+    @bot.command("shop", description="Shop")
+    async def shop(ctx):
+        pass
+
+    with pytest.raises(ValueError, match="created automatically"):
+
+        @bot.command("shop/buy", description="Buy an item")
+        async def shop_buy(ctx):
+            pass
+
+
+def test_subcommand_permissions_propagate_to_parent():
+    bot = Cordless()
+
+    @bot.command("admin/ban", description="Ban a user", default_member_permissions=4)
+    async def ban(ctx):
+        pass
+
+    @bot.command("admin/purge", description="Purge messages", default_member_permissions=8192, nsfw=True)
+    async def purge(ctx):
+        pass
+
+    parent = next(d for d in bot.router.command_definitions() if d["name"] == "admin")
+    assert parent["default_member_permissions"] == str(4 | 8192)
+    assert parent["nsfw"] is True
+
+
+def test_subcommand_parent_without_permissions_stays_open():
+    bot = Cordless()
+
+    @bot.command("shop/buy", description="Buy an item")
+    async def buy(ctx):
+        pass
+
+    parent = next(d for d in bot.router.command_definitions() if d["name"] == "shop")
+    assert "default_member_permissions" not in parent
+    assert "nsfw" not in parent
+
+
 def test_subcommand_group_definitions_structure():
     bot = Cordless()
 
     @bot.command("admin/users/ban", description="Ban a user")
-    async def ban(ctx): pass
+    async def ban(ctx):
+        pass
 
     parent = next(d for d in bot.router.command_definitions() if d["name"] == "admin")
     group = next(o for o in parent["options"] if o["name"] == "users")
@@ -213,6 +435,7 @@ def test_subcommand_group_definitions_structure():
 
 
 # --- Context menu commands ---
+
 
 def test_user_command_dispatch():
     bot = Cordless()
@@ -223,15 +446,20 @@ def test_user_command_dispatch():
         captured["target"] = ctx.target_user
         await ctx.send("ok", ephemeral=True)
 
-    result = _handle(bot, {
-        "type": 2, "id": "1", "token": "tok",
-        "data": {
-            "name": "Inspect User",
+    result = _handle(
+        bot,
+        {
             "type": 2,
-            "target_id": "42",
-            "resolved": {"users": {"42": {"id": "42", "username": "bob"}}},
+            "id": "1",
+            "token": "tok",
+            "data": {
+                "name": "Inspect User",
+                "type": 2,
+                "target_id": "42",
+                "resolved": {"users": {"42": {"id": "42", "username": "bob"}}},
+            },
         },
-    })
+    )
     assert result["statusCode"] == 200
     assert captured["target"] == {"id": "42", "username": "bob"}
 
@@ -245,15 +473,20 @@ def test_message_command_dispatch():
         captured["msg"] = ctx.target_message
         await ctx.send("saved", ephemeral=True)
 
-    result = _handle(bot, {
-        "type": 2, "id": "1", "token": "tok",
-        "data": {
-            "name": "Bookmark",
-            "type": 3,
-            "target_id": "77",
-            "resolved": {"messages": {"77": {"id": "77", "content": "hey"}}},
+    result = _handle(
+        bot,
+        {
+            "type": 2,
+            "id": "1",
+            "token": "tok",
+            "data": {
+                "name": "Bookmark",
+                "type": 3,
+                "target_id": "77",
+                "resolved": {"messages": {"77": {"id": "77", "content": "hey"}}},
+            },
         },
-    })
+    )
     assert result["statusCode"] == 200
     assert captured["msg"] == {"id": "77", "content": "hey"}
 
@@ -262,10 +495,12 @@ def test_context_menu_command_definitions():
     bot = Cordless()
 
     @bot.user_command("Inspect User")
-    async def inspect(ctx): pass
+    async def inspect(ctx):
+        pass
 
     @bot.message_command("Bookmark")
-    async def bookmark(ctx): pass
+    async def bookmark(ctx):
+        pass
 
     defs = {d["name"]: d for d in bot.router.command_definitions()}
     assert defs["Inspect User"] == {"name": "Inspect User", "type": 2}
@@ -276,10 +511,12 @@ def test_context_menu_excluded_from_subcommand_grouping():
     bot = Cordless()
 
     @bot.user_command("Say Hi")
-    async def say_hi(ctx): pass
+    async def say_hi(ctx):
+        pass
 
     @bot.command("hi", description="Slash hi")
-    async def slash_hi(ctx): pass
+    async def slash_hi(ctx):
+        pass
 
     defs = bot.router.command_definitions()
     # "Say Hi" must not be merged into a "Say" subcommand group
@@ -289,6 +526,7 @@ def test_context_menu_excluded_from_subcommand_grouping():
 
 # --- Unsupported type ---
 
+
 def test_unsupported_interaction_type_returns_400():
     bot = Cordless()
     result = _handle(bot, {"type": 99})
@@ -296,6 +534,7 @@ def test_unsupported_interaction_type_returns_400():
 
 
 # --- Error handler ---
+
 
 def test_error_handler_catches_exception():
     bot = Cordless()
@@ -313,6 +552,7 @@ def test_error_handler_catches_exception():
 
 
 # --- Permission guard ---
+
 
 def test_guard_blocks_handler():
     bot = Cordless()

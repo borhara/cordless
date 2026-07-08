@@ -1,4 +1,5 @@
 """cordless dev: hot reload, HTTP round-trip, in-process deferred handlers."""
+
 import json
 import os
 import sys
@@ -29,6 +30,25 @@ def bot_project(tmp_path):
 
 # --- Reloader ---
 
+
+def test_defer_import_survives_no_region(monkeypatch):
+    import sys
+
+    import botocore.exceptions
+
+    def _no_region(*a, **kw):
+        raise botocore.exceptions.NoRegionError()
+
+    monkeypatch.setattr("boto3.client", _no_region)
+    sys.modules.pop("cordless.defer", None)
+    try:
+        import cordless.defer as defer_mod
+
+        assert defer_mod._lambda_client is None
+    finally:
+        sys.modules.pop("cordless.defer", None)
+
+
 def test_reloader_loads_bot(bot_project):
     reloader = Reloader("mybot:bot", str(bot_project))
     bot = reloader.get()
@@ -53,6 +73,7 @@ def test_reloader_reloads_on_change(bot_project):
 
 
 # --- HTTP round-trip ---
+
 
 @pytest.fixture
 def dev_server(bot_project):
@@ -85,7 +106,37 @@ def test_get_health_check(dev_server):
         assert resp.status == 200
 
 
+def test_post_interaction_with_files_round_trips_raw_bytes(bot_project):
+    """isBase64Encoded responses (multipart file attachments) must be decoded
+    back to raw bytes before hitting the socket, same as real API Gateway."""
+    (bot_project / "mybot.py").write_text(
+        "from cordless import Cordless\n"
+        "bot = Cordless()\n"
+        "@bot.command('file')\n"
+        "async def file_cmd(ctx):\n"
+        "    await ctx.send('here', files=[('report.pdf', b'binary-data')])\n"
+    )
+    reloader = Reloader("mybot:bot", str(bot_project))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _make_handler(reloader))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f"http://127.0.0.1:{server.server_address[1]}"
+        payload = json.dumps({"type": 2, "data": {"name": "file"}}).encode()
+        req = urllib.request.Request(url, data=payload, method="POST")
+        with urllib.request.urlopen(req) as resp:
+            content_type = resp.headers.get("Content-Type")
+            body = resp.read()
+        assert content_type.startswith("multipart/form-data")
+        assert b"binary-data" in body
+        assert b'filename="report.pdf"' in body
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 # --- in-process defer ---
+
 
 def test_local_invoke_runs_worker_thread(bot_project, monkeypatch):
     import cordless.defer
@@ -116,6 +167,21 @@ def test_local_invoke_runs_worker_thread(bot_project, monkeypatch):
 
 
 # --- env loading ---
+
+
+def test_load_env_strips_double_quotes(tmp_path, monkeypatch):
+    monkeypatch.delenv("QUOTED", raising=False)
+    (tmp_path / ".env").write_text('QUOTED="my-token"\n')
+    _load_env(str(tmp_path))
+    assert os.environ.pop("QUOTED") == "my-token"
+
+
+def test_load_env_strips_single_quotes(tmp_path, monkeypatch):
+    monkeypatch.delenv("QUOTED", raising=False)
+    (tmp_path / ".env").write_text("QUOTED='my-token'\n")
+    _load_env(str(tmp_path))
+    assert os.environ.pop("QUOTED") == "my-token"
+
 
 def test_load_env_reads_toml_and_dotenv(tmp_path, monkeypatch):
     monkeypatch.delenv("FROM_TOML", raising=False)

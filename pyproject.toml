@@ -5,10 +5,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cordless"
-version = "0.13.2"
+version = "1.0.0rc4"
 description = "Serverless Discord interactions framework for AWS Lambda"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+keywords = ["discord", "bot", "lambda", "serverless", "aws", "interactions"]
 dependencies = []
 
 authors = [
@@ -16,15 +18,17 @@ authors = [
 ]
 
 classifiers = [
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License",
-  "Operating System :: OS Independent"
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
 ]
 
 
 [project.urls]
 Homepage = "https://cordless.dev"
-Documentation = "https://cordless.dev"
+Documentation = "https://www.cordless.dev/guides/introduction/"
 Repository = "https://github.com/borhara/cordless"
 
 
@@ -33,13 +37,6 @@ cordless = "cordless.cli:main"
 
 
 [project.optional-dependencies]
-dev = [
-  "pytest>=8.0",
-  "pynacl>=1.5",
-  "moto[iam,lambda,apigatewayv2,events,logs,s3]>=5.0",
-  "boto3>=1.20",
-  "botocore[crt]",
-]
 deploy = [
   "boto3>=1.20",
   "botocore[crt]",
@@ -56,3 +53,20 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[dependency-groups]
+dev = [
+    "boto3>=1.20",
+    "botocore[crt]",
+    "moto[iam,awslambda,apigatewayv2,events,logs,s3]>=5.0",
+    "pynacl>=1.5",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.15.20",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]  # pycodestyle, pyflakes, isort

@@ -3,6 +3,7 @@ import json
 
 class FakeDiscordResponse:
     """Minimal stub for urllib.request.urlopen responses."""
+
     def __init__(self, payload):
         self._payload = payload
 

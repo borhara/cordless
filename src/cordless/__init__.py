@@ -1,20 +1,12 @@
 from .app import Cordless, option
-from .cog import (
-    Cog,
-    cog_autocomplete,
-    cog_button,
-    cog_command,
-    cog_message_command,
-    cog_modal,
-    cog_select,
-    cog_user_command,
-)
+from .cog import Cog
 from .components import (
     ActionRow,
     Button,
     ButtonStyle,
     ChannelSelect,
     Container,
+    File,
     MediaGallery,
     MentionableSelect,
     Modal,
@@ -47,13 +39,6 @@ __all__ = [
     "option",
     # Cogs
     "Cog",
-    "cog_autocomplete",
-    "cog_button",
-    "cog_command",
-    "cog_message_command",
-    "cog_modal",
-    "cog_select",
-    "cog_user_command",
     # Components
     "ActionRow",
     "Button",
@@ -72,6 +57,7 @@ __all__ = [
     "EmbedField",
     # UI Kit
     "Container",
+    "File",
     "MediaGallery",
     "Section",
     "Separator",

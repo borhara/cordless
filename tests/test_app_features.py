@@ -1,9 +1,11 @@
 """0.11+ surface: bot.handler(), typed options, name validation, prefix args, attachments."""
+
 import json
+from typing import Literal
 
 import pytest
 
-from cordless import Cog, cog_command
+from cordless import Cog
 from cordless.app import Cordless, options_from_signature
 
 
@@ -16,6 +18,7 @@ def _body(result):
 
 
 # --- bot.handler() ---
+
 
 def test_handler_returns_lambda_compatible_callable():
     bot = Cordless()
@@ -31,6 +34,7 @@ def test_handler_returns_lambda_compatible_callable():
 
 # --- invalid JSON ---
 
+
 def test_invalid_json_body_returns_400():
     bot = Cordless()
     result = bot.handle({"body": "{not json"})
@@ -45,8 +49,10 @@ def test_missing_body_returns_400():
 
 # --- ctx.defer(ephemeral=True) ---
 
+
 def test_defer_ephemeral_sets_flags():
     from asyncio import run
+
     from cordless.context import Context
 
     ctx = Context({"type": 2, "data": {"name": "x"}, "id": "1", "token": "t"})
@@ -58,6 +64,7 @@ def test_defer_ephemeral_sets_flags():
 
 def test_defer_plain_has_no_data():
     from asyncio import run
+
     from cordless.context import Context
 
     ctx = Context({"type": 2, "data": {"name": "x"}, "id": "1", "token": "t"})
@@ -67,49 +74,62 @@ def test_defer_plain_has_no_data():
 
 # --- command name validation ---
 
+
 def test_invalid_command_name_raises_at_decoration():
     bot = Cordless()
     with pytest.raises(ValueError):
+
         @bot.command("Bad Name")
-        async def bad(ctx): pass
+        async def bad(ctx):
+            pass
 
 
 def test_uppercase_command_name_raises():
     bot = Cordless()
     with pytest.raises(ValueError):
+
         @bot.command("Ping")
-        async def ping(ctx): pass
+        async def ping(ctx):
+            pass
 
 
 def test_too_long_command_name_raises():
     bot = Cordless()
     with pytest.raises(ValueError):
+
         @bot.command("a" * 33)
-        async def long_cmd(ctx): pass
+        async def long_cmd(ctx):
+            pass
 
 
 def test_subcommand_path_segments_validated():
     bot = Cordless()
 
     @bot.command("mod/ban")  # valid path
-    async def ban(ctx): pass
+    async def ban(ctx):
+        pass
 
     with pytest.raises(ValueError):
+
         @bot.command("mod/Bad Seg")
-        async def bad(ctx): pass
+        async def bad(ctx):
+            pass
 
 
 def test_context_menu_names_allow_spaces_and_case():
     bot = Cordless()
 
     @bot.user_command("Inspect User")
-    async def inspect(ctx): pass  # must not raise
+    async def inspect(ctx):
+        pass  # must not raise
 
 
 # --- options from type hints ---
 
+
 def test_options_inferred_from_signature():
-    async def buy(ctx, item: str, qty: int = 1): pass
+    async def buy(ctx, item: str, qty: int = 1):
+        pass
 
     opts = options_from_signature(buy)
     assert opts[0] == {"name": "item", "description": "No description provided.", "type": 3, "required": True}
@@ -119,7 +139,8 @@ def test_options_inferred_from_signature():
 
 
 def test_bool_and_float_annotations():
-    async def f(ctx, flag: bool, ratio: float): pass
+    async def f(ctx, flag: bool, ratio: float):
+        pass
 
     opts = options_from_signature(f)
     assert opts[0]["type"] == 5
@@ -127,8 +148,78 @@ def test_bool_and_float_annotations():
 
 
 def test_unannotated_param_defaults_to_string():
-    async def f(ctx, thing): pass
+    async def f(ctx, thing):
+        pass
+
     assert options_from_signature(f)[0]["type"] == 3
+
+
+def test_stringized_annotations_are_resolved():
+    # `from __future__ import annotations` turns every annotation into a
+    # string; the types must still resolve instead of falling back to string
+    src = "from __future__ import annotations\nasync def buy(ctx, item: str, qty: int = 1, ratio: float = 1.0): ..."
+    ns = {}
+    exec(compile(src, "<test>", "exec"), ns)
+
+    opts = {o["name"]: o for o in options_from_signature(ns["buy"])}
+    assert opts["item"]["type"] == 3
+    assert opts["qty"]["type"] == 4
+    assert opts["ratio"]["type"] == 10
+
+
+def test_stringized_literal_choices_are_resolved():
+    src = (
+        "from __future__ import annotations\n"
+        "from typing import Literal\n"
+        "async def f(ctx, size: Literal['small', 'large']): ..."
+    )
+    ns = {}
+    exec(compile(src, "<test>", "exec"), ns)
+
+    opt = options_from_signature(ns["f"])[0]
+    assert opt["choices"] == [{"name": "small", "value": "small"}, {"name": "large", "value": "large"}]
+
+
+def test_unresolvable_annotation_falls_back_to_string():
+    async def f(ctx, thing: "NotDefinedAnywhere"):  # noqa: F821
+        pass
+
+    assert options_from_signature(f)[0]["type"] == 3
+
+
+def test_string_literal_choices():
+    async def f(ctx, size: Literal["small", "large"]):
+        pass
+
+    opt = options_from_signature(f)[0]
+    assert opt["type"] == 3
+    assert opt["choices"] == [{"name": "small", "value": "small"}, {"name": "large", "value": "large"}]
+
+
+def test_int_literal_choices():
+    async def f(ctx, tier: Literal[1, 2, 3]):
+        pass
+
+    opt = options_from_signature(f)[0]
+    assert opt["type"] == 4
+    assert opt["choices"][0] == {"name": "1", "value": 1}
+
+
+def test_float_literal_choices_are_typed_as_number():
+    async def f(ctx, ratio: Literal[1.5, 2.5]):
+        pass
+
+    opt = options_from_signature(f)[0]
+    assert opt["type"] == 10
+    assert opt["choices"][0] == {"name": "1.5", "value": 1.5}
+
+
+def test_bool_literal_choices_raise():
+    async def f(ctx, flag: Literal[True, False]):
+        pass
+
+    with pytest.raises(ValueError):
+        options_from_signature(f)
 
 
 def test_typed_options_registered_in_definitions():
@@ -163,10 +254,18 @@ def test_typed_options_passed_as_kwargs():
         got.update(item=item, qty=qty)
         await ctx.send("ok")
 
-    _handle(bot, {"type": 2, "id": "1", "token": "t", "data": {
-        "name": "buy",
-        "options": [{"name": "item", "type": 3, "value": "sword"}, {"name": "qty", "type": 4, "value": 3}],
-    }})
+    _handle(
+        bot,
+        {
+            "type": 2,
+            "id": "1",
+            "token": "t",
+            "data": {
+                "name": "buy",
+                "options": [{"name": "item", "type": 3, "value": "sword"}, {"name": "qty", "type": 4, "value": 3}],
+            },
+        },
+    )
     assert got == {"item": "sword", "qty": 3}
 
 
@@ -179,10 +278,18 @@ def test_typed_options_defaults_apply_when_omitted():
         got.update(item=item, qty=qty)
         await ctx.send("ok")
 
-    _handle(bot, {"type": 2, "id": "1", "token": "t", "data": {
-        "name": "buy",
-        "options": [{"name": "item", "type": 3, "value": "shield"}],
-    }})
+    _handle(
+        bot,
+        {
+            "type": 2,
+            "id": "1",
+            "token": "t",
+            "data": {
+                "name": "buy",
+                "options": [{"name": "item", "type": 3, "value": "shield"}],
+            },
+        },
+    )
     assert got == {"item": "shield", "qty": 1}
 
 
@@ -198,25 +305,35 @@ def test_ctx_only_handlers_unchanged():
 
 
 def test_cog_command_options_from_signature():
-    class Shop(Cog):
-        @cog_command("buy")
-        async def buy(self, ctx, item: str, qty: int = 2):
-            await ctx.send(f"{qty}x {item}")
+    shop = Cog()
+
+    @shop.command("buy")
+    async def buy(ctx, item: str, qty: int = 2):
+        await ctx.send(f"{qty}x {item}")
 
     bot = Cordless()
-    bot.add_cog(Shop())
+    bot.add_cog(shop)
 
     cmd = next(d for d in bot.router.command_definitions() if d["name"] == "buy")
     assert [o["name"] for o in cmd["options"]] == ["item", "qty"]
 
-    got = _handle(bot, {"type": 2, "id": "1", "token": "t", "data": {
-        "name": "buy",
-        "options": [{"name": "item", "type": 3, "value": "potion"}],
-    }})
+    got = _handle(
+        bot,
+        {
+            "type": 2,
+            "id": "1",
+            "token": "t",
+            "data": {
+                "name": "buy",
+                "options": [{"name": "item", "type": 3, "value": "potion"}],
+            },
+        },
+    )
     assert _body(got)["data"]["content"] == "2x potion"
 
 
 # --- custom_id prefix matching + args ---
+
 
 def test_button_prefix_args():
     bot = Cordless()
@@ -240,8 +357,10 @@ def test_select_prefix_matching():
         got["args"] = ctx.custom_id_args
         await ctx.edit("ok")
 
-    result = _handle(bot, {"type": 3, "id": "1", "token": "t",
-                           "data": {"custom_id": "pick:page2", "component_type": 3, "values": ["a"]}})
+    result = _handle(
+        bot,
+        {"type": 3, "id": "1", "token": "t", "data": {"custom_id": "pick:page2", "component_type": 3, "values": ["a"]}},
+    )
     assert result["statusCode"] == 200
     assert got["args"] == ["page2"]
 
@@ -255,8 +374,7 @@ def test_modal_prefix_matching():
         got["args"] = ctx.custom_id_args
         await ctx.send("ok")
 
-    result = _handle(bot, {"type": 5, "id": "1", "token": "t",
-                           "data": {"custom_id": "form:step2", "components": []}})
+    result = _handle(bot, {"type": 5, "id": "1", "token": "t", "data": {"custom_id": "form:step2", "components": []}})
     assert result["statusCode"] == 200
     assert got["args"] == ["step2"]
 
@@ -276,6 +394,7 @@ def test_exact_match_has_no_args():
 
 # --- ctx.attachments ---
 
+
 def test_attachments_resolved_from_interaction():
     bot = Cordless()
     got = {}
@@ -285,18 +404,60 @@ def test_attachments_resolved_from_interaction():
         got["attachment"] = ctx.attachments[ctx.options["file"]]
         await ctx.send("ok")
 
-    _handle(bot, {"type": 2, "id": "1", "token": "t", "data": {
-        "name": "upload",
-        "options": [{"name": "file", "type": 11, "value": "att-1"}],
-        "resolved": {"attachments": {"att-1": {"filename": "cat.png", "url": "https://cdn/x.png", "size": 12}}},
-    }})
+    _handle(
+        bot,
+        {
+            "type": 2,
+            "id": "1",
+            "token": "t",
+            "data": {
+                "name": "upload",
+                "options": [{"name": "file", "type": 11, "value": "att-1"}],
+                "resolved": {"attachments": {"att-1": {"filename": "cat.png", "url": "https://cdn/x.png", "size": 12}}},
+            },
+        },
+    )
     assert got["attachment"]["filename"] == "cat.png"
+
+
+def test_empty_public_key_rejects_invalid_signature():
+    bot = Cordless(public_key="")
+
+    @bot.command("ping")
+    async def ping(ctx):
+        await ctx.send("pong")
+
+    result = bot.handle(
+        {
+            "body": json.dumps({"type": 2, "data": {"name": "ping"}}),
+            "headers": {
+                "x-signature-ed25519": "a" * 128,
+                "x-signature-timestamp": "1234567890",
+            },
+        }
+    )
+    assert result["statusCode"] == 401
+
+
+def test_raw_dict_uikit_component_sets_flag():
+    bot = Cordless()
+
+    @bot.command("test")
+    async def test_cmd(ctx):
+        await ctx.send(components=[{"type": 17, "components": []}])
+
+    result = _handle(bot, {"type": 2, "data": {"name": "test"}, "id": "1", "token": "t"})
+    flags = _body(result)["data"].get("flags", 0)
+    assert flags & 32768
 
 
 # --- load_extension ---
 
+
 def test_load_extension_without_setup_raises():
-    import sys, os
+    import os
+    import sys
+
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "fixtures"))
     try:
         bot = Cordless()

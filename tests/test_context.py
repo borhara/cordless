@@ -1,3 +1,4 @@
+import base64
 import json
 from asyncio import run
 
@@ -12,6 +13,7 @@ def _make_ctx(data=None, **extra):
 
 
 # --- Basic attributes ---
+
 
 def test_custom_id_exposed_on_button_context():
     bot = Cordless()
@@ -42,6 +44,7 @@ def test_interaction_id_and_token_exposed():
 
 
 # --- send flags ---
+
 
 def test_send_ephemeral_sets_flags():
     bot = Cordless()
@@ -81,6 +84,7 @@ def test_send_uikit_and_ephemeral_combines_flags():
 
 # --- send with embeds / components ---
 
+
 def test_send_with_embed():
     ctx = _make_ctx()
     run(ctx.send("content", embeds=[Embed(title="Hi")]))
@@ -93,7 +97,47 @@ def test_send_with_components():
     assert json.loads(ctx.response["body"])["data"]["components"][0]["type"] == 1
 
 
+# --- send/edit with files (initial response, non-worker) ---
+
+
+def test_send_with_files_returns_base64_multipart_body():
+    ctx = _make_ctx()
+    run(ctx.send("here", files=[("report.pdf", b"binary-data")]))
+
+    assert ctx.response["isBase64Encoded"] is True
+    assert ctx.response["headers"]["Content-Type"].startswith("multipart/form-data")
+
+    body = base64.b64decode(ctx.response["body"])
+    assert b'name="payload_json"' in body
+    assert b'name="files[0]"; filename="report.pdf"' in body
+    assert b"binary-data" in body
+
+    boundary = ctx.response["headers"]["Content-Type"].split("boundary=")[1]
+    payload_part = body.split(f"--{boundary}".encode())[1]
+    payload_json = json.loads(payload_part.split(b"\r\n\r\n", 1)[1].rsplit(b"\r\n", 1)[0])
+    assert payload_json["data"]["content"] == "here"
+    assert payload_json["data"]["attachments"] == [{"id": 0, "filename": "report.pdf"}]
+
+
+def test_send_without_files_is_plain_json():
+    ctx = _make_ctx()
+    run(ctx.send("hi"))
+    assert "isBase64Encoded" not in ctx.response
+    assert ctx.response["headers"]["Content-Type"] == "application/json"
+
+
+def test_edit_with_files_returns_base64_multipart_body():
+    ctx = _make_ctx()
+    run(ctx.edit("updated", files=[("img.png", b"\x89PNG...")]))
+
+    assert ctx.response["isBase64Encoded"] is True
+    body = base64.b64decode(ctx.response["body"])
+    assert b'filename="img.png"' in body
+    assert b"\x89PNG..." in body
+
+
 # --- send_modal ---
+
 
 def test_send_modal():
     ctx = _make_ctx()
@@ -105,6 +149,7 @@ def test_send_modal():
 
 # --- respond_autocomplete ---
 
+
 def test_respond_autocomplete():
     ctx = _make_ctx()
     run(ctx.respond_autocomplete([{"name": "Option A", "value": "a"}]))
@@ -115,65 +160,78 @@ def test_respond_autocomplete():
 
 # --- modal_values ---
 
+
 def test_modal_values_parsed_from_submission():
-    ctx = Context({
-        "type": 5,
-        "data": {
-            "custom_id": "feedback",
-            "components": [
-                {"type": 1, "components": [{"type": 4, "custom_id": "msg", "value": "Hello"}]}
-            ],
-        },
-        "id": "2", "token": "tok",
-    })
+    ctx = Context(
+        {
+            "type": 5,
+            "data": {
+                "custom_id": "feedback",
+                "components": [{"type": 1, "components": [{"type": 4, "custom_id": "msg", "value": "Hello"}]}],
+            },
+            "id": "2",
+            "token": "tok",
+        }
+    )
     assert ctx.modal_values == {"msg": "Hello"}
 
 
 # --- select values ---
 
+
 def test_select_values_on_context():
-    ctx = Context({
-        "type": 3,
-        "data": {"custom_id": "color", "component_type": 3, "values": ["red", "blue"]},
-        "id": "3", "token": "tok",
-    })
+    ctx = Context(
+        {
+            "type": 3,
+            "data": {"custom_id": "color", "component_type": 3, "values": ["red", "blue"]},
+            "id": "3",
+            "token": "tok",
+        }
+    )
     assert ctx.values == ["red", "blue"]
 
 
 # --- context menu: target attributes ---
 
+
 def test_target_user_from_user_command():
-    ctx = Context({
-        "type": 2,
-        "data": {
-            "name": "Inspect User",
+    ctx = Context(
+        {
             "type": 2,
-            "target_id": "999",
-            "resolved": {
-                "users": {"999": {"id": "999", "username": "alice"}},
-                "members": {"999": {"nick": "Alice"}},
+            "data": {
+                "name": "Inspect User",
+                "type": 2,
+                "target_id": "999",
+                "resolved": {
+                    "users": {"999": {"id": "999", "username": "alice"}},
+                    "members": {"999": {"nick": "Alice"}},
+                },
             },
-        },
-        "id": "4", "token": "tok",
-    })
+            "id": "4",
+            "token": "tok",
+        }
+    )
     assert ctx.target_user == {"id": "999", "username": "alice"}
     assert ctx.target_member == {"nick": "Alice"}
     assert ctx.target_message is None
 
 
 def test_target_message_from_message_command():
-    ctx = Context({
-        "type": 2,
-        "data": {
-            "name": "Bookmark",
-            "type": 3,
-            "target_id": "555",
-            "resolved": {
-                "messages": {"555": {"id": "555", "content": "hello world"}},
+    ctx = Context(
+        {
+            "type": 2,
+            "data": {
+                "name": "Bookmark",
+                "type": 3,
+                "target_id": "555",
+                "resolved": {
+                    "messages": {"555": {"id": "555", "content": "hello world"}},
+                },
             },
-        },
-        "id": "5", "token": "tok",
-    })
+            "id": "5",
+            "token": "tok",
+        }
+    )
     assert ctx.target_message == {"id": "555", "content": "hello world"}
     assert ctx.target_user is None
     assert ctx.target_member is None

@@ -1,87 +1,126 @@
 """
-Cog support: split bot commands across multiple classes.
+Cog support: group related handlers into a module.
 
 Usage:
-    from cordless import Cog, cog_command, cog_button
+    from cordless import Cog
 
-    class GameCog(Cog):
-        @cog_command("ping", description="Check the bot is alive")
-        async def ping(self, ctx):
-            await ctx.send("Pong!")
+    cog = Cog()
 
-        @cog_button("next_page")
-        async def next_page(self, ctx):
-            await ctx.edit(...)
+    @cog.command("ping", description="Check the bot is alive")
+    async def ping(ctx):
+        await ctx.send("Pong!")
 
-    bot.add_cog(GameCog())
+    @cog.button("next_page")
+    async def next_page(ctx):
+        await ctx.edit(...)
+
+    bot.add_cog(cog)
 """
 
 
 class Cog:
-    """Base class for all cogs. Subclass this and decorate methods."""
-    pass
+    """Group related handlers. Decorate functions with @cog.command, @cog.button, etc."""
 
+    def __init__(self):
+        self._handlers = []
 
-def cog_command(name, description="No description provided.", options=None,
-                defer=False, dm_permission=True):
-    def decorator(func):
-        func._cog_type = "command"
-        func._cog_name = name
-        func._cog_description = description
-        func._cog_options = options
-        func._cog_defer = defer
-        func._cog_dm_permission = dm_permission
-        return func
-    return decorator
+    def command(
+        self,
+        name,
+        description="No description provided.",
+        options=None,
+        defer=False,
+        dm_permission=True,
+        default_member_permissions=None,
+        nsfw=False,
+        ephemeral=False,
+    ):
+        def decorator(func):
+            self._handlers.append(
+                (
+                    "command",
+                    func,
+                    {
+                        "name": name,
+                        "description": description,
+                        "options": options,
+                        "defer": defer,
+                        "dm_permission": dm_permission,
+                        "default_member_permissions": default_member_permissions,
+                        "nsfw": nsfw,
+                        "ephemeral": ephemeral,
+                    },
+                )
+            )
+            return func
 
+        return decorator
 
-def cog_button(custom_id, defer=False):
-    def decorator(func):
-        func._cog_type = "button"
-        func._cog_custom_id = custom_id
-        func._cog_defer = defer
-        return func
-    return decorator
+    def button(self, custom_id, defer=False):
+        def decorator(func):
+            self._handlers.append(("button", func, {"custom_id": custom_id, "defer": defer}))
+            return func
 
+        return decorator
 
-def cog_select(custom_id):
-    def decorator(func):
-        func._cog_type = "select"
-        func._cog_custom_id = custom_id
-        return func
-    return decorator
+    def select(self, custom_id, defer=False):
+        def decorator(func):
+            self._handlers.append(("select", func, {"custom_id": custom_id, "defer": defer}))
+            return func
 
+        return decorator
 
-def cog_modal(custom_id):
-    def decorator(func):
-        func._cog_type = "modal"
-        func._cog_custom_id = custom_id
-        return func
-    return decorator
+    def modal(self, custom_id, defer=False):
+        def decorator(func):
+            self._handlers.append(("modal", func, {"custom_id": custom_id, "defer": defer}))
+            return func
 
+        return decorator
 
-def cog_autocomplete(cmd_name, option_name):
-    def decorator(func):
-        func._cog_type = "autocomplete"
-        func._cog_cmd_name = cmd_name
-        func._cog_option_name = option_name
-        return func
-    return decorator
+    def autocomplete(self, cmd_name, option_name):
+        def decorator(func):
+            self._handlers.append(
+                (
+                    "autocomplete",
+                    func,
+                    {
+                        "cmd_name": cmd_name,
+                        "option_name": option_name,
+                    },
+                )
+            )
+            return func
 
+        return decorator
 
-def cog_user_command(name, dm_permission=True):
-    def decorator(func):
-        func._cog_type = "user_command"
-        func._cog_name = name
-        func._cog_dm_permission = dm_permission
-        return func
-    return decorator
+    def user_command(self, name, dm_permission=True):
+        def decorator(func):
+            self._handlers.append(
+                (
+                    "user_command",
+                    func,
+                    {
+                        "name": name,
+                        "dm_permission": dm_permission,
+                    },
+                )
+            )
+            return func
 
+        return decorator
 
-def cog_message_command(name, dm_permission=True):
-    def decorator(func):
-        func._cog_type = "message_command"
-        func._cog_name = name
-        func._cog_dm_permission = dm_permission
-        return func
-    return decorator
+    def message_command(self, name, dm_permission=True):
+        def decorator(func):
+            self._handlers.append(
+                (
+                    "message_command",
+                    func,
+                    {
+                        "name": name,
+                        "dm_permission": dm_permission,
+                    },
+                )
+            )
+            return func
+
+        return decorator
