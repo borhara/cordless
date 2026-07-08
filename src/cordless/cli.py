@@ -272,6 +272,10 @@ async def ping(ctx):
 
 
 handler = bot.handler()
+
+# For commands with defer=True (and defer_worker set in cordless.toml), the
+# worker Lambda needs its own entrypoint - uncomment this:
+# worker_handler = bot.worker_handler
 """
 
 _INIT_TOML = """\

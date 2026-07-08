@@ -140,6 +140,8 @@ def test_init_creates_scaffold(tmp_path, monkeypatch):
     assert (tmp_path / "cordless.toml").exists()
     assert (tmp_path / ".env.example").exists()
     assert "mybot" in (tmp_path / "cordless.toml").read_text()
+    # the defer wiring line ships commented out so it's discoverable
+    assert "# worker_handler = bot.worker_handler" in (tmp_path / "lambda_function.py").read_text()
 
 
 def test_init_skips_existing_files(tmp_path, monkeypatch, capsys):
