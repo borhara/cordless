@@ -257,6 +257,22 @@ class Thumbnail:
         return d
 
 
+class File:
+    is_ui_kit = True
+
+    def __init__(self, url, spoiler=False):
+        # `url` must be an attachment reference, e.g. "attachment://report.pdf",
+        # matching a file uploaded alongside this message.
+        self.url = url
+        self.spoiler = spoiler
+
+    def to_dict(self):
+        d = {"type": 13, "file": {"url": self.url}}
+        if self.spoiler:
+            d["spoiler"] = True
+        return d
+
+
 class MediaGallery:
     is_ui_kit = True
 

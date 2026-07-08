@@ -6,6 +6,7 @@ from .components import (
     ButtonStyle,
     ChannelSelect,
     Container,
+    File,
     MediaGallery,
     MentionableSelect,
     Modal,
@@ -56,6 +57,7 @@ __all__ = [
     "EmbedField",
     # UI Kit
     "Container",
+    "File",
     "MediaGallery",
     "Section",
     "Separator",

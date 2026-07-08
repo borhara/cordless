@@ -8,6 +8,7 @@ from cordless import (
     Container,
     Embed,
     EmbedField,
+    File,
     MediaGallery,
     MentionableSelect,
     Modal,
@@ -182,3 +183,12 @@ def test_container():
 
 def test_media_gallery():
     assert MediaGallery({"url": "https://example.com/img.png"}).to_dict()["type"] == 12
+
+
+def test_file():
+    d = File("attachment://report.pdf").to_dict()
+    assert d == {"type": 13, "file": {"url": "attachment://report.pdf"}}
+
+
+def test_file_spoiler():
+    assert File("attachment://report.pdf", spoiler=True).to_dict()["spoiler"] is True
