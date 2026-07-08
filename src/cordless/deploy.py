@@ -531,7 +531,8 @@ def deploy(
             )
             lam.get_waiter("function_updated").wait(FunctionName=function_name)
 
-    if crons:
+    # run even when crons is empty so rules for deleted crons get cleaned up
+    if crons is not None:
         cron_target = defer_worker or function_name
         _, cron_arn = _function_exists(lam, cron_target)
         events = session.client("events")

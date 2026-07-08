@@ -339,6 +339,17 @@ def test_deploy_wires_crons(deploy_patches, monkeypatch):
 
 
 @mock_aws
+def test_deploy_removes_stale_cron_rules_when_last_cron_is_deleted(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches, crons={"daily": "rate(1 day)"}))
+    deploy(**_base_deploy_kwargs(deploy_patches, crons={}))
+    events = boto3.client("events", region_name=REGION)
+    rules = events.list_rules(NamePrefix="my-bot-cron-")["Rules"]
+    assert rules == []
+
+
+@mock_aws
 def test_deploy_raises_without_function_name(deploy_patches):
     with pytest.raises(SystemExit):
         deploy(**_base_deploy_kwargs(deploy_patches, function_name=""))
