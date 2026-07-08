@@ -10,6 +10,7 @@ _RED = "\033[31m"
 _DIM = "\033[2m"
 _BOLD = "\033[1m"
 _RESET = "\033[0m"
+_ERASE_LINE = "\033[K"
 
 _tty = sys.stdout.isatty()
 
@@ -36,9 +37,9 @@ class Spinner:
             if self._thread:
                 self._thread.join()
             if exc_type:
-                sys.stdout.write(f"\r  {_RED}✗{_RESET} {self.label}\n")
+                sys.stdout.write(f"\r{_ERASE_LINE}  {_RED}✗{_RESET} {self.label}\n")
             else:
-                sys.stdout.write(f"\r  {_GREEN}✓{_RESET} {self.label}\n")
+                sys.stdout.write(f"\r{_ERASE_LINE}  {_GREEN}✓{_RESET} {self.label}\n")
             sys.stdout.flush()
         elif exc_type is None:
             print(f"  ✓ {self.label}", flush=True)
