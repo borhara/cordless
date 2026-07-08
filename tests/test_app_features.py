@@ -1,6 +1,7 @@
 """0.11+ surface: bot.handler(), typed options, name validation, prefix args, attachments."""
 
 import json
+from typing import Literal
 
 import pytest
 
@@ -151,6 +152,41 @@ def test_unannotated_param_defaults_to_string():
         pass
 
     assert options_from_signature(f)[0]["type"] == 3
+
+
+def test_string_literal_choices():
+    async def f(ctx, size: Literal["small", "large"]):
+        pass
+
+    opt = options_from_signature(f)[0]
+    assert opt["type"] == 3
+    assert opt["choices"] == [{"name": "small", "value": "small"}, {"name": "large", "value": "large"}]
+
+
+def test_int_literal_choices():
+    async def f(ctx, tier: Literal[1, 2, 3]):
+        pass
+
+    opt = options_from_signature(f)[0]
+    assert opt["type"] == 4
+    assert opt["choices"][0] == {"name": "1", "value": 1}
+
+
+def test_float_literal_choices_are_typed_as_number():
+    async def f(ctx, ratio: Literal[1.5, 2.5]):
+        pass
+
+    opt = options_from_signature(f)[0]
+    assert opt["type"] == 10
+    assert opt["choices"][0] == {"name": "1.5", "value": 1.5}
+
+
+def test_bool_literal_choices_raise():
+    async def f(ctx, flag: Literal[True, False]):
+        pass
+
+    with pytest.raises(ValueError):
+        options_from_signature(f)
 
 
 def test_typed_options_registered_in_definitions():

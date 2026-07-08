@@ -77,7 +77,18 @@ def options_from_signature(func):
 
         if get_origin(annotation) is Literal:
             choices_vals = get_args(annotation)
-            opt["type"] = 4 if choices_vals and isinstance(choices_vals[0], int) else 3
+            first = choices_vals[0] if choices_vals else None
+            if isinstance(first, bool):
+                raise ValueError(
+                    f"Literal choices of type bool are not supported (parameter {p.name!r}): "
+                    "Discord doesn't allow `choices` on boolean options"
+                )
+            elif isinstance(first, float):
+                opt["type"] = 10
+            elif isinstance(first, int):
+                opt["type"] = 4
+            else:
+                opt["type"] = 3
             opt["choices"] = [{"name": str(v), "value": v} for v in choices_vals]
         else:
             opt["type"] = _ANNOTATION_TYPES.get(annotation, 3)
