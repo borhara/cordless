@@ -201,3 +201,24 @@ def test_deploy_falls_back_to_config(tmp_path, monkeypatch):
     kwargs = mock_deploy.call_args.kwargs
     assert kwargs["function_name"] == "from-toml"
     assert kwargs["region"] == "eu-west-1"
+
+
+def test_deploy_setup_resolves_against_source_not_cwd(tmp_path, monkeypatch):
+    """A same-named module shadowing in cwd must not win over --source's copy."""
+    cwd_dir = tmp_path / "cwd"
+    project_dir = tmp_path / "project"
+    cwd_dir.mkdir()
+    project_dir.mkdir()
+
+    (cwd_dir / "db.py").write_text("def create_tables():\n    raise AssertionError('wrong db.py loaded from cwd')\n")
+    (project_dir / "db.py").write_text("calls = []\n\n\ndef create_tables():\n    calls.append(True)\n")
+
+    monkeypatch.chdir(cwd_dir)
+    monkeypatch.setattr(sys, "modules", dict(sys.modules))
+    sys.modules.pop("db", None)
+    try:
+        with patch("cordless.deploy.deploy"):
+            main(["deploy", "--source", str(project_dir), "--setup", "db:create_tables", "--function", "fn"])
+        assert sys.modules["db"].calls == [True]
+    finally:
+        sys.modules.pop("db", None)

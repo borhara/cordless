@@ -154,7 +154,7 @@ def _deploy(args):
     if setup_target:
         print(f"  running setup {setup_target}...")
         sys.path.insert(0, source_dir)
-        setup_fn = _load_bot(setup_target)
+        setup_fn = _load_bot(setup_target, path=source_dir)
         setup_fn()
         print("  ✓ setup")
 
