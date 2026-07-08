@@ -30,6 +30,19 @@ _ANNOTATION_TYPES = {str: 3, int: 4, bool: 5, float: 10}
 _NAME_RE = re.compile(r"[a-z0-9_-]{1,32}")
 
 
+def _prewarm_defer():
+    """Import defer.py at decoration time (Lambda INIT) so boto3's Lambda client is
+    constructed before Discord's 3-second response window opens, not synchronously
+    during the first deferred invocation. Never called unconditionally at module
+    scope: that would make every bot pay boto3's import cost, even ones that never
+    use defer=True.
+    """
+    try:
+        from . import defer as _defer_mod  # noqa: F401
+    except Exception:
+        pass
+
+
 def _validate_command_name(name):
     """Fail at decoration time instead of with a cryptic Discord API error at register time."""
     for part in name.split("/"):
@@ -164,13 +177,7 @@ class Cordless:
                 func._defer = True
                 if ephemeral:
                     func._defer_ephemeral = True
-                # Importing defer.py here (at decorator-application time, i.e. Lambda INIT)
-                # causes boto3 to be imported and the Lambda client pre-created before
-                # Discord's 3-second response window opens on the first invocation.
-                try:
-                    from . import defer as _defer_mod  # noqa: F401
-                except Exception:
-                    pass
+                _prewarm_defer()
             self.router.register_command(
                 name,
                 func,
@@ -295,10 +302,7 @@ class Cordless:
         def decorator(func):
             if defer:
                 func._defer = True
-                try:
-                    from . import defer as _defer_mod  # noqa: F401
-                except Exception:
-                    pass
+                _prewarm_defer()
             self.router.register_button(custom_id, func)
             return func
 
@@ -308,10 +312,7 @@ class Cordless:
         def decorator(func):
             if defer:
                 func._defer = True
-                try:
-                    from . import defer as _defer_mod  # noqa: F401
-                except Exception:
-                    pass
+                _prewarm_defer()
             self.router.register_select(custom_id, func)
             return func
 
@@ -321,10 +322,7 @@ class Cordless:
         def decorator(func):
             if defer:
                 func._defer = True
-                try:
-                    from . import defer as _defer_mod  # noqa: F401
-                except Exception:
-                    pass
+                _prewarm_defer()
             self.router.register_modal(custom_id, func)
             return func
 
@@ -439,10 +437,7 @@ class Cordless:
                     func._defer = True
                     if kwargs.get("ephemeral"):
                         func._defer_ephemeral = True
-                    try:
-                        from . import defer as _defer_mod  # noqa: F401
-                    except Exception:
-                        pass
+                    _prewarm_defer()
                 _validate_command_name(kwargs["name"])
                 resolved_options = kwargs["options"]
                 if resolved_options is None:
@@ -459,14 +454,17 @@ class Cordless:
             elif ctype == "button":
                 if kwargs.get("defer"):
                     func._defer = True
+                    _prewarm_defer()
                 self.router.register_button(kwargs["custom_id"], func)
             elif ctype == "select":
                 if kwargs.get("defer"):
                     func._defer = True
+                    _prewarm_defer()
                 self.router.register_select(kwargs["custom_id"], func)
             elif ctype == "modal":
                 if kwargs.get("defer"):
                     func._defer = True
+                    _prewarm_defer()
                 self.router.register_modal(kwargs["custom_id"], func)
             elif ctype == "autocomplete":
                 self.router.register_autocomplete(kwargs["cmd_name"], kwargs["option_name"], func)
