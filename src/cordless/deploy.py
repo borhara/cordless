@@ -231,8 +231,7 @@ def _publish_cordless_layer(lam, layer_name, python_version=None, architecture="
     )
 
     try:
-        versions = lam.list_layer_versions(LayerName=layer_name).get("LayerVersions", [])
-        for v in versions:
+        for v in _list_all_layer_versions(lam, layer_name):
             if v.get("Description") == description:
                 return v["LayerVersionArn"]
     except lam.exceptions.ResourceNotFoundException:
@@ -254,6 +253,15 @@ def _publish_cordless_layer(lam, layer_name, python_version=None, architecture="
         return resp["LayerVersionArn"]
     finally:
         os.unlink(zip_path)
+
+
+def _list_all_apis(apigw):
+    return apigw.get_paginator("get_apis").paginate().build_full_result()["Items"]
+
+
+def _list_all_layer_versions(lam, layer_name):
+    paginator = lam.get_paginator("list_layer_versions")
+    return paginator.paginate(LayerName=layer_name).build_full_result()["LayerVersions"]
 
 
 def _function_exists(lam, function_name):
@@ -332,7 +340,7 @@ def _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account
     api_name = f"{function_name}-api"
 
     # Reuse existing API if one with this name exists
-    apis = apigw.get_apis().get("Items", [])
+    apis = _list_all_apis(apigw)
     existing = next((a for a in apis if a["Name"] == api_name), None)
 
     if existing:
@@ -613,7 +621,7 @@ def destroy(function_name, role_name, region, defer_worker=None, layer_name=None
 
     api_name = f"{function_name}-api"
     with Spinner(f"API Gateway  {api_name}"):
-        apis = apigw.get_apis().get("Items", [])
+        apis = _list_all_apis(apigw)
         existing = next((a for a in apis if a["Name"] == api_name), None)
         if existing:
             apigw.delete_api(ApiId=existing["ApiId"])
@@ -649,8 +657,7 @@ def destroy(function_name, role_name, region, defer_worker=None, layer_name=None
 
     if layer_name:
         with Spinner(f"Lambda layer  {layer_name}"):
-            versions = lam.list_layer_versions(LayerName=layer_name).get("LayerVersions", [])
-            for v in versions:
+            for v in _list_all_layer_versions(lam, layer_name):
                 lam.delete_layer_version(LayerName=layer_name, VersionNumber=v["Version"])
 
     print(f"  ✓ destroyed {function_name}")

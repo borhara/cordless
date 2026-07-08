@@ -204,6 +204,42 @@ def test_ensure_api_gateway_is_idempotent(aws_clients, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# _list_all_apis / _list_all_layer_versions (pagination)
+# ---------------------------------------------------------------------------
+
+
+class _FakePaginator:
+    def __init__(self, pages, result_key):
+        self._pages = pages
+        self._result_key = result_key
+
+    def paginate(self, **kwargs):
+        return self
+
+    def build_full_result(self):
+        merged = [item for page in self._pages for item in page]
+        return {self._result_key: merged}
+
+
+class _FakeClient:
+    def __init__(self, pages, result_key):
+        self._paginator = _FakePaginator(pages, result_key)
+
+    def get_paginator(self, name):
+        return self._paginator
+
+
+def test_list_all_apis_aggregates_every_page():
+    client = _FakeClient([[{"Name": "a"}], [{"Name": "b"}]], "Items")
+    assert cordless.deploy._list_all_apis(client) == [{"Name": "a"}, {"Name": "b"}]
+
+
+def test_list_all_layer_versions_aggregates_every_page():
+    client = _FakeClient([[{"Version": 1}], [{"Version": 2}]], "LayerVersions")
+    assert cordless.deploy._list_all_layer_versions(client, "cordless") == [{"Version": 1}, {"Version": 2}]
+
+
+# ---------------------------------------------------------------------------
 # _allow_worker_invoke
 # ---------------------------------------------------------------------------
 
