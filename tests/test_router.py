@@ -393,6 +393,34 @@ def test_registering_subcommand_under_existing_command_raises():
             pass
 
 
+def test_subcommand_permissions_propagate_to_parent():
+    bot = Cordless()
+
+    @bot.command("admin/ban", description="Ban a user", default_member_permissions=4)
+    async def ban(ctx):
+        pass
+
+    @bot.command("admin/purge", description="Purge messages", default_member_permissions=8192, nsfw=True)
+    async def purge(ctx):
+        pass
+
+    parent = next(d for d in bot.router.command_definitions() if d["name"] == "admin")
+    assert parent["default_member_permissions"] == str(4 | 8192)
+    assert parent["nsfw"] is True
+
+
+def test_subcommand_parent_without_permissions_stays_open():
+    bot = Cordless()
+
+    @bot.command("shop/buy", description="Buy an item")
+    async def buy(ctx):
+        pass
+
+    parent = next(d for d in bot.router.command_definitions() if d["name"] == "shop")
+    assert "default_member_permissions" not in parent
+    assert "nsfw" not in parent
+
+
 def test_subcommand_group_definitions_structure():
     bot = Cordless()
 

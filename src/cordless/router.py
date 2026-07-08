@@ -164,6 +164,16 @@ class Router:
             }
             if any(not m.get("dm_permission", True) for m in entries.values()):
                 cmd["dm_permission"] = False
+            # Discord only accepts these at the top level, so combine across
+            # subcommands: union the permission bits (most restrictive wins)
+            perms = 0
+            for m in entries.values():
+                if m.get("default_member_permissions") is not None:
+                    perms |= int(m["default_member_permissions"])
+            if perms:
+                cmd["default_member_permissions"] = str(perms)
+            if any(m.get("nsfw") for m in entries.values()):
+                cmd["nsfw"] = True
             result.append(cmd)
 
         return result
