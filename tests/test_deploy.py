@@ -239,6 +239,11 @@ def test_list_all_layer_versions_aggregates_every_page():
     assert cordless.deploy._list_all_layer_versions(client, "cordless") == [{"Version": 1}, {"Version": 2}]
 
 
+def test_list_all_rules_aggregates_every_page():
+    client = _FakeClient([[{"Name": "fn-cron-a"}], [{"Name": "fn-cron-b"}]], "Rules")
+    assert cordless.deploy._list_all_rules(client, "fn-cron-") == [{"Name": "fn-cron-a"}, {"Name": "fn-cron-b"}]
+
+
 # ---------------------------------------------------------------------------
 # _allow_worker_invoke
 # ---------------------------------------------------------------------------

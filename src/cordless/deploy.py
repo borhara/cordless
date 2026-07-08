@@ -264,6 +264,10 @@ def _list_all_layer_versions(lam, layer_name):
     return paginator.paginate(LayerName=layer_name).build_full_result()["LayerVersions"]
 
 
+def _list_all_rules(events, prefix):
+    return events.get_paginator("list_rules").paginate(NamePrefix=prefix).build_full_result()["Rules"]
+
+
 def _function_exists(lam, function_name):
     try:
         config = lam.get_function_configuration(FunctionName=function_name)
@@ -558,7 +562,7 @@ def _wire_crons(events, lam, function_name, target_fn, target_arn, crons):
 
     prefix = f"{function_name}-cron-"
     wanted = {f"{prefix}{name}" for name in crons}
-    for rule in events.list_rules(NamePrefix=prefix).get("Rules", []):
+    for rule in _list_all_rules(events, prefix):
         if rule["Name"] in wanted:
             continue
         targets = events.list_targets_by_rule(Rule=rule["Name"]).get("Targets", [])
@@ -627,7 +631,7 @@ def destroy(function_name, role_name, region, defer_worker=None, layer_name=None
             apigw.delete_api(ApiId=existing["ApiId"])
 
     with Spinner("cron schedules"):
-        rules = events.list_rules(NamePrefix=f"{function_name}-cron-").get("Rules", [])
+        rules = _list_all_rules(events, f"{function_name}-cron-")
         for rule in rules:
             target_ids = [t["Id"] for t in events.list_targets_by_rule(Rule=rule["Name"]).get("Targets", [])]
             if target_ids:
