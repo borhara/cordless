@@ -114,8 +114,7 @@ def test_cron_rejects_unknown_name():
 
 
 # ---------------------------------------------------------------------------
-# flag abbreviation is disabled (an abbreviated flag must not silently match
-# a longer one, e.g. --bundle must not match --bundle-cordless)
+# flag abbreviation
 # ---------------------------------------------------------------------------
 
 
