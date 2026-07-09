@@ -257,6 +257,81 @@ class Cordless:
             None, self._discord_request, "DELETE", f"/channels/{channel_id}/messages/{message_id}"
         )
 
+    async def execute_webhook(
+        self,
+        webhook_id,
+        webhook_token=None,
+        content=None,
+        *,
+        embeds=None,
+        components=None,
+        files=None,
+        username=None,
+        avatar_url=None,
+        tts=False,
+        allowed_mentions=None,
+        wait=False,
+        thread_id=None,
+    ):
+        """Send a message through a Discord webhook. No bot token required.
+
+        Pass a full webhook URL as `webhook_id` (leave `webhook_token` unset),
+        or the id and token separately.
+        """
+        from . import webhook as _webhook
+
+        if webhook_token is None:
+            webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
+
+        payload = _webhook.build_payload(
+            content,
+            embeds,
+            components,
+            username=username,
+            avatar_url=avatar_url,
+            tts=tts,
+            allowed_mentions=allowed_mentions,
+        )
+
+        await asyncio.get_event_loop().run_in_executor(
+            None, _webhook.execute, webhook_id, webhook_token, payload, files, wait, thread_id
+        )
+
+    async def edit_webhook_message(
+        self,
+        webhook_id,
+        webhook_token=None,
+        message_id="@original",
+        content=None,
+        *,
+        embeds=None,
+        components=None,
+        files=None,
+        allowed_mentions=None,
+    ):
+        """Edit a message previously sent through a webhook. No bot token required."""
+        from . import webhook as _webhook
+
+        if webhook_token is None:
+            webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
+
+        payload = _webhook.build_payload(content, embeds, components, allowed_mentions=allowed_mentions)
+
+        await asyncio.get_event_loop().run_in_executor(
+            None, _webhook.edit_message, webhook_id, webhook_token, message_id, payload, files
+        )
+
+    async def delete_webhook_message(self, webhook_id, webhook_token=None, message_id="@original"):
+        """Delete a message previously sent through a webhook. No bot token required."""
+        from . import webhook as _webhook
+
+        if webhook_token is None:
+            webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
+
+        await asyncio.get_event_loop().run_in_executor(
+            None, _webhook.delete_message, webhook_id, webhook_token, message_id
+        )
+
     async def add_role(self, guild_id, user_id, role_id):
         import asyncio
 
