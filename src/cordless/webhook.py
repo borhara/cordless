@@ -49,6 +49,9 @@ def build_payload(content, embeds, components, *, username=None, avatar_url=None
 
 
 def _request(method, path, body=None, content_type=None):
+    """Raises RuntimeError on a non-2xx response, same contract as
+    Cordless._discord_request, so callers can rely on the call having
+    actually happened rather than silently no-opping."""
     conn = HTTPSConnection("discord.com", timeout=_TIMEOUT)
     try:
         headers = {"User-Agent": "cordless"}
@@ -61,7 +64,7 @@ def _request(method, path, body=None, content_type=None):
     finally:
         conn.close()
     if status >= 300:
-        print(f"[cordless] webhook {method} {path} {status}: {data.decode(errors='replace')}")
+        raise RuntimeError(f"Discord API error {status}: {data.decode(errors='replace')}")
     return status, data
 
 

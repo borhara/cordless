@@ -152,11 +152,10 @@ def test_delete_webhook_deletes_webhook_path(fake_conn):
     assert req["url"] == "/api/v10/webhooks/123/abc"
 
 
-def test_non_2xx_status_does_not_raise(fake_conn):
+def test_non_2xx_status_raises(fake_conn):
     fake_conn.responses = [(404, b'{"message": "Unknown Webhook"}')]
-    status, body = cordless.webhook.execute("123", "abc", {"content": "hi"})
-    assert status == 404
-    assert b"Unknown Webhook" in body
+    with pytest.raises(RuntimeError, match="Discord API error 404.*Unknown Webhook"):
+        cordless.webhook.execute("123", "abc", {"content": "hi"})
 
 
 # --- Cordless.execute_webhook / edit_webhook_message / delete_webhook_message ---
@@ -233,6 +232,43 @@ def test_delete_webhook_with_token_skips_bot_auth(webhook_calls):
     asyncio.run(bot.delete_webhook("123", "abc"))
 
     assert webhook_calls["delete_webhook"][0] == ("123", "abc")
+
+
+def test_execute_webhook_propagates_failure(monkeypatch):
+    import asyncio
+
+    def fail(*a):
+        raise RuntimeError("Discord API error 404: Unknown Webhook")
+
+    monkeypatch.setattr(cordless.webhook, "execute", fail)
+
+    bot = Cordless()
+    with pytest.raises(RuntimeError, match="404"):
+        asyncio.run(bot.execute_webhook("123", "abc", content="hi"))
+
+
+def test_execute_webhook_returns_message_when_wait(monkeypatch):
+    import asyncio
+
+    monkeypatch.setattr(
+        cordless.webhook, "execute", lambda *a: (200, json.dumps({"id": "msg-1", "content": "hi"}).encode())
+    )
+
+    bot = Cordless()
+    result = asyncio.run(bot.execute_webhook("123", "abc", content="hi", wait=True))
+
+    assert result == {"id": "msg-1", "content": "hi"}
+
+
+def test_execute_webhook_returns_none_without_wait(monkeypatch):
+    import asyncio
+
+    monkeypatch.setattr(cordless.webhook, "execute", lambda *a: (204, b""))
+
+    bot = Cordless()
+    result = asyncio.run(bot.execute_webhook("123", "abc", content="hi"))
+
+    assert result is None
 
 
 # --- Cordless.create_webhook / get_channel_webhooks / delete_webhook (bot-token) ---

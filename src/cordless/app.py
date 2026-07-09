@@ -293,9 +293,11 @@ class Cordless:
             allowed_mentions=allowed_mentions,
         )
 
-        await asyncio.get_event_loop().run_in_executor(
+        _, body = await asyncio.get_event_loop().run_in_executor(
             None, _webhook.execute, webhook_id, webhook_token, payload, files, wait, thread_id
         )
+        if wait and body:
+            return json.loads(body)
 
     async def edit_webhook_message(
         self,
