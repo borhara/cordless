@@ -374,9 +374,7 @@ class Cordless:
             await asyncio.get_event_loop().run_in_executor(None, _webhook.delete_webhook, webhook_id, webhook_token)
             return
 
-        await asyncio.get_event_loop().run_in_executor(
-            None, self._discord_request, "DELETE", f"/webhooks/{webhook_id}"
-        )
+        await asyncio.get_event_loop().run_in_executor(None, self._discord_request, "DELETE", f"/webhooks/{webhook_id}")
 
     @property
     def worker_handler(self):
