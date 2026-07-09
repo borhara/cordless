@@ -11,7 +11,7 @@ import re
 from http.client import HTTPSConnection
 
 from ._multipart import build_multipart_body
-from .context import _FLAG_UI_KIT, _contains_uikit
+from .context import _FLAG_UI_KIT, _attach_files, _contains_uikit
 
 _TIMEOUT = 10
 
@@ -67,6 +67,7 @@ def _request(method, path, body=None, content_type=None):
 
 def _encode(payload, files):
     if files:
+        _attach_files(payload, files)
         return build_multipart_body(payload, files)
     return json.dumps(payload).encode(), "application/json"
 

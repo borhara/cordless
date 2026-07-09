@@ -125,6 +125,20 @@ def test_execute_with_files_sends_multipart(fake_conn):
     assert b"png-bytes" in req["body"]
 
 
+def test_execute_with_files_declares_attachments_metadata(fake_conn):
+    """Discord ignores multipart file parts unless payload_json lists them in `attachments`."""
+    cordless.webhook.execute("123", "abc", {"content": "hi"}, files=[("a.png", b"x"), ("b.txt", b"y")])
+    req = fake_conn.requests[0]
+    assert b'name="payload_json"' in req["body"]
+    assert b'"attachments": [{"id": 0, "filename": "a.png"}, {"id": 1, "filename": "b.txt"}]' in req["body"]
+
+
+def test_edit_message_with_files_declares_attachments_metadata(fake_conn):
+    cordless.webhook.edit_message("123", "abc", "999", {"content": "hi"}, files=[("a.png", b"x")])
+    req = fake_conn.requests[0]
+    assert b'"attachments": [{"id": 0, "filename": "a.png"}]' in req["body"]
+
+
 def test_edit_message_patches_message_path(fake_conn):
     cordless.webhook.edit_message("123", "abc", "999", {"content": "edited"})
     req = fake_conn.requests[0]
@@ -274,11 +288,10 @@ def test_execute_webhook_returns_none_without_wait(monkeypatch):
 # --- Cordless.create_webhook / get_channel_webhooks / delete_webhook (bot-token) ---
 
 
-def test_create_webhook_posts_to_channel_webhooks_endpoint():
+def test_create_webhook_posts_to_channel_webhooks_endpoint(monkeypatch):
     import asyncio
-    import os
 
-    os.environ["DISCORD_BOT_TOKEN"] = "bot-tok"
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "bot-tok")
     responses = [FakeDiscordResponse({"id": "wh-1", "token": "wh-tok"})]
 
     bot = Cordless()
@@ -292,11 +305,10 @@ def test_create_webhook_posts_to_channel_webhooks_endpoint():
     assert json.loads(req.data) == {"name": "Alerts"}
 
 
-def test_get_channel_webhooks_lists_channel_webhooks():
+def test_get_channel_webhooks_lists_channel_webhooks(monkeypatch):
     import asyncio
-    import os
 
-    os.environ["DISCORD_BOT_TOKEN"] = "bot-tok"
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "bot-tok")
     responses = [FakeDiscordResponse([{"id": "wh-1"}, {"id": "wh-2"}])]
 
     bot = Cordless()
@@ -307,11 +319,10 @@ def test_get_channel_webhooks_lists_channel_webhooks():
     assert urlopen.call_args_list[0].args[0].full_url == "https://discord.com/api/v10/channels/chan-1/webhooks"
 
 
-def test_delete_webhook_without_token_uses_bot_auth():
+def test_delete_webhook_without_token_uses_bot_auth(monkeypatch):
     import asyncio
-    import os
 
-    os.environ["DISCORD_BOT_TOKEN"] = "bot-tok"
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "bot-tok")
     responses = [FakeDiscordResponse(None)]
 
     bot = Cordless()
