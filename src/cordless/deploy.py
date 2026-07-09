@@ -131,7 +131,7 @@ def _packages_cache_dir(packages, python_version, architecture="x86_64"):
 
 
 def _ensure_packages(packages, python_version, architecture="x86_64"):
-    """pip-install Lambda-compatible wheels, cached across deploys.
+    """uv-install Lambda-compatible wheels, cached across deploys.
 
     The cache key is the exact packages list + python version, so unpinned
     specs (e.g. "pillow") stay at whatever version was first installed until
@@ -145,45 +145,37 @@ def _ensure_packages(packages, python_version, architecture="x86_64"):
     import subprocess
     import sys
 
-    abi = "cp" + python_version.replace(".", "")
-    # uv venvs don't ship pip, so search PATH excluding the active venv
-    venv = os.environ.get("VIRTUAL_ENV", "")
-    search_path = os.pathsep.join(
-        d for d in os.environ.get("PATH", "").split(os.pathsep) if not (venv and d.startswith(venv))
-    )
-    python = shutil.which("python3", path=search_path) or shutil.which("python", path=search_path) or sys.executable
+    # prefer the uv installed alongside this interpreter (e.g. via cordless[deploy])
+    # before falling back to PATH (e.g. brew, the astral install script)
+    venv_uv = os.path.join(os.path.dirname(sys.executable), "uv")
+    uv = venv_uv if os.path.isfile(venv_uv) else shutil.which("uv")
+    if uv is None:
+        raise RuntimeError("uv not found — install it: https://docs.astral.sh/uv/getting-started/installation/")
 
     os.makedirs(os.path.dirname(cache_dir), exist_ok=True)
     staging = tempfile.mkdtemp(dir=os.path.dirname(cache_dir))
     try:
-        platform = "manylinux2014_aarch64" if architecture == "arm64" else "manylinux2014_x86_64"
+        platform = "aarch64-manylinux2014" if architecture == "arm64" else "x86_64-manylinux2014"
         result = subprocess.run(
             [
-                python,
-                "-m",
+                uv,
                 "pip",
                 "install",
                 "--target",
                 staging,
-                "--platform",
+                "--python-platform",
                 platform,
                 "--python-version",
                 python_version,
-                "--implementation",
-                "cp",
-                "--abi",
-                abi,
-                "--abi",
-                "abi3",  # accept stable-ABI wheels too (pynacl, cryptography, …)
                 "--only-binary",
                 ":all:",
-                "--no-compile",
                 *packages,
             ],
             capture_output=True,
         )
         if result.returncode != 0:
-            raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
+            stderr = result.stderr.decode(errors="replace").strip() if result.stderr else ""
+            raise RuntimeError(f"uv pip install failed for {packages} (exit {result.returncode}): {stderr}")
         try:
             os.rename(staging, cache_dir)
         except OSError:

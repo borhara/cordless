@@ -14,14 +14,10 @@ def _cordless_package_dir():
 
 
 def _layer_extras_dir(python_version, architecture="x86_64"):
-    """Fetch pynacl (fast Ed25519 verify) for the layer; None means build without it."""
+    """Fetch pynacl (fast Ed25519 verify) for the layer."""
     from .deploy import _ensure_packages
 
-    try:
-        return _ensure_packages(["pynacl"], python_version, architecture)
-    except Exception as exc:
-        print(f"  (layer extras unavailable, falling back: {exc})")
-        return None
+    return _ensure_packages(["pynacl"], python_version, architecture)
 
 
 def build_layer_zip(python_version=None, architecture="x86_64"):
