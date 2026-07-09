@@ -346,6 +346,38 @@ class Cordless:
             None, self._discord_request, "DELETE", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}"
         )
 
+    async def create_webhook(self, channel_id, name, avatar=None):
+        """Create a webhook in a channel. Requires DISCORD_BOT_TOKEN. Returns the
+        webhook object, including the id/token pair execute_webhook needs."""
+        payload = {"name": name}
+        if avatar is not None:
+            payload["avatar"] = avatar
+
+        body = await asyncio.get_event_loop().run_in_executor(
+            None, self._discord_request, "POST", f"/channels/{channel_id}/webhooks", payload
+        )
+        return json.loads(body)
+
+    async def get_channel_webhooks(self, channel_id):
+        """List a channel's webhooks. Requires DISCORD_BOT_TOKEN."""
+        body = await asyncio.get_event_loop().run_in_executor(
+            None, self._discord_request, "GET", f"/channels/{channel_id}/webhooks"
+        )
+        return json.loads(body)
+
+    async def delete_webhook(self, webhook_id, webhook_token=None):
+        """Delete a webhook. With webhook_token, authenticates with the webhook's
+        own token (no bot token needed); otherwise uses DISCORD_BOT_TOKEN."""
+        if webhook_token is not None:
+            from . import webhook as _webhook
+
+            await asyncio.get_event_loop().run_in_executor(None, _webhook.delete_webhook, webhook_id, webhook_token)
+            return
+
+        await asyncio.get_event_loop().run_in_executor(
+            None, self._discord_request, "DELETE", f"/webhooks/{webhook_id}"
+        )
+
     @property
     def worker_handler(self):
         from .worker import make_worker_handler
