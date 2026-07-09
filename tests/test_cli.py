@@ -114,6 +114,29 @@ def test_cron_rejects_unknown_name():
 
 
 # ---------------------------------------------------------------------------
+# flag abbreviation
+# ---------------------------------------------------------------------------
+
+
+def test_abbreviated_flag_is_rejected(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit):
+        main(["deploy", "--function", "x", "--bundle"])
+
+
+def test_full_flag_name_still_works(tmp_path, monkeypatch):
+    import cordless.cli
+
+    captured = {}
+    monkeypatch.setattr(cordless.cli, "_deploy", lambda args: captured.setdefault("args", args))
+    monkeypatch.chdir(tmp_path)
+
+    main(["deploy", "--function", "x", "--bundle-cordless"])
+
+    assert captured["args"].bundle_cordless is True
+
+
+# ---------------------------------------------------------------------------
 # _pick
 # ---------------------------------------------------------------------------
 
