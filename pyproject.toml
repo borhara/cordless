@@ -40,6 +40,7 @@ cordless = "cordless.cli:main"
 deploy = [
   "boto3>=1.20",
   "botocore[crt]",
+  "uv>=0.11",
 ]
 
 

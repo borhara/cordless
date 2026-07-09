@@ -143,10 +143,14 @@ def _ensure_packages(packages, python_version, architecture="x86_64"):
 
     import shutil
     import subprocess
+    import sys
 
-    uv = shutil.which("uv")
+    # prefer the uv installed alongside this interpreter (e.g. via cordless[deploy])
+    # before falling back to PATH (e.g. brew, the astral install script)
+    venv_uv = os.path.join(os.path.dirname(sys.executable), "uv")
+    uv = venv_uv if os.path.isfile(venv_uv) else shutil.which("uv")
     if uv is None:
-        raise RuntimeError("uv not found on PATH — install it: https://docs.astral.sh/uv/getting-started/installation/")
+        raise RuntimeError("uv not found — install it: https://docs.astral.sh/uv/getting-started/installation/")
 
     os.makedirs(os.path.dirname(cache_dir), exist_ok=True)
     staging = tempfile.mkdtemp(dir=os.path.dirname(cache_dir))
