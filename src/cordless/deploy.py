@@ -183,7 +183,8 @@ def _ensure_packages(packages, python_version, architecture="x86_64"):
             capture_output=True,
         )
         if result.returncode != 0:
-            raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
+            stderr = result.stderr.decode(errors="replace").strip() if result.stderr else ""
+            raise RuntimeError(f"pip install failed for {packages} (exit {result.returncode}): {stderr}")
         try:
             os.rename(staging, cache_dir)
         except OSError:
