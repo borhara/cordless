@@ -438,11 +438,13 @@ def _load_env(source_dir):
 
 def main(argv=None):
     _load_env(os.getcwd())
-    parser = argparse.ArgumentParser(prog="cordless", description="cordless command-line tools")
+    parser = argparse.ArgumentParser(prog="cordless", description="cordless command-line tools", allow_abbrev=False)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # register
-    register = subparsers.add_parser("register", help="Register this bot's slash commands with Discord")
+    register = subparsers.add_parser(
+        "register", help="Register this bot's slash commands with Discord", allow_abbrev=False
+    )
     register.add_argument(
         "bot",
         nargs="?",
@@ -468,7 +470,11 @@ def main(argv=None):
     register.set_defaults(func=_register)
 
     # upload
-    upload = subparsers.add_parser("upload", help="Package cordless as a Lambda layer and attach it to your function")
+    upload = subparsers.add_parser(
+        "upload",
+        help="Package cordless as a Lambda layer and attach it to your function",
+        allow_abbrev=False,
+    )
     upload.add_argument("--function", "-f", required=True, metavar="FUNCTION", help="Lambda function name or ARN")
     upload.add_argument("--layer-name", default="cordless", metavar="NAME", help="Layer name (default: cordless)")
     upload.add_argument("--region", "-r", default=None, metavar="REGION", help="AWS region")
@@ -484,6 +490,7 @@ def main(argv=None):
     deploy_cmd = subparsers.add_parser(
         "deploy",
         help="Package and deploy your bot to Lambda with the cordless layer attached",
+        allow_abbrev=False,
     )
     deploy_cmd.add_argument("--function", "-f", metavar="FUNCTION", help="Lambda function name")
     deploy_cmd.add_argument(
@@ -549,7 +556,9 @@ def main(argv=None):
 
     # destroy
     destroy_cmd = subparsers.add_parser(
-        "destroy", help="Delete the Lambda function(s), API Gateway, cron rules, logs, and IAM role for a deployed bot"
+        "destroy",
+        help="Delete the Lambda function(s), API Gateway, cron rules, logs, and IAM role for a deployed bot",
+        allow_abbrev=False,
     )
     destroy_cmd.add_argument(
         "--function",
@@ -575,12 +584,16 @@ def main(argv=None):
     destroy_cmd.set_defaults(func=_destroy)
 
     # init
-    init_cmd = subparsers.add_parser("init", help="Scaffold a new cordless bot in the current directory")
+    init_cmd = subparsers.add_parser(
+        "init", help="Scaffold a new cordless bot in the current directory", allow_abbrev=False
+    )
     init_cmd.add_argument("name", nargs="?", default=None, help="Function name (default: current directory name)")
     init_cmd.set_defaults(func=_init)
 
     # dev
-    dev_cmd = subparsers.add_parser("dev", help="Run your bot locally with hot reload and a public tunnel")
+    dev_cmd = subparsers.add_parser(
+        "dev", help="Run your bot locally with hot reload and a public tunnel", allow_abbrev=False
+    )
     dev_cmd.add_argument(
         "bot", nargs="?", default=None, help="Your Cordless instance as MODULE:ATTRIBUTE (auto-detected if omitted)"
     )
@@ -592,13 +605,15 @@ def main(argv=None):
     dev_cmd.set_defaults(func=_dev)
 
     # logs
-    cron_cmd = subparsers.add_parser("cron", help="Run a cron handler locally by name")
+    cron_cmd = subparsers.add_parser("cron", help="Run a cron handler locally by name", allow_abbrev=False)
     cron_cmd.add_argument("name", metavar="NAME", help="Cron handler name (e.g. daily_rewards)")
     cron_cmd.add_argument("bot", nargs="?", metavar="BOT", help="MODULE:ATTRIBUTE (auto-detected if omitted)")
     cron_cmd.add_argument("--source", default=".", metavar="DIR", help="Source directory (default: .)")
     cron_cmd.set_defaults(func=_cron)
 
-    logs_cmd = subparsers.add_parser("logs", help="Tail CloudWatch logs for a deployed Lambda function")
+    logs_cmd = subparsers.add_parser(
+        "logs", help="Tail CloudWatch logs for a deployed Lambda function", allow_abbrev=False
+    )
     logs_cmd.add_argument(
         "--function",
         "-f",
