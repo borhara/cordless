@@ -14,6 +14,10 @@ _ERASE_LINE = "\033[K"
 
 _tty = sys.stdout.isatty()
 
+# Set by callers (e.g. --verbose) to suppress the animated thread, since it
+# stomps on any print() the deploy code (or a caller) does mid-spin.
+verbose = False
+
 
 class Spinner:
     """Context manager that shows an animated spinner, then ✓ or ✗ on exit."""
@@ -24,7 +28,7 @@ class Spinner:
         self._thread = None
 
     def __enter__(self):
-        if _tty:
+        if _tty and not verbose:
             self._thread = threading.Thread(target=self._spin, daemon=True)
             self._thread.start()
         else:
@@ -32,7 +36,7 @@ class Spinner:
         return self
 
     def __exit__(self, exc_type, *_):
-        if _tty:
+        if _tty and not verbose:
             self._stop.set()
             if self._thread:
                 self._thread.join()

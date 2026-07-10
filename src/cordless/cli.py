@@ -145,7 +145,10 @@ def _upload(args):
 
 
 def _deploy(args):
+    from . import _progress
     from .deploy import deploy, load_config
+
+    _progress.verbose = args.verbose
 
     source_dir = os.path.abspath(args.source)
     cfg = load_config(source_dir)
@@ -541,6 +544,12 @@ def main(argv=None):
     )
     deploy_cmd.add_argument(
         "--architecture", default=None, choices=["x86_64", "arm64"], help="Lambda architecture (default: x86_64)"
+    )
+    deploy_cmd.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Disable the animated spinner so print/log output isn't overwritten",
     )
     deploy_cmd.add_argument(
         "--register",
