@@ -219,7 +219,9 @@ def _publish_cordless_layer(lam, layer_name, python_version=None, architecture="
     # pynacl's cffi dependency is compiled per python version, so layers are
     # runtime-specific. the description keys the reuse check on both
     description = (
-        f"cordless {current_version} (python{python_version})" if python_version else f"cordless {current_version}"
+        f"cordless_{architecture} {current_version} (python{python_version})"
+        if python_version
+        else f"cordless_{architecture} {current_version}"
     )
 
     try:
