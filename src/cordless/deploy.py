@@ -243,6 +243,7 @@ def _publish_cordless_layer(lam, layer_name, python_version=None, architecture="
                 Description=description,
                 Content={"ZipFile": f.read()},
                 CompatibleRuntimes=runtimes,
+                CompatibleArchitectures=[architecture]
             )
         return resp["LayerVersionArn"]
     finally:
