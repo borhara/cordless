@@ -15,6 +15,7 @@ from cordless.deploy import (
     deploy,
     destroy,
     ensure_iam_role,
+    _publish_cordless_layer,
 )
 
 REGION = "us-east-1"
@@ -394,6 +395,16 @@ def test_deploy_removes_stale_cron_rules_when_last_cron_is_deleted(deploy_patche
 def test_deploy_raises_without_function_name(deploy_patches):
     with pytest.raises(SystemExit):
         deploy(**_base_deploy_kwargs(deploy_patches, function_name=""))
+
+
+def test_new_layer_for_different_architectures():
+    with mock_aws():
+        lam = boto3.client("lambda", region_name="us-east-1")
+
+        arn1 = _publish_cordless_layer(lam, "cordless", "3.12", architecture="x86_64")
+        arn2 = _publish_cordless_layer(lam, "cordless", "3.12", architecture="arm64")
+
+    assert arn1 != arn2
 
 
 @mock_aws
