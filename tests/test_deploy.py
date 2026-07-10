@@ -11,11 +11,11 @@ from cordless.deploy import (
     _allow_worker_invoke,
     _ensure_api_gateway,
     _function_exists,
+    _publish_cordless_layer,
     _wire_crons,
     deploy,
     destroy,
     ensure_iam_role,
-    _publish_cordless_layer,
 )
 
 REGION = "us-east-1"
