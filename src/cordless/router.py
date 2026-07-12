@@ -40,6 +40,7 @@ class Router:
         cmd_type=1,
         default_member_permissions=None,
         nsfw=False,
+        guild_ids=None,
     ):
         if cmd_type == 1:
             for existing, meta in self.commands.items():
@@ -61,6 +62,7 @@ class Router:
             "params": list(inspect.signature(handler).parameters)[1:],
             "default_member_permissions": default_member_permissions,
             "nsfw": nsfw,
+            "guild_ids": list(guild_ids) if guild_ids else None,
         }
 
     def register_button(self, custom_id, handler):
@@ -79,10 +81,29 @@ class Router:
         self._error_handler = handler
 
     def command_definitions(self):
+        """Every registered command, regardless of guild scoping — the full
+        set deploy tooling pushes to one guild for instant dev updates."""
+        return self._definitions(self.commands)
+
+    def scoped_command_definitions(self, guild_id):
+        """Only commands registered for this scope (None = global) — see
+        register_command's guild_ids. A command with guild_ids=[a, b] shows
+        up in both scoped_command_definitions(a) and (b)."""
+        if guild_id is None:
+            scoped = {k: m for k, m in self.commands.items() if not m.get("guild_ids")}
+        else:
+            scoped = {k: m for k, m in self.commands.items() if guild_id in (m.get("guild_ids") or [])}
+        return self._definitions(scoped)
+
+    def guild_ids(self):
+        """Every distinct guild referenced by any command's guild_ids."""
+        return sorted({gid for m in self.commands.values() for gid in (m.get("guild_ids") or [])})
+
+    def _definitions(self, commands):
         flat = {}  # name → meta
         subs = {}  # top-level name → {path → meta}
 
-        for key, meta in self.commands.items():
+        for key, meta in commands.items():
             # Context menu commands (type 2/3) never participate in subcommand grouping
             if meta.get("cmd_type", 1) in (2, 3):
                 flat[key] = meta

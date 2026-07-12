@@ -175,6 +175,7 @@ class Cordless:
         default_member_permissions=None,
         nsfw=False,
         ephemeral=False,
+        guild_ids=None,
     ):
         _validate_command_name(name)
 
@@ -193,6 +194,7 @@ class Cordless:
                 dm_permission=dm_permission,
                 default_member_permissions=default_member_permissions,
                 nsfw=nsfw,
+                guild_ids=guild_ids,
             )
             return func
 
@@ -442,23 +444,23 @@ class Cordless:
 
         return decorator
 
-    def user_command(self, name, dm_permission=True):
+    def user_command(self, name, dm_permission=True, guild_ids=None):
         """Register a User context menu command (right-click → Apps → name)."""
 
         def decorator(func):
             self.router.register_command(
-                name, func, description=None, options=[], dm_permission=dm_permission, cmd_type=2
+                name, func, description=None, options=[], dm_permission=dm_permission, cmd_type=2, guild_ids=guild_ids
             )
             return func
 
         return decorator
 
-    def message_command(self, name, dm_permission=True):
+    def message_command(self, name, dm_permission=True, guild_ids=None):
         """Register a Message context menu command (right-click message → Apps → name)."""
 
         def decorator(func):
             self.router.register_command(
-                name, func, description=None, options=[], dm_permission=dm_permission, cmd_type=3
+                name, func, description=None, options=[], dm_permission=dm_permission, cmd_type=3, guild_ids=guild_ids
             )
             return func
 
@@ -564,6 +566,7 @@ class Cordless:
                     dm_permission=kwargs["dm_permission"],
                     default_member_permissions=kwargs.get("default_member_permissions"),
                     nsfw=kwargs.get("nsfw", False),
+                    guild_ids=kwargs.get("guild_ids"),
                 )
             elif ctype == "button":
                 if kwargs.get("defer"):
@@ -590,6 +593,7 @@ class Cordless:
                     options=[],
                     dm_permission=kwargs["dm_permission"],
                     cmd_type=2,
+                    guild_ids=kwargs.get("guild_ids"),
                 )
             elif ctype == "message_command":
                 self.router.register_command(
@@ -599,25 +603,48 @@ class Cordless:
                     options=[],
                     dm_permission=kwargs["dm_permission"],
                     cmd_type=3,
+                    guild_ids=kwargs.get("guild_ids"),
                 )
 
     def sync_commands(self, bot_token=None, client_id=None, client_secret=None, guild_id=None):
         """Push this bot's registered commands to Discord.
 
         Authenticate with a bot token, or with client_id + client_secret via
-        OAuth2 client credentials (no bot user required). Omit `guild_id`
-        (the default) to register commands globally, for every guild that
-        has authorized the app and every user in it. Run this from a deploy
-        step, not from inside the Lambda handler, since it makes blocking network
-        calls to Discord's API.
+        OAuth2 client credentials (no bot user required). Run this from a
+        deploy step, not from inside the Lambda handler, since it makes
+        blocking network calls to Discord's API.
+
+        Omit `guild_id` (the default) to sync each command to its own scope:
+        global by default, or whichever guild(s) `@bot.command(guild_ids=...)`
+        named, all in this one call. Pass `guild_id` to override every
+        command's own scope and push the full set to just that guild
+        instead, for instant updates during development.
         """
-        return sync_commands(
-            self.router.command_definitions(),
-            guild_id=guild_id,
+        if guild_id:
+            return sync_commands(
+                self.router.command_definitions(),
+                guild_id=guild_id,
+                bot_token=bot_token,
+                client_id=client_id,
+                client_secret=client_secret,
+            )
+
+        registered = sync_commands(
+            self.router.scoped_command_definitions(None),
+            guild_id=None,
             bot_token=bot_token,
             client_id=client_id,
             client_secret=client_secret,
         )
+        for gid in self.router.guild_ids():
+            registered += sync_commands(
+                self.router.scoped_command_definitions(gid),
+                guild_id=gid,
+                bot_token=bot_token,
+                client_id=client_id,
+                client_secret=client_secret,
+            )
+        return registered
 
 
 def _extract_body(event):

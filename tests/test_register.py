@@ -45,6 +45,83 @@ def test_context_menu_definitions_have_no_description_or_options():
     assert defs["Bookmark"] == {"name": "Bookmark", "type": 3}
 
 
+# --- guild-scoped commands ---
+
+
+def test_scoped_command_definitions_filters_by_guild():
+    bot = Cordless()
+
+    @bot.command("ping")
+    async def ping(ctx):
+        pass
+
+    @bot.command("mod-only", guild_ids=["guild-1"])
+    async def mod_only(ctx):
+        pass
+
+    assert [d["name"] for d in bot.router.scoped_command_definitions(None)] == ["ping"]
+    assert [d["name"] for d in bot.router.scoped_command_definitions("guild-1")] == ["mod-only"]
+
+
+def test_scoped_command_definitions_handles_multiple_guild_ids():
+    bot = Cordless()
+
+    @bot.command("announce", guild_ids=["guild-1", "guild-2"])
+    async def announce(ctx):
+        pass
+
+    assert [d["name"] for d in bot.router.scoped_command_definitions("guild-1")] == ["announce"]
+    assert [d["name"] for d in bot.router.scoped_command_definitions("guild-2")] == ["announce"]
+    assert bot.router.scoped_command_definitions("guild-3") == []
+    assert bot.router.scoped_command_definitions(None) == []
+
+
+def test_command_definitions_ignores_guild_scoping():
+    bot = Cordless()
+
+    @bot.command("ping")
+    async def ping(ctx):
+        pass
+
+    @bot.command("mod-only", guild_ids=["guild-1"])
+    async def mod_only(ctx):
+        pass
+
+    assert {d["name"] for d in bot.router.command_definitions()} == {"ping", "mod-only"}
+
+
+def test_guild_ids_lists_distinct_scopes_in_order():
+    bot = Cordless()
+
+    @bot.command("a", guild_ids=["guild-2"])
+    async def a(ctx):
+        pass
+
+    @bot.command("b", guild_ids=["guild-1"])
+    async def b(ctx):
+        pass
+
+    @bot.command("c", guild_ids=["guild-2"])
+    async def c(ctx):
+        pass
+
+    @bot.command("d")
+    async def d(ctx):
+        pass
+
+    assert bot.router.guild_ids() == ["guild-1", "guild-2"]
+
+
+def test_guild_ids_flattens_multi_guild_commands():
+    bot = Cordless()
+
+    @bot.command("announce", guild_ids=["guild-1", "guild-2"])
+    async def announce(ctx):
+        pass
+
+    assert bot.router.guild_ids() == ["guild-1", "guild-2"]
+
+
 # --- option() helper ---
 
 
@@ -176,6 +253,56 @@ def test_bot_sync_commands_delegates_to_register_module():
         client_secret=None,
     )
     assert result == [{"id": "1"}]
+
+
+def test_bot_sync_commands_pushes_each_command_to_its_own_scope():
+    bot = Cordless()
+
+    @bot.command("ping")
+    async def ping(ctx):
+        pass
+
+    @bot.command("mod-only", guild_ids=["guild-1"])
+    async def mod_only(ctx):
+        pass
+
+    with patch("cordless.app.sync_commands", side_effect=[[{"id": "global"}], [{"id": "guild"}]]) as mock_sync:
+        result = bot.sync_commands(bot_token="bot-token")
+
+    global_call, guild_call = mock_sync.call_args_list
+    assert global_call.args == (bot.router.scoped_command_definitions(None),)
+    assert global_call.kwargs["guild_id"] is None
+    assert guild_call.args == (bot.router.scoped_command_definitions("guild-1"),)
+    assert guild_call.kwargs["guild_id"] == "guild-1"
+    assert result == [{"id": "global"}, {"id": "guild"}]
+
+
+def test_bot_sync_commands_pushes_multi_guild_command_to_each_guild():
+    bot = Cordless()
+
+    @bot.command("announce", guild_ids=["guild-1", "guild-2"])
+    async def announce(ctx):
+        pass
+
+    with patch("cordless.app.sync_commands", side_effect=[[], [{"id": "g1"}], [{"id": "g2"}]]) as mock_sync:
+        result = bot.sync_commands(bot_token="bot-token")
+
+    call_guild_ids = [call.kwargs["guild_id"] for call in mock_sync.call_args_list]
+    assert call_guild_ids == [None, "guild-1", "guild-2"]
+    assert result == [{"id": "g1"}, {"id": "g2"}]
+
+
+def test_bot_sync_commands_skips_guild_calls_when_none_registered():
+    bot = Cordless()
+
+    @bot.command("ping")
+    async def ping(ctx):
+        pass
+
+    with patch("cordless.app.sync_commands", return_value=[{"id": "1"}]) as mock_sync:
+        bot.sync_commands(bot_token="bot-token")
+
+    mock_sync.assert_called_once()
 
 
 def _basic(client_id, client_secret):
