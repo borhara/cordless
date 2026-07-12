@@ -74,22 +74,15 @@ def _local_invoke_worker(reloader):
     return invoke
 
 
-def _load_env(source_dir):
-    """Export [deploy.env] from cordless.toml and any .env file, without clobbering the shell."""
+def _load_env(source_dir, environment=None):
+    """Export [deploy.env] from cordless.toml and any .env/.env.<environment> files, without clobbering the shell."""
+    from ._env import load_dotenv
     from .deploy import load_config
 
     for key, value in load_config(source_dir).get("env", {}).items():
         os.environ.setdefault(key, str(value))
 
-    env_path = os.path.join(source_dir, ".env")
-    if os.path.exists(env_path):
-        with open(env_path) as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                key, _, value = line.partition("=")
-                os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+    load_dotenv(source_dir, environment)
 
 
 def _make_handler(reloader):
@@ -159,10 +152,10 @@ def _start_tunnel(port):
     return proc, url
 
 
-def run_dev(target, port=8787, tunnel=True, source_dir="."):
+def run_dev(target, port=8787, tunnel=True, source_dir=".", environment=None):
     source_dir = os.path.abspath(source_dir)
     sys.path.insert(0, source_dir)
-    _load_env(source_dir)
+    _load_env(source_dir, environment)
 
     # deferred handlers run in-process, no worker Lambda locally
     os.environ.setdefault("CORDLESS_WORKER_FUNCTION", "cordless-dev-local")

@@ -199,3 +199,24 @@ def test_load_env_reads_toml_and_dotenv(tmp_path, monkeypatch):
 
     del os.environ["FROM_TOML"]
     del os.environ["FROM_DOTENV"]
+
+
+def test_load_env_environment_overlay_wins_over_dot_env(tmp_path, monkeypatch):
+    monkeypatch.delenv("KEY", raising=False)
+    monkeypatch.delenv("BASE_ONLY", raising=False)
+    (tmp_path / ".env").write_text("KEY=dev\nBASE_ONLY=base\n")
+    (tmp_path / ".env.prod").write_text("KEY=prod\n")
+
+    _load_env(str(tmp_path), "prod")
+
+    assert os.environ.pop("KEY") == "prod"
+    assert os.environ.pop("BASE_ONLY") == "base"
+
+
+def test_load_env_missing_environment_file_falls_back_to_dot_env(tmp_path, monkeypatch):
+    monkeypatch.delenv("KEY", raising=False)
+    (tmp_path / ".env").write_text("KEY=dev\n")
+
+    _load_env(str(tmp_path), "staging")
+
+    assert os.environ.pop("KEY") == "dev"
