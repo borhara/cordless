@@ -6,7 +6,7 @@ import os
 import re
 from typing import Literal, Union, get_args, get_origin
 
-from .context import _FLAG_UI_KIT, Context, _contains_uikit
+from .context import _FLAG_UI_KIT, Context, _attach_files, _contains_uikit
 from .errors import CordlessError
 from .register import sync_commands
 from .router import Router
@@ -200,21 +200,29 @@ class Cordless:
 
         return decorator
 
-    def _discord_request(self, method, path, payload=None):
+    def _discord_request(self, method, path, payload=None, files=None):
         import json
         import urllib.error
         import urllib.request
         from importlib.metadata import version as _ver
 
         token = os.environ["DISCORD_BOT_TOKEN"]
-        body = json.dumps(payload).encode() if payload is not None else None
+        if files:
+            from ._multipart import build_multipart_body
+
+            _attach_files(payload, files)
+            body, content_type = build_multipart_body(payload, files)
+        elif payload is not None:
+            body, content_type = json.dumps(payload).encode(), "application/json"
+        else:
+            body, content_type = None, None
         req = urllib.request.Request(
             f"https://discord.com/api/v10{path}",
             data=body,
             headers={
                 "Authorization": f"Bot {token}",
                 "User-Agent": f"DiscordBot (https://cordless.dev, {_ver('cordless')})",
-                **({"Content-Type": "application/json"} if body else {}),
+                **({"Content-Type": content_type} if content_type else {}),
             },
             method=method,
         )
@@ -224,7 +232,7 @@ class Cordless:
         except urllib.error.HTTPError as exc:
             raise RuntimeError(f"Discord API error {exc.code}: {exc.read().decode()}") from exc
 
-    async def send_message(self, channel_id, content=None, *, embeds=None, components=None):
+    async def send_message(self, channel_id, content=None, *, embeds=None, components=None, files=None):
         payload = {}
         if content is not None:
             payload["content"] = content
@@ -237,10 +245,10 @@ class Cordless:
         import asyncio
 
         await asyncio.get_event_loop().run_in_executor(
-            None, self._discord_request, "POST", f"/channels/{channel_id}/messages", payload
+            None, self._discord_request, "POST", f"/channels/{channel_id}/messages", payload, files
         )
 
-    async def edit_message(self, channel_id, message_id, content=None, *, embeds=None, components=None):
+    async def edit_message(self, channel_id, message_id, content=None, *, embeds=None, components=None, files=None):
         payload = {}
         if content is not None:
             payload["content"] = content
@@ -253,7 +261,7 @@ class Cordless:
         import asyncio
 
         await asyncio.get_event_loop().run_in_executor(
-            None, self._discord_request, "PATCH", f"/channels/{channel_id}/messages/{message_id}", payload
+            None, self._discord_request, "PATCH", f"/channels/{channel_id}/messages/{message_id}", payload, files
         )
 
     async def delete_message(self, channel_id, message_id):

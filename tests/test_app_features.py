@@ -472,16 +472,21 @@ def test_raw_dict_uikit_component_sets_flag():
 # --- send_message / edit_message ---
 
 
-def _captured_payload(bot, coro):
+def _captured_request(bot, coro):
     captured = {}
 
-    def fake_request(method, path, payload=None):
+    def fake_request(method, path, payload=None, files=None):
         captured["payload"] = payload
+        captured["files"] = files
         return b"{}"
 
     with patch.object(bot, "_discord_request", side_effect=fake_request):
         asyncio.run(coro)
-    return captured["payload"]
+    return captured
+
+
+def _captured_payload(bot, coro):
+    return _captured_request(bot, coro)["payload"]
 
 
 def test_send_message_sets_components_v2_flag():
@@ -504,6 +509,62 @@ def test_edit_message_sets_components_v2_flag():
         bot, bot.edit_message("123", "456", components=[{"type": 17, "components": []}])
     )
     assert payload["flags"] & 32768
+
+
+def test_send_message_passes_files_through_to_discord_request():
+    bot = Cordless()
+    files = [("board.png", b"\x89PNG...")]
+    captured = _captured_request(bot, bot.send_message("123", content="hi", files=files))
+    assert captured["files"] == files
+
+
+def test_send_message_without_files_passes_none():
+    bot = Cordless()
+    captured = _captured_request(bot, bot.send_message("123", content="hi"))
+    assert captured["files"] is None
+
+
+def test_edit_message_passes_files_through_to_discord_request():
+    bot = Cordless()
+    files = [("board.png", b"\x89PNG...")]
+    captured = _captured_request(bot, bot.edit_message("123", "456", files=files))
+    assert captured["files"] == files
+
+
+def test_discord_request_attaches_files_metadata_and_builds_multipart():
+    bot = Cordless()
+    captured = {}
+
+    def fake_urlopen(req):
+        captured["headers"] = dict(req.header_items())
+        captured["body"] = req.data
+
+        class _Resp:
+            def __enter__(self_):
+                return self_
+
+            def __exit__(self_, *a):
+                return False
+
+            def read(self_):
+                return b"{}"
+
+        return _Resp()
+
+    import os
+
+    with (
+        patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
+        patch("urllib.request.urlopen", side_effect=fake_urlopen),
+    ):
+        bot._discord_request(
+            "POST", "/channels/123/messages", {"content": "hi"}, [("board.png", b"\x89PNG...")]
+        )
+
+    assert captured["headers"]["Content-type"].startswith("multipart/form-data; boundary=")
+    assert b'name="files[0]"; filename="board.png"' in captured["body"]
+    assert b'name="payload_json"' in captured["body"]
+    assert b'"attachments": [{"id": 0, "filename": "board.png"}]' in captured["body"]
 
 
 # --- load_extension ---
