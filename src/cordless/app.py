@@ -175,7 +175,7 @@ class Cordless:
         default_member_permissions=None,
         nsfw=False,
         ephemeral=False,
-        guild_id=None,
+        guild_ids=None,
     ):
         _validate_command_name(name)
 
@@ -194,7 +194,7 @@ class Cordless:
                 dm_permission=dm_permission,
                 default_member_permissions=default_member_permissions,
                 nsfw=nsfw,
-                guild_id=guild_id,
+                guild_ids=guild_ids,
             )
             return func
 
@@ -444,23 +444,23 @@ class Cordless:
 
         return decorator
 
-    def user_command(self, name, dm_permission=True, guild_id=None):
+    def user_command(self, name, dm_permission=True, guild_ids=None):
         """Register a User context menu command (right-click → Apps → name)."""
 
         def decorator(func):
             self.router.register_command(
-                name, func, description=None, options=[], dm_permission=dm_permission, cmd_type=2, guild_id=guild_id
+                name, func, description=None, options=[], dm_permission=dm_permission, cmd_type=2, guild_ids=guild_ids
             )
             return func
 
         return decorator
 
-    def message_command(self, name, dm_permission=True, guild_id=None):
+    def message_command(self, name, dm_permission=True, guild_ids=None):
         """Register a Message context menu command (right-click message → Apps → name)."""
 
         def decorator(func):
             self.router.register_command(
-                name, func, description=None, options=[], dm_permission=dm_permission, cmd_type=3, guild_id=guild_id
+                name, func, description=None, options=[], dm_permission=dm_permission, cmd_type=3, guild_ids=guild_ids
             )
             return func
 
@@ -566,7 +566,7 @@ class Cordless:
                     dm_permission=kwargs["dm_permission"],
                     default_member_permissions=kwargs.get("default_member_permissions"),
                     nsfw=kwargs.get("nsfw", False),
-                    guild_id=kwargs.get("guild_id"),
+                    guild_ids=kwargs.get("guild_ids"),
                 )
             elif ctype == "button":
                 if kwargs.get("defer"):
@@ -593,7 +593,7 @@ class Cordless:
                     options=[],
                     dm_permission=kwargs["dm_permission"],
                     cmd_type=2,
-                    guild_id=kwargs.get("guild_id"),
+                    guild_ids=kwargs.get("guild_ids"),
                 )
             elif ctype == "message_command":
                 self.router.register_command(
@@ -603,7 +603,7 @@ class Cordless:
                     options=[],
                     dm_permission=kwargs["dm_permission"],
                     cmd_type=3,
-                    guild_id=kwargs.get("guild_id"),
+                    guild_ids=kwargs.get("guild_ids"),
                 )
 
     def sync_commands(self, bot_token=None, client_id=None, client_secret=None, guild_id=None):
@@ -614,8 +614,8 @@ class Cordless:
         deploy step, not from inside the Lambda handler, since it makes
         blocking network calls to Discord's API.
 
-        Omit `guild_id` (the default) to sync each command to its own scope
-        — global by default, or whichever guild `@bot.command(guild_id=...)`
+        Omit `guild_id` (the default) to sync each command to its own scope:
+        global by default, or whichever guild(s) `@bot.command(guild_ids=...)`
         named, all in this one call. Pass `guild_id` to override every
         command's own scope and push the full set to just that guild
         instead, for instant updates during development.
