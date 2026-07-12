@@ -1,7 +1,9 @@
 """0.11+ surface: bot.handler(), typed options, name validation, prefix args, attachments."""
 
+import asyncio
 import json
 from typing import Literal
+from unittest.mock import patch
 
 import pytest
 
@@ -465,6 +467,43 @@ def test_raw_dict_uikit_component_sets_flag():
     result = _handle(bot, {"type": 2, "data": {"name": "test"}, "id": "1", "token": "t"})
     flags = _body(result)["data"].get("flags", 0)
     assert flags & 32768
+
+
+# --- send_message / edit_message ---
+
+
+def _captured_payload(bot, coro):
+    captured = {}
+
+    def fake_request(method, path, payload=None):
+        captured["payload"] = payload
+        return b"{}"
+
+    with patch.object(bot, "_discord_request", side_effect=fake_request):
+        asyncio.run(coro)
+    return captured["payload"]
+
+
+def test_send_message_sets_components_v2_flag():
+    bot = Cordless()
+    payload = _captured_payload(
+        bot, bot.send_message("123", components=[{"type": 17, "components": []}])
+    )
+    assert payload["flags"] & 32768
+
+
+def test_send_message_omits_flags_without_uikit_components():
+    bot = Cordless()
+    payload = _captured_payload(bot, bot.send_message("123", content="hi"))
+    assert "flags" not in payload
+
+
+def test_edit_message_sets_components_v2_flag():
+    bot = Cordless()
+    payload = _captured_payload(
+        bot, bot.edit_message("123", "456", components=[{"type": 17, "components": []}])
+    )
+    assert payload["flags"] & 32768
 
 
 # --- load_extension ---

@@ -6,7 +6,7 @@ import os
 import re
 from typing import Literal, Union, get_args, get_origin
 
-from .context import Context
+from .context import _FLAG_UI_KIT, Context, _contains_uikit
 from .errors import CordlessError
 from .register import sync_commands
 from .router import Router
@@ -232,6 +232,8 @@ class Cordless:
             payload["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
         if components is not None:
             payload["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
+        if _contains_uikit(components):
+            payload["flags"] = _FLAG_UI_KIT
         import asyncio
 
         await asyncio.get_event_loop().run_in_executor(
@@ -246,6 +248,8 @@ class Cordless:
             payload["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
         if components is not None:
             payload["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
+        if _contains_uikit(components):
+            payload["flags"] = _FLAG_UI_KIT
         import asyncio
 
         await asyncio.get_event_loop().run_in_executor(
