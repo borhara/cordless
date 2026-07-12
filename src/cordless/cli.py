@@ -171,9 +171,12 @@ def _deploy(args):
         print("  ✓ setup")
 
     env = {}
+    env_flag_environment = None
     for pair in args.env or []:
         if "=" not in pair:
-            raise SystemExit(f"--env values must be KEY=VALUE, got: {pair!r}")
+            # a bare --env value (no "="), e.g. `--env prod`, picks the environment overlay instead
+            env_flag_environment = pair
+            continue
         k, _, v = pair.partition("=")
         env[k] = v
 
@@ -181,7 +184,7 @@ def _deploy(args):
     runtime = args.runtime or cfg.get("runtime", "python3.12")
     defer_worker = args.defer_worker or cfg.get("defer_worker")
 
-    environment = resolve_environment(args.environment)
+    environment = resolve_environment(args.environment or env_flag_environment)
     merged_env = {**read_dotenv(source_dir, environment), **cfg.get("env", {}), **env}
     if not merged_env.get("DISCORD_PUBLIC_KEY"):
         print("  warning: DISCORD_PUBLIC_KEY is empty or missing - Discord cannot validate the endpoint")
@@ -436,16 +439,21 @@ def _logs(args):
 
 def _environment_from_argv(argv):
     """Scan for --environment/-E/--env ahead of argparse, so it can seed .env loading before subcommand
-    args exist. --env is excluded on `deploy`, where it already means a KEY=VALUE Lambda env var."""
-    flags = ("--environment", "-E")
-    if (argv[0] if argv else None) != "deploy":
-        flags += ("--env",)
+    args exist. On `deploy`, --env doubles as a literal KEY=VALUE Lambda env var, so a value containing
+    "=" is left for that instead of being read as an environment name."""
+    flags = ("--environment", "-E", "--env")
     for i, arg in enumerate(argv):
         if arg in flags and i + 1 < len(argv):
-            return argv[i + 1]
+            value = argv[i + 1]
+            if arg == "--env" and "=" in value:
+                continue
+            return value
         for flag in flags:
             if arg.startswith(flag + "="):
-                return arg.partition("=")[2]
+                value = arg.partition("=")[2]
+                if flag == "--env" and "=" in value:
+                    continue
+                return value
     return None
 
 
@@ -525,7 +533,12 @@ def main(argv=None):
     )
     deploy_cmd.add_argument("--region", "-r", default=None, metavar="REGION", help="AWS region")
     deploy_cmd.add_argument("--environment", "-E", default=None, metavar="NAME", help=_ENV_HELP)
-    deploy_cmd.add_argument("--env", metavar="KEY=VALUE", action="append", help="Environment variable (repeatable)")
+    deploy_cmd.add_argument(
+        "--env",
+        metavar="KEY=VALUE|NAME",
+        action="append",
+        help="Environment variable (repeatable), or bare NAME to pick .env.<NAME> like --environment",
+    )
     deploy_cmd.add_argument(
         "--timeout", metavar="SECONDS", default=None, help="Main Lambda timeout in seconds (default: 10)"
     )

@@ -284,8 +284,7 @@ def test_deploy_missing_env_file_falls_back_to_dot_env(tmp_path, monkeypatch):
     assert mock_deploy.call_args.kwargs["env"]["DISCORD_PUBLIC_KEY"] == "dev-key"
 
 
-def test_deploy_env_flag_still_means_key_value_not_environment_name(tmp_path, monkeypatch):
-    """--env is reserved for KEY=VALUE on deploy; --environment/-E is the only way to pick an env file."""
+def test_deploy_env_flag_key_value_still_works(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".env").write_text("DISCORD_PUBLIC_KEY=dev-key\n")
     with patch("cordless.deploy.deploy") as mock_deploy:
@@ -293,12 +292,31 @@ def test_deploy_env_flag_still_means_key_value_not_environment_name(tmp_path, mo
     assert mock_deploy.call_args.kwargs["env"]["DISCORD_PUBLIC_KEY"] == "cli-key"
 
 
-def test_environment_from_argv_ignores_env_flag_for_deploy():
+def test_deploy_env_flag_bare_value_selects_environment(tmp_path, monkeypatch):
+    """A bare --env value (no "=") picks the .env.<name> overlay, like --environment."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text("DISCORD_PUBLIC_KEY=dev-key\n")
+    (tmp_path / ".env.dev").write_text("DISCORD_PUBLIC_KEY=dev-overlay-key\n")
+    with patch("cordless.deploy.deploy") as mock_deploy:
+        main(["deploy", "--function", "fn", "--env", "dev"])
+    assert mock_deploy.call_args.kwargs["env"]["DISCORD_PUBLIC_KEY"] == "dev-overlay-key"
+
+
+def test_deploy_env_flag_mixes_bare_name_and_key_value(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text("DISCORD_PUBLIC_KEY=dev-key\n")
+    (tmp_path / ".env.prod").write_text("DISCORD_PUBLIC_KEY=prod-key\n")
+    with patch("cordless.deploy.deploy") as mock_deploy:
+        main(["deploy", "--function", "fn", "--env", "prod", "--env", "EXTRA=1"])
+    env = mock_deploy.call_args.kwargs["env"]
+    assert env["DISCORD_PUBLIC_KEY"] == "prod-key"
+    assert env["EXTRA"] == "1"
+
+
+def test_environment_from_argv_env_flag_bare_value_is_a_name():
     assert _environment_from_argv(["deploy", "--env", "FOO=bar", "--function", "x"]) is None
+    assert _environment_from_argv(["deploy", "--env", "dev"]) == "dev"
     assert _environment_from_argv(["deploy", "--environment", "prod"]) == "prod"
-
-
-def test_environment_from_argv_treats_env_flag_as_name_elsewhere():
     assert _environment_from_argv(["register", "--env", "prod"]) == "prod"
     assert _environment_from_argv(["dev", "--env", "prod"]) == "prod"
     assert _environment_from_argv(["cron", "name", "--env", "staging"]) == "staging"
