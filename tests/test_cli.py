@@ -228,6 +228,35 @@ def test_deploy_falls_back_to_config(tmp_path, monkeypatch):
     assert kwargs["region"] == "eu-west-1"
 
 
+def test_deploy_env_flag_overlays_dot_env(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text("DISCORD_PUBLIC_KEY=dev-key\nDISCORD_BOT_TOKEN=dev\n")
+    (tmp_path / ".env.prod").write_text("DISCORD_PUBLIC_KEY=prod-key\n")
+    with patch("cordless.deploy.deploy") as mock_deploy:
+        main(["deploy", "--function", "fn", "--environment", "prod"])
+    env = mock_deploy.call_args.kwargs["env"]
+    assert env["DISCORD_PUBLIC_KEY"] == "prod-key"
+    assert env["DISCORD_BOT_TOKEN"] == "dev"
+
+
+def test_deploy_env_var_overlays_dot_env(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ENV", "prod")
+    (tmp_path / ".env").write_text("DISCORD_PUBLIC_KEY=dev-key\n")
+    (tmp_path / ".env.prod").write_text("DISCORD_PUBLIC_KEY=prod-key\n")
+    with patch("cordless.deploy.deploy") as mock_deploy:
+        main(["deploy", "--function", "fn"])
+    assert mock_deploy.call_args.kwargs["env"]["DISCORD_PUBLIC_KEY"] == "prod-key"
+
+
+def test_deploy_missing_env_file_falls_back_to_dot_env(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text("DISCORD_PUBLIC_KEY=dev-key\n")
+    with patch("cordless.deploy.deploy") as mock_deploy:
+        main(["deploy", "--function", "fn", "--environment", "staging"])
+    assert mock_deploy.call_args.kwargs["env"]["DISCORD_PUBLIC_KEY"] == "dev-key"
+
+
 def test_deploy_setup_resolves_against_source_not_cwd(tmp_path, monkeypatch):
     """A same-named module shadowing in cwd must not win over --source's copy."""
     cwd_dir = tmp_path / "cwd"

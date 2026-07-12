@@ -3,6 +3,10 @@ import importlib
 import os
 import sys
 
+from ._env import load_dotenv, read_dotenv, resolve_environment
+
+_ENV_HELP = "Environment name - loads .env.<NAME> over .env (or set $ENV)"
+
 
 def _load_bot(target, path=None):
     module_name, _, attr = target.partition(":")
@@ -177,7 +181,8 @@ def _deploy(args):
     runtime = args.runtime or cfg.get("runtime", "python3.12")
     defer_worker = args.defer_worker or cfg.get("defer_worker")
 
-    merged_env = {**_read_dot_env(source_dir), **cfg.get("env", {}), **env}
+    environment = resolve_environment(args.environment)
+    merged_env = {**read_dotenv(source_dir, environment), **cfg.get("env", {}), **env}
     if not merged_env.get("DISCORD_PUBLIC_KEY"):
         print("  warning: DISCORD_PUBLIC_KEY is empty or missing - Discord cannot validate the endpoint")
 
@@ -332,14 +337,20 @@ def _dev(args):
             "Bot location required: pass it as an argument (e.g. `cordless dev lambda_function:bot`) "
             "or add `bot` to [deploy] in cordless.toml."
         )
-    run_dev(target, port=args.port, tunnel=not args.no_tunnel, source_dir=source_dir)
+    run_dev(
+        target,
+        port=args.port,
+        tunnel=not args.no_tunnel,
+        source_dir=source_dir,
+        environment=resolve_environment(args.environment),
+    )
 
 
 def _cron(args):
     from .deploy import load_config
 
     source_dir = os.path.abspath(args.source)
-    _load_env(source_dir)
+    load_dotenv(source_dir, resolve_environment(args.environment))
     cfg = load_config(source_dir)
     target = _resolve_bot(args.bot, source_dir, cfg)
     if not target:
@@ -423,29 +434,19 @@ def _logs(args):
             print()
 
 
-def _read_dot_env(source_dir):
-    """Return a dict of KEY=VALUE pairs from .env (quotes stripped, comments ignored)."""
-    result = {}
-    env_path = os.path.join(source_dir, ".env")
-    if os.path.exists(env_path):
-        with open(env_path) as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                key, _, value = line.partition("=")
-                result[key.strip()] = value.strip().strip("\"'")
-    return result
-
-
-def _load_env(source_dir):
-    """Load .env into the process environment (no clobber)."""
-    for key, value in _read_dot_env(source_dir).items():
-        os.environ.setdefault(key, value)
+def _environment_from_argv(argv):
+    """Scan for --environment/-E ahead of argparse, so it can seed .env loading before subcommand args exist."""
+    for i, arg in enumerate(argv):
+        if arg in ("--environment", "-E") and i + 1 < len(argv):
+            return argv[i + 1]
+        if arg.startswith("--environment="):
+            return arg.partition("=")[2]
+    return None
 
 
 def main(argv=None):
-    _load_env(os.getcwd())
+    argv = sys.argv[1:] if argv is None else argv
+    load_dotenv(os.getcwd(), resolve_environment(_environment_from_argv(argv)))
     parser = argparse.ArgumentParser(prog="cordless", description="cordless command-line tools", allow_abbrev=False)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -459,6 +460,7 @@ def main(argv=None):
         default=None,
         help="Location of your Cordless instance, as MODULE:ATTRIBUTE (e.g. app:bot); auto-detected if omitted",
     )
+    register.add_argument("--environment", "-E", default=None, metavar="NAME", help=_ENV_HELP)
     register.add_argument("--token", default=None, help="Bot token (defaults to $DISCORD_BOT_TOKEN)")
     register.add_argument(
         "--client-id",
@@ -517,6 +519,7 @@ def main(argv=None):
         "--layer-name", default=None, metavar="NAME", help="Cordless layer name (default: cordless)"
     )
     deploy_cmd.add_argument("--region", "-r", default=None, metavar="REGION", help="AWS region")
+    deploy_cmd.add_argument("--environment", "-E", default=None, metavar="NAME", help=_ENV_HELP)
     deploy_cmd.add_argument("--env", metavar="KEY=VALUE", action="append", help="Environment variable (repeatable)")
     deploy_cmd.add_argument(
         "--timeout", metavar="SECONDS", default=None, help="Main Lambda timeout in seconds (default: 10)"
@@ -616,6 +619,7 @@ def main(argv=None):
         "--source", "-s", default=".", metavar="DIR", help="Project directory (default: current directory)"
     )
     dev_cmd.add_argument("--no-tunnel", action="store_true", help="Serve on localhost only, skip cloudflared")
+    dev_cmd.add_argument("--environment", "-E", default=None, metavar="NAME", help=_ENV_HELP)
     dev_cmd.set_defaults(func=_dev)
 
     # logs
@@ -623,6 +627,7 @@ def main(argv=None):
     cron_cmd.add_argument("name", metavar="NAME", help="Cron handler name (e.g. daily_rewards)")
     cron_cmd.add_argument("bot", nargs="?", metavar="BOT", help="MODULE:ATTRIBUTE (auto-detected if omitted)")
     cron_cmd.add_argument("--source", default=".", metavar="DIR", help="Source directory (default: .)")
+    cron_cmd.add_argument("--environment", "-E", default=None, metavar="NAME", help=_ENV_HELP)
     cron_cmd.set_defaults(func=_cron)
 
     logs_cmd = subparsers.add_parser(
