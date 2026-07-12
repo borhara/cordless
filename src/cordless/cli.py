@@ -435,12 +435,17 @@ def _logs(args):
 
 
 def _environment_from_argv(argv):
-    """Scan for --environment/-E ahead of argparse, so it can seed .env loading before subcommand args exist."""
+    """Scan for --environment/-E/--env ahead of argparse, so it can seed .env loading before subcommand
+    args exist. --env is excluded on `deploy`, where it already means a KEY=VALUE Lambda env var."""
+    flags = ("--environment", "-E")
+    if (argv[0] if argv else None) != "deploy":
+        flags += ("--env",)
     for i, arg in enumerate(argv):
-        if arg in ("--environment", "-E") and i + 1 < len(argv):
+        if arg in flags and i + 1 < len(argv):
             return argv[i + 1]
-        if arg.startswith("--environment="):
-            return arg.partition("=")[2]
+        for flag in flags:
+            if arg.startswith(flag + "="):
+                return arg.partition("=")[2]
     return None
 
 
@@ -460,7 +465,7 @@ def main(argv=None):
         default=None,
         help="Location of your Cordless instance, as MODULE:ATTRIBUTE (e.g. app:bot); auto-detected if omitted",
     )
-    register.add_argument("--environment", "-E", default=None, metavar="NAME", help=_ENV_HELP)
+    register.add_argument("--environment", "-E", "--env", default=None, metavar="NAME", help=_ENV_HELP)
     register.add_argument("--token", default=None, help="Bot token (defaults to $DISCORD_BOT_TOKEN)")
     register.add_argument(
         "--client-id",
@@ -619,7 +624,7 @@ def main(argv=None):
         "--source", "-s", default=".", metavar="DIR", help="Project directory (default: current directory)"
     )
     dev_cmd.add_argument("--no-tunnel", action="store_true", help="Serve on localhost only, skip cloudflared")
-    dev_cmd.add_argument("--environment", "-E", default=None, metavar="NAME", help=_ENV_HELP)
+    dev_cmd.add_argument("--environment", "-E", "--env", default=None, metavar="NAME", help=_ENV_HELP)
     dev_cmd.set_defaults(func=_dev)
 
     # logs
@@ -627,7 +632,7 @@ def main(argv=None):
     cron_cmd.add_argument("name", metavar="NAME", help="Cron handler name (e.g. daily_rewards)")
     cron_cmd.add_argument("bot", nargs="?", metavar="BOT", help="MODULE:ATTRIBUTE (auto-detected if omitted)")
     cron_cmd.add_argument("--source", default=".", metavar="DIR", help="Source directory (default: .)")
-    cron_cmd.add_argument("--environment", "-E", default=None, metavar="NAME", help=_ENV_HELP)
+    cron_cmd.add_argument("--environment", "-E", "--env", default=None, metavar="NAME", help=_ENV_HELP)
     cron_cmd.set_defaults(func=_cron)
 
     logs_cmd = subparsers.add_parser(

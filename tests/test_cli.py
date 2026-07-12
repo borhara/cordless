@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from conftest import FakeDiscordResponse
 
-from cordless.cli import _pick, main
+from cordless.cli import _environment_from_argv, _pick, main
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -79,6 +79,19 @@ def test_register_rejects_missing_attribute():
         main(["register", "sample_app:missing", "--token", "tok"])
 
 
+def test_register_env_alias_loads_dot_env_overlay(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("DISCORD_BOT_TOKEN", raising=False)
+    (tmp_path / ".env").write_text("DISCORD_BOT_TOKEN=dev-token\n")
+    (tmp_path / ".env.prod").write_text("DISCORD_BOT_TOKEN=prod-token\n")
+    responses = [FakeDiscordResponse({"id": "app-id"}), FakeDiscordResponse([])]
+
+    with patch("cordless.register.urllib.request.urlopen", side_effect=responses) as urlopen:
+        main(["register", "sample_app:bot", "--env", "prod"])
+
+    assert urlopen.call_args_list[0].args[0].get_header("Authorization") == "Bot prod-token"
+
+
 def test_register_prefers_client_credentials_over_token(capsys, monkeypatch):
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "should-not-be-used")
     responses = [
@@ -111,6 +124,20 @@ def test_cron_runs_handler(monkeypatch):
 def test_cron_rejects_unknown_name():
     with pytest.raises(SystemExit, match="unknown_cron"):
         main(["cron", "unknown_cron", "sample_app:bot", "--source", FIXTURES_DIR])
+
+
+def test_cron_env_alias_loads_environment_overlay(tmp_path, monkeypatch):
+    import sample_app
+
+    sample_app.cron_calls.clear()
+    monkeypatch.delenv("MARKER", raising=False)
+    (tmp_path / ".env").write_text("MARKER=dev\n")
+    (tmp_path / ".env.staging").write_text("MARKER=staging\n")
+
+    main(["cron", "hourly", "sample_app:bot", "--source", str(tmp_path), "--env", "staging"])
+
+    assert sample_app.cron_calls == ["hourly"]
+    assert os.environ.pop("MARKER") == "staging"
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +282,26 @@ def test_deploy_missing_env_file_falls_back_to_dot_env(tmp_path, monkeypatch):
     with patch("cordless.deploy.deploy") as mock_deploy:
         main(["deploy", "--function", "fn", "--environment", "staging"])
     assert mock_deploy.call_args.kwargs["env"]["DISCORD_PUBLIC_KEY"] == "dev-key"
+
+
+def test_deploy_env_flag_still_means_key_value_not_environment_name(tmp_path, monkeypatch):
+    """--env is reserved for KEY=VALUE on deploy; --environment/-E is the only way to pick an env file."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text("DISCORD_PUBLIC_KEY=dev-key\n")
+    with patch("cordless.deploy.deploy") as mock_deploy:
+        main(["deploy", "--function", "fn", "--env", "DISCORD_PUBLIC_KEY=cli-key"])
+    assert mock_deploy.call_args.kwargs["env"]["DISCORD_PUBLIC_KEY"] == "cli-key"
+
+
+def test_environment_from_argv_ignores_env_flag_for_deploy():
+    assert _environment_from_argv(["deploy", "--env", "FOO=bar", "--function", "x"]) is None
+    assert _environment_from_argv(["deploy", "--environment", "prod"]) == "prod"
+
+
+def test_environment_from_argv_treats_env_flag_as_name_elsewhere():
+    assert _environment_from_argv(["register", "--env", "prod"]) == "prod"
+    assert _environment_from_argv(["dev", "--env", "prod"]) == "prod"
+    assert _environment_from_argv(["cron", "name", "--env", "staging"]) == "staging"
 
 
 def test_deploy_setup_resolves_against_source_not_cwd(tmp_path, monkeypatch):
