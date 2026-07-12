@@ -33,6 +33,8 @@ def test_zip_excludes_junk(tmp_path):
         [
             "lambda_function.py",
             ".env",
+            ".env.prod",
+            ".env.example",
             "cordless.toml",
             ".DS_Store",
             "app.pyc",

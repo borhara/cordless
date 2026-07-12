@@ -29,6 +29,10 @@ def _exclude_dir(d):
     return d in _EXCLUDE_DIRS or d.endswith(".egg-info")
 
 
+def _exclude_file(f):
+    return f in _EXCLUDE_FILES or f.endswith(_EXCLUDE_SUFFIXES) or f.startswith(".env.")
+
+
 _LAMBDA_TRUST_POLICY = json.dumps(
     {
         "Version": "2012-10-17",
@@ -86,7 +90,7 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
         for root, dirs, files in os.walk(source_dir):
             dirs[:] = [d for d in dirs if not _exclude_dir(d)]
             for fname in files:
-                if fname in _EXCLUDE_FILES or fname.endswith(_EXCLUDE_SUFFIXES):
+                if _exclude_file(fname):
                     continue
                 abs_path = os.path.join(root, fname)
                 zf.write(abs_path, os.path.relpath(abs_path, source_dir))
