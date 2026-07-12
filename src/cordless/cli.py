@@ -127,7 +127,12 @@ def _register(args):
 
     bot = _load_bot(target, path=source_dir)
     commands, names = _run_register(bot, token, client_id, client_secret, guild_id=args.guild_id)
-    scope = f"guild {args.guild_id}" if args.guild_id else "globally"
+    if args.guild_id:
+        scope = f"guild {args.guild_id}"
+    elif bot.router.guild_ids():
+        scope = f"globally + {len(bot.router.guild_ids())} guild-scoped"
+    else:
+        scope = "globally"
     print(f"Registered {len(commands)} command(s) {scope}: {names}")
 
 
