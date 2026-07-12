@@ -1,7 +1,9 @@
 """0.11+ surface: bot.handler(), typed options, name validation, prefix args, attachments."""
 
+import asyncio
 import json
 from typing import Literal
+from unittest.mock import patch
 
 import pytest
 
@@ -467,6 +469,98 @@ def test_raw_dict_uikit_component_sets_flag():
     assert flags & 32768
 
 
+# --- send_message / edit_message ---
+
+
+def _captured_request(bot, coro):
+    captured = {}
+
+    def fake_request(method, path, payload=None, files=None):
+        captured["payload"] = payload
+        captured["files"] = files
+        return b"{}"
+
+    with patch.object(bot, "_discord_request", side_effect=fake_request):
+        asyncio.run(coro)
+    return captured
+
+
+def _captured_payload(bot, coro):
+    return _captured_request(bot, coro)["payload"]
+
+
+def test_send_message_sets_components_v2_flag():
+    bot = Cordless()
+    payload = _captured_payload(bot, bot.send_message("123", components=[{"type": 17, "components": []}]))
+    assert payload["flags"] & 32768
+
+
+def test_send_message_omits_flags_without_uikit_components():
+    bot = Cordless()
+    payload = _captured_payload(bot, bot.send_message("123", content="hi"))
+    assert "flags" not in payload
+
+
+def test_edit_message_sets_components_v2_flag():
+    bot = Cordless()
+    payload = _captured_payload(bot, bot.edit_message("123", "456", components=[{"type": 17, "components": []}]))
+    assert payload["flags"] & 32768
+
+
+def test_send_message_passes_files_through_to_discord_request():
+    bot = Cordless()
+    files = [("board.png", b"\x89PNG...")]
+    captured = _captured_request(bot, bot.send_message("123", content="hi", files=files))
+    assert captured["files"] == files
+
+
+def test_send_message_without_files_passes_none():
+    bot = Cordless()
+    captured = _captured_request(bot, bot.send_message("123", content="hi"))
+    assert captured["files"] is None
+
+
+def test_edit_message_passes_files_through_to_discord_request():
+    bot = Cordless()
+    files = [("board.png", b"\x89PNG...")]
+    captured = _captured_request(bot, bot.edit_message("123", "456", files=files))
+    assert captured["files"] == files
+
+
+def test_discord_request_attaches_files_metadata_and_builds_multipart():
+    bot = Cordless()
+    captured = {}
+
+    def fake_urlopen(req):
+        captured["headers"] = dict(req.header_items())
+        captured["body"] = req.data
+
+        class _Resp:
+            def __enter__(self_):
+                return self_
+
+            def __exit__(self_, *a):
+                return False
+
+            def read(self_):
+                return b"{}"
+
+        return _Resp()
+
+    import os
+
+    with (
+        patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
+        patch("urllib.request.urlopen", side_effect=fake_urlopen),
+    ):
+        bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}, [("board.png", b"\x89PNG...")])
+
+    assert captured["headers"]["Content-type"].startswith("multipart/form-data; boundary=")
+    assert b'name="files[0]"; filename="board.png"' in captured["body"]
+    assert b'name="payload_json"' in captured["body"]
+    assert b'"attachments": [{"id": 0, "filename": "board.png"}]' in captured["body"]
+
+
 # --- load_extension ---
 
 
@@ -482,3 +576,36 @@ def test_load_extension_without_setup_raises():
     finally:
         sys.path.pop(0)
         sys.modules.pop("ext_without_setup", None)
+
+
+def test_load_extension_calls_sync_setup_hook():
+    import os
+    import sys
+
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "fixtures"))
+    try:
+        import ext_with_setup_hook
+
+        bot = Cordless()
+        bot.load_extension("ext_with_setup_hook")
+        assert ext_with_setup_hook.calls == [bot]
+    finally:
+        sys.path.pop(0)
+        sys.modules.pop("ext_with_setup_hook", None)
+
+
+def test_load_extension_does_not_mistake_setup_named_handler_for_hook():
+    """Regression: a command handler coroutine literally named `setup` must not
+    be invoked as the manual hook - the Cog it belongs to must still register."""
+    import os
+    import sys
+
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "fixtures"))
+    try:
+        bot = Cordless()
+        bot.load_extension("ext_with_setup_named_handler")
+        names = [d["name"] for d in bot.router.command_definitions()]
+        assert "setup" in names
+    finally:
+        sys.path.pop(0)
+        sys.modules.pop("ext_with_setup_named_handler", None)
