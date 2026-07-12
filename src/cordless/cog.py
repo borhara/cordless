@@ -34,6 +34,7 @@ class Cog:
         default_member_permissions=None,
         nsfw=False,
         ephemeral=False,
+        guild_id=None,
     ):
         def decorator(func):
             self._handlers.append(
@@ -49,6 +50,7 @@ class Cog:
                         "default_member_permissions": default_member_permissions,
                         "nsfw": nsfw,
                         "ephemeral": ephemeral,
+                        "guild_id": guild_id,
                     },
                 )
             )
@@ -93,7 +95,7 @@ class Cog:
 
         return decorator
 
-    def user_command(self, name, dm_permission=True):
+    def user_command(self, name, dm_permission=True, guild_id=None):
         def decorator(func):
             self._handlers.append(
                 (
@@ -102,6 +104,7 @@ class Cog:
                     {
                         "name": name,
                         "dm_permission": dm_permission,
+                        "guild_id": guild_id,
                     },
                 )
             )
@@ -109,7 +112,7 @@ class Cog:
 
         return decorator
 
-    def message_command(self, name, dm_permission=True):
+    def message_command(self, name, dm_permission=True, guild_id=None):
         def decorator(func):
             self._handlers.append(
                 (
@@ -118,6 +121,7 @@ class Cog:
                     {
                         "name": name,
                         "dm_permission": dm_permission,
+                        "guild_id": guild_id,
                     },
                 )
             )

@@ -566,6 +566,7 @@ class Cordless:
                     dm_permission=kwargs["dm_permission"],
                     default_member_permissions=kwargs.get("default_member_permissions"),
                     nsfw=kwargs.get("nsfw", False),
+                    guild_id=kwargs.get("guild_id"),
                 )
             elif ctype == "button":
                 if kwargs.get("defer"):
@@ -592,6 +593,7 @@ class Cordless:
                     options=[],
                     dm_permission=kwargs["dm_permission"],
                     cmd_type=2,
+                    guild_id=kwargs.get("guild_id"),
                 )
             elif ctype == "message_command":
                 self.router.register_command(
@@ -601,6 +603,7 @@ class Cordless:
                     options=[],
                     dm_permission=kwargs["dm_permission"],
                     cmd_type=3,
+                    guild_id=kwargs.get("guild_id"),
                 )
 
     def sync_commands(self, bot_token=None, client_id=None, client_secret=None, guild_id=None):
