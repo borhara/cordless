@@ -266,9 +266,7 @@ def test_bot_sync_commands_pushes_each_command_to_its_own_scope():
     async def mod_only(ctx):
         pass
 
-    with patch(
-        "cordless.app.sync_commands", side_effect=[[{"id": "global"}], [{"id": "guild"}]]
-    ) as mock_sync:
+    with patch("cordless.app.sync_commands", side_effect=[[{"id": "global"}], [{"id": "guild"}]]) as mock_sync:
         result = bot.sync_commands(bot_token="bot-token")
 
     global_call, guild_call = mock_sync.call_args_list
@@ -286,9 +284,7 @@ def test_bot_sync_commands_pushes_multi_guild_command_to_each_guild():
     async def announce(ctx):
         pass
 
-    with patch(
-        "cordless.app.sync_commands", side_effect=[[], [{"id": "g1"}], [{"id": "g2"}]]
-    ) as mock_sync:
+    with patch("cordless.app.sync_commands", side_effect=[[], [{"id": "g1"}], [{"id": "g2"}]]) as mock_sync:
         result = bot.sync_commands(bot_token="bot-token")
 
     call_guild_ids = [call.kwargs["guild_id"] for call in mock_sync.call_args_list]
