@@ -304,6 +304,21 @@ def test_ctx_only_handlers_unchanged():
     assert _body(result)["data"]["content"] == "pong"
 
 
+def test_cog_command_guild_id_threads_through_to_router():
+    admin = Cog()
+
+    @admin.command("purge", guild_id="guild-1")
+    async def purge(ctx):
+        await ctx.send("done")
+
+    bot = Cordless()
+    bot.add_cog(admin)
+
+    assert bot.router.guild_ids() == ["guild-1"]
+    assert [d["name"] for d in bot.router.scoped_command_definitions("guild-1")] == ["purge"]
+    assert bot.router.scoped_command_definitions(None) == []
+
+
 def test_cog_command_options_from_signature():
     shop = Cog()
 
