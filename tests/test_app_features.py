@@ -582,3 +582,36 @@ def test_load_extension_without_setup_raises():
     finally:
         sys.path.pop(0)
         sys.modules.pop("ext_without_setup", None)
+
+
+def test_load_extension_calls_sync_setup_hook():
+    import os
+    import sys
+
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "fixtures"))
+    try:
+        import ext_with_setup_hook
+
+        bot = Cordless()
+        bot.load_extension("ext_with_setup_hook")
+        assert ext_with_setup_hook.calls == [bot]
+    finally:
+        sys.path.pop(0)
+        sys.modules.pop("ext_with_setup_hook", None)
+
+
+def test_load_extension_does_not_mistake_setup_named_handler_for_hook():
+    """Regression: a command handler coroutine literally named `setup` must not
+    be invoked as the manual hook - the Cog it belongs to must still register."""
+    import os
+    import sys
+
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "fixtures"))
+    try:
+        bot = Cordless()
+        bot.load_extension("ext_with_setup_named_handler")
+        names = [d["name"] for d in bot.router.command_definitions()]
+        assert "setup" in names
+    finally:
+        sys.path.pop(0)
+        sys.modules.pop("ext_with_setup_named_handler", None)

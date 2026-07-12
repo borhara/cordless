@@ -527,14 +527,20 @@ class Cordless:
     def load_extension(self, name: str) -> None:
         """Load a cog module by dotted path (e.g. 'cogs.game').
         Discovers all Cog instances defined in the module automatically.
-        Alternatively, define setup(bot) for manual control."""
+        Alternatively, define a plain (non-async) setup(bot) for manual control."""
         import importlib
+        import inspect
 
         from .cog import Cog as _Cog
 
         module = importlib.import_module(name)
-        if hasattr(module, "setup"):
-            module.setup(self)
+        setup_fn = getattr(module, "setup", None)
+        # a coroutine function named `setup` is a command handler that
+        # collided with the hook's name, not the hook itself - setup(bot)
+        # is always called synchronously, so an async one could never have
+        # actually run
+        if callable(setup_fn) and not inspect.iscoroutinefunction(setup_fn):
+            setup_fn(self)
             return
         seen = set()
         cogs = []
