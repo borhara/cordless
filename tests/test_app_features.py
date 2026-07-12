@@ -491,9 +491,7 @@ def _captured_payload(bot, coro):
 
 def test_send_message_sets_components_v2_flag():
     bot = Cordless()
-    payload = _captured_payload(
-        bot, bot.send_message("123", components=[{"type": 17, "components": []}])
-    )
+    payload = _captured_payload(bot, bot.send_message("123", components=[{"type": 17, "components": []}]))
     assert payload["flags"] & 32768
 
 
@@ -505,9 +503,7 @@ def test_send_message_omits_flags_without_uikit_components():
 
 def test_edit_message_sets_components_v2_flag():
     bot = Cordless()
-    payload = _captured_payload(
-        bot, bot.edit_message("123", "456", components=[{"type": 17, "components": []}])
-    )
+    payload = _captured_payload(bot, bot.edit_message("123", "456", components=[{"type": 17, "components": []}]))
     assert payload["flags"] & 32768
 
 
@@ -557,9 +553,7 @@ def test_discord_request_attaches_files_metadata_and_builds_multipart():
         patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
         patch("urllib.request.urlopen", side_effect=fake_urlopen),
     ):
-        bot._discord_request(
-            "POST", "/channels/123/messages", {"content": "hi"}, [("board.png", b"\x89PNG...")]
-        )
+        bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}, [("board.png", b"\x89PNG...")])
 
     assert captured["headers"]["Content-type"].startswith("multipart/form-data; boundary=")
     assert b'name="files[0]"; filename="board.png"' in captured["body"]
