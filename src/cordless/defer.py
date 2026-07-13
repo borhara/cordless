@@ -117,9 +117,7 @@ def patch_followup_with_file(app_id, token, payload, filename, file_bytes, conte
 
 def post_followup(app_id, token, payload):
     """POST a new followup message (creates an additional message, does not replace @original)."""
-    return _request(
-        "POST", f"/api/v10/webhooks/{app_id}/{token}", json.dumps(payload).encode(), "application/json"
-    )
+    return _request("POST", f"/api/v10/webhooks/{app_id}/{token}", json.dumps(payload).encode(), "application/json")
 
 
 def delete_original(app_id, token):
