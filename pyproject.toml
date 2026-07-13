@@ -59,7 +59,7 @@ pythonpath = ["src"]
 dev = [
     "boto3>=1.20",
     "botocore[crt]",
-    "moto[iam,awslambda-simple,apigatewayv2,dynamodb,events,logs,s3]>=5.0",
+    "moto[iam,awslambda-simple,apigatewayv2,events,logs,s3]>=5.0",
     "pynacl>=1.5",
     "pytest>=8.0",
     "pytest-cov>=5.0",
