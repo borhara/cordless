@@ -11,6 +11,7 @@ invocations never touch the same bucket at the same time.
 """
 
 import os
+import random
 import time
 
 _TABLE_ENV_VAR = "CORDLESS_RATELIMIT_TABLE"
@@ -22,6 +23,18 @@ _local = {}
 
 def enabled():
     return bool(os.environ.get(_TABLE_ENV_VAR))
+
+
+def jittered_wait(seconds):
+    """Equal jitter: wait at least half the requested time, capped at _MAX_WAIT.
+
+    Concurrent callers given the same `seconds` (e.g. several requests that
+    all just got the same Discord retry_after) spread out across the second
+    half of the window instead of all waking up at the same instant and
+    colliding again.
+    """
+    capped = min(seconds, _MAX_WAIT)
+    return capped / 2 + random.uniform(0, capped / 2)
 
 
 def _key(method, path):
@@ -52,7 +65,7 @@ def wait_if_needed(method, path):
     candidates = [t for t in (cached[1] if cached else None, _shared_block(key)) if t]
     blocked_until = max(candidates, default=None)
     if blocked_until and blocked_until > time.time():
-        time.sleep(min(blocked_until - time.time(), _MAX_WAIT))
+        time.sleep(jittered_wait(blocked_until - time.time()))
 
 
 def note_blocked(method, path, retry_after):

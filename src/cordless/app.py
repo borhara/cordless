@@ -242,7 +242,7 @@ class Cordless:
                     except (ValueError, AttributeError):
                         retry_after = 1.0
                     ratelimit.note_blocked(method, path, retry_after)
-                    time.sleep(min(retry_after, 5))
+                    time.sleep(ratelimit.jittered_wait(retry_after))
                     continue
                 raise RuntimeError(f"Discord API error {exc.code}: {body_out.decode(errors='replace')}") from exc
 

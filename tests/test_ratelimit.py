@@ -1,6 +1,7 @@
 """Local header tracking + DynamoDB fallback for outbound rate-limit coordination."""
 
 import os
+import random
 
 import boto3
 import pytest
@@ -21,6 +22,18 @@ def _reset_local_cache():
     ratelimit._local.clear()
     yield
     ratelimit._local.clear()
+
+
+def test_jittered_wait_stays_within_half_to_full_of_the_capped_value():
+    for _ in range(200):
+        result = ratelimit.jittered_wait(2.0)
+        assert 1.0 <= result <= 2.0
+
+
+def test_jittered_wait_caps_at_max_wait_before_jittering():
+    for _ in range(200):
+        result = ratelimit.jittered_wait(100.0)
+        assert ratelimit._MAX_WAIT / 2 <= result <= ratelimit._MAX_WAIT
 
 
 def test_disabled_without_table_env_var(monkeypatch):
@@ -106,8 +119,12 @@ def test_wait_if_needed_prefers_the_later_of_local_and_shared_block(monkeypatch)
     slept = []
     monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
 
+    monkeypatch.setattr(random, "uniform", lambda a, b: b)  # deterministic: always the top of the jitter range
+
     ratelimit.wait_if_needed("POST", "/channels/1/messages")
 
+    # the shared block (now+10) wins over local (now+0.1), then gets capped at
+    # _MAX_WAIT before jitter is applied - so the full jittered range caps at _MAX_WAIT
     assert slept and slept[0] == pytest.approx(ratelimit._MAX_WAIT)
 
 
