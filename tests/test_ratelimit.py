@@ -77,6 +77,40 @@ def test_wait_if_needed_checks_dynamo_on_cold_start(monkeypatch):
     assert calls == ["POST /channels/1/messages"]
 
 
+def test_wait_if_needed_sleeps_on_local_state_even_if_shared_check_fails(monkeypatch):
+    """A local note_blocked() must still cause a wait even when DynamoDB is
+    unreachable/unconfigured and _shared_block fails open to None - otherwise
+    concurrent callers in the same process get zero benefit from each other's
+    429s whenever the shared table isn't actually working."""
+    monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
+    import time
+
+    monkeypatch.setattr(ratelimit, "_shared_block", lambda key: None)
+    monkeypatch.setattr(ratelimit, "_put_shared", lambda key, blocked_until: None)
+    slept = []
+    monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
+
+    ratelimit.note_blocked("POST", "/channels/1/messages", 0.3)
+    ratelimit.wait_if_needed("POST", "/channels/1/messages")
+
+    assert slept and slept[0] <= ratelimit._MAX_WAIT
+
+
+def test_wait_if_needed_prefers_the_later_of_local_and_shared_block(monkeypatch):
+    monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
+    import time
+
+    now = time.time()
+    ratelimit._local["POST /channels/1/messages"] = (0, now + 0.1)
+    monkeypatch.setattr(ratelimit, "_shared_block", lambda key: now + 10)
+    slept = []
+    monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
+
+    ratelimit.wait_if_needed("POST", "/channels/1/messages")
+
+    assert slept and slept[0] == pytest.approx(ratelimit._MAX_WAIT)
+
+
 def test_wait_if_needed_sleeps_until_shared_block_clears(monkeypatch):
     monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
     import time

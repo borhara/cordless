@@ -669,6 +669,54 @@ def test_discord_request_retries_once_on_429_then_succeeds(monkeypatch):
     assert blocked == [0.2]
 
 
+def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(monkeypatch):
+    """wait_if_needed must run before every attempt, not just the first - otherwise a
+    sibling call's note_blocked() from a moment ago is never consulted before retrying."""
+    import io
+    import os
+    import time
+    import urllib.error
+
+    import cordless.ratelimit as ratelimit
+
+    bot = Cordless()
+    waits = []
+    monkeypatch.setattr(ratelimit, "wait_if_needed", lambda method, path: waits.append((method, path)))
+    monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: None)
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+
+    class _Resp:
+        headers = {}
+
+        def __enter__(self_):
+            return self_
+
+        def __exit__(self_, *a):
+            return False
+
+        def read(self_):
+            return b"{}"
+
+    too_many_requests = urllib.error.HTTPError(
+        "url", 429, "rate limited", {}, io.BytesIO(json.dumps({"retry_after": 0.1}).encode())
+    )
+    responses = [too_many_requests, _Resp()]
+
+    def fake_urlopen(req):
+        resp = responses.pop(0)
+        if isinstance(resp, BaseException):
+            raise resp
+        return resp
+
+    with (
+        patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
+        patch("urllib.request.urlopen", side_effect=fake_urlopen),
+    ):
+        bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
+
+    assert waits == [("POST", "/channels/123/messages"), ("POST", "/channels/123/messages")]
+
+
 def test_discord_request_gives_up_after_repeated_429(monkeypatch):
     import io
     import os

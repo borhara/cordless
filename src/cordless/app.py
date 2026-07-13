@@ -226,8 +226,8 @@ class Cordless:
         }
 
         url = f"https://discord.com/api/v10{path}"
-        ratelimit.wait_if_needed(method, path)
         for attempt in range(3):
+            ratelimit.wait_if_needed(method, path)
             req = urllib.request.Request(url, data=body, headers=headers, method=method)
             try:
                 with urllib.request.urlopen(req) as resp:

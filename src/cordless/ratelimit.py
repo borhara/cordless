@@ -46,8 +46,11 @@ def wait_if_needed(method, path):
     key = _key(method, path)
     cached = _local.get(key)
     if cached and cached[0] > _LOW_REMAINING and cached[1] > time.time():
-        return
-    blocked_until = _shared_block(key)
+        return  # comfortably clear locally, no need to ask anyone
+    # not clear (or unknown) locally - local state is still a valid wait source on
+    # its own, since DynamoDB can be unreachable/unconfigured and fails open to None
+    candidates = [t for t in (cached[1] if cached else None, _shared_block(key)) if t]
+    blocked_until = max(candidates, default=None)
     if blocked_until and blocked_until > time.time():
         time.sleep(min(blocked_until - time.time(), _MAX_WAIT))
 
