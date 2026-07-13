@@ -717,7 +717,7 @@ def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(monkeypatch):
     assert waits == [("POST", "/channels/123/messages"), ("POST", "/channels/123/messages")]
 
 
-def test_discord_request_gives_up_after_repeated_429(monkeypatch):
+def test_discord_request_gives_up_after_retry_budget_exhausted(monkeypatch):
     import io
     import os
     import time
@@ -725,6 +725,15 @@ def test_discord_request_gives_up_after_repeated_429(monkeypatch):
 
     bot = Cordless()
     monkeypatch.setattr(time, "sleep", lambda s: None)
+    # jump straight past _MAX_RETRY_SECONDS on the very first check, so this test
+    # doesn't actually spend 30 real seconds retrying against a mocked 429
+    clock = [0.0]
+
+    def fake_monotonic():
+        clock[0] += 100
+        return clock[0]
+
+    monkeypatch.setattr(time, "monotonic", fake_monotonic)
 
     def fake_urlopen(req):
         return (_ for _ in ()).throw(

@@ -14,6 +14,12 @@ from .verify import verify_signature
 
 PING = 1
 
+# How long _discord_request keeps retrying a 429 before giving up. Matches
+# defer_worker's 30s default timeout - callers doing bursty sends from the
+# main function's default 10s timeout should raise `timeout` in
+# cordless.toml or move the work behind defer_worker.
+_MAX_RETRY_SECONDS = 30.0
+
 _OPTION_TYPES = {
     "string": 3,
     "integer": 4,
@@ -226,7 +232,8 @@ class Cordless:
         }
 
         url = f"https://discord.com/api/v10{path}"
-        for attempt in range(3):
+        deadline = time.monotonic() + _MAX_RETRY_SECONDS
+        while True:
             ratelimit.wait_if_needed(method, path)
             req = urllib.request.Request(url, data=body, headers=headers, method=method)
             try:
@@ -236,7 +243,7 @@ class Cordless:
                     return data
             except urllib.error.HTTPError as exc:
                 body_out = exc.read()
-                if exc.code == 429 and attempt < 2:
+                if exc.code == 429 and time.monotonic() < deadline:
                     try:
                         retry_after = float(json.loads(body_out).get("retry_after", 1))
                     except (ValueError, AttributeError):
