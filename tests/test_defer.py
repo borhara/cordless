@@ -190,6 +190,54 @@ def test_connection_has_timeout(fake_conn):
     assert fake_conn.requests[0]["timeout"] == cordless.defer._TIMEOUT
 
 
+# --- post_followup / delete_original retry (previously had none at all) ---
+
+
+def test_post_followup_retries_on_429_with_retry_after(fake_conn, monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(cordless.defer.time, "sleep", lambda s: sleeps.append(s))
+    fake_conn.responses = [(429, json.dumps({"retry_after": 0.4}).encode()), (200, b"{}")]
+
+    status, _ = cordless.defer.post_followup("app", "tok", {"content": "hi"})
+
+    assert status == 200
+    assert sleeps == [0.4]
+    assert len(fake_conn.requests) == 2
+
+
+def test_post_followup_does_not_retry_on_404(fake_conn, monkeypatch):
+    """Unlike @original, a new followup POST doesn't race Discord's ACK write,
+    so a 404 here is a real error, not worth retrying."""
+    monkeypatch.setattr(cordless.defer.time, "sleep", lambda s: None)
+    fake_conn.responses = [(404, b"{}")]
+
+    status, _ = cordless.defer.post_followup("app", "tok", {"content": "hi"})
+
+    assert status == 404
+    assert len(fake_conn.requests) == 1
+
+
+def test_delete_original_retries_on_404(fake_conn, monkeypatch):
+    monkeypatch.setattr(cordless.defer.time, "sleep", lambda s: None)
+    fake_conn.responses = [(404, b"{}"), (200, b"{}")]
+
+    status = cordless.defer.delete_original("app", "tok")
+
+    assert status == 200
+    assert len(fake_conn.requests) == 2
+
+
+def test_delete_original_retries_on_429(fake_conn, monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(cordless.defer.time, "sleep", lambda s: sleeps.append(s))
+    fake_conn.responses = [(429, json.dumps({"retry_after": 0.1}).encode()), (204, b"")]
+
+    status = cordless.defer.delete_original("app", "tok")
+
+    assert status == 204
+    assert sleeps == [0.1]
+
+
 # --- Crons ---
 
 

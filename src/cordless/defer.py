@@ -43,29 +43,33 @@ def invoke_worker(function_name, interaction):
         )
 
 
-def _patch(app_id, token, body, content_type):
-    """PATCH the deferred @original message.
+def _request(method, path, body=None, content_type=None, retry_404=False):
+    """Make a webhooks/{app_id}/{token}/... call.
 
-    Retries on 404 (a warm worker can outrun Discord processing the ACK)
-    and on 429 (honouring retry_after).
+    Retries on 429 (honouring retry_after) always, and on 404 (a warm worker
+    can outrun Discord processing the ACK for @original) when retry_404 is
+    set. Each interaction has its own token, which Discord uses as the
+    bucket's major parameter for these routes, so calls here essentially
+    never share a bucket with another invocation or with send_message's
+    channel buckets - there's nothing for the cross-invocation coordination
+    in ratelimit.py to usefully do here, just a local retry.
     """
+    headers = {"User-Agent": "cordless"}
+    if content_type:
+        headers["Content-Type"] = content_type
+
     status, body_out = 0, b""
     for attempt in range(3):
         conn = HTTPSConnection("discord.com", timeout=_TIMEOUT)
         try:
-            conn.request(
-                "PATCH",
-                f"/api/v10/webhooks/{app_id}/{token}/messages/@original",
-                body,
-                {"Content-Type": content_type, "User-Agent": "cordless"},
-            )
+            conn.request(method, path, body, headers)
             resp = conn.getresponse()
             status = resp.status
             body_out = resp.read()
         finally:
             conn.close()
 
-        if status == 404 and attempt < 2:
+        if status == 404 and retry_404 and attempt < 2:
             time.sleep(0.5)
             continue
         if status == 429 and attempt < 2:
@@ -78,12 +82,18 @@ def _patch(app_id, token, body, content_type):
         break
 
     if status >= 300:
-        print(f"[cordless] followup PATCH {status}: {body_out.decode(errors='replace')}")
+        print(f"[cordless] {method} {path} {status}: {body_out.decode(errors='replace')}")
     return status, body_out
 
 
 def patch_followup(app_id, token, payload):
-    return _patch(app_id, token, json.dumps(payload).encode(), "application/json")
+    return _request(
+        "PATCH",
+        f"/api/v10/webhooks/{app_id}/{token}/messages/@original",
+        json.dumps(payload).encode(),
+        "application/json",
+        retry_404=True,
+    )
 
 
 def patch_followup_with_files(app_id, token, payload, files):
@@ -95,7 +105,9 @@ def patch_followup_with_files(app_id, token, payload, files):
     from ._multipart import build_multipart_body
 
     body, content_type = build_multipart_body(payload, files)
-    return _patch(app_id, token, body, content_type)
+    return _request(
+        "PATCH", f"/api/v10/webhooks/{app_id}/{token}/messages/@original", body, content_type, retry_404=True
+    )
 
 
 def patch_followup_with_file(app_id, token, payload, filename, file_bytes, content_type=None):
@@ -105,37 +117,12 @@ def patch_followup_with_file(app_id, token, payload, filename, file_bytes, conte
 
 def post_followup(app_id, token, payload):
     """POST a new followup message (creates an additional message, does not replace @original)."""
-    conn = HTTPSConnection("discord.com", timeout=_TIMEOUT)
-    try:
-        conn.request(
-            "POST",
-            f"/api/v10/webhooks/{app_id}/{token}",
-            json.dumps(payload).encode(),
-            {"Content-Type": "application/json", "User-Agent": "cordless"},
-        )
-        resp = conn.getresponse()
-        status = resp.status
-        body = resp.read()
-    finally:
-        conn.close()
-    if status >= 300:
-        print(f"[cordless] followup POST {status}: {body.decode(errors='replace')}")
-    return status, body
+    return _request(
+        "POST", f"/api/v10/webhooks/{app_id}/{token}", json.dumps(payload).encode(), "application/json"
+    )
 
 
 def delete_original(app_id, token):
     """DELETE the deferred @original message."""
-    conn = HTTPSConnection("discord.com", timeout=_TIMEOUT)
-    try:
-        conn.request(
-            "DELETE",
-            f"/api/v10/webhooks/{app_id}/{token}/messages/@original",
-            None,
-            {"User-Agent": "cordless"},
-        )
-        resp = conn.getresponse()
-        status = resp.status
-        resp.read()
-    finally:
-        conn.close()
+    status, _ = _request("DELETE", f"/api/v10/webhooks/{app_id}/{token}/messages/@original", retry_404=True)
     return status
