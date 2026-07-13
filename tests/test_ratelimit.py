@@ -65,6 +65,32 @@ def test_record_response_caches_remaining_and_reset(monkeypatch):
     assert reset_at > time.time()
 
 
+def test_record_response_publishes_to_shared_state_when_remaining_is_low(monkeypatch):
+    """A successful response revealing remaining=1 should warn siblings before
+    any of them has to burn its own 429 to find out the same thing."""
+    monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
+    published = []
+    monkeypatch.setattr(ratelimit, "_put_shared", lambda key, blocked_until: published.append((key, blocked_until)))
+
+    ratelimit.record_response(
+        "POST", "/channels/1/messages", {"X-RateLimit-Remaining": "1", "X-RateLimit-Reset-After": "2.5"}
+    )
+
+    assert published and published[0][0] == "POST /channels/1/messages"
+
+
+def test_record_response_does_not_publish_when_remaining_is_comfortable(monkeypatch):
+    monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
+    published = []
+    monkeypatch.setattr(ratelimit, "_put_shared", lambda key, blocked_until: published.append((key, blocked_until)))
+
+    ratelimit.record_response(
+        "POST", "/channels/1/messages", {"X-RateLimit-Remaining": "5", "X-RateLimit-Reset-After": "2.5"}
+    )
+
+    assert published == []
+
+
 def test_record_response_ignores_missing_headers(monkeypatch):
     monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
     ratelimit.record_response("POST", "/channels/1/messages", {})

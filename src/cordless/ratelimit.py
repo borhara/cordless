@@ -49,7 +49,14 @@ def record_response(method, path, headers):
     reset_after = headers.get("X-RateLimit-Reset-After")
     if remaining is None or reset_after is None:
         return
-    _local[_key(method, path)] = (int(float(remaining)), time.time() + float(reset_after))
+    remaining = int(float(remaining))
+    reset_at = time.time() + float(reset_after)
+    key = _key(method, path)
+    _local[key] = (remaining, reset_at)
+    if remaining <= _LOW_REMAINING:
+        # publish proactively, so a concurrent invocation can back off before
+        # it ever gets a 429 itself, not just after someone else already has
+        _put_shared(key, reset_at)
 
 
 def wait_if_needed(method, path):
