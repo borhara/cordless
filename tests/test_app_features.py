@@ -545,6 +545,8 @@ def test_discord_request_attaches_files_metadata_and_builds_multipart():
             def read(self_):
                 return b"{}"
 
+            headers = {}
+
         return _Resp()
 
     import os
@@ -559,6 +561,191 @@ def test_discord_request_attaches_files_metadata_and_builds_multipart():
     assert b'name="files[0]"; filename="board.png"' in captured["body"]
     assert b'name="payload_json"' in captured["body"]
     assert b'"attachments": [{"id": 0, "filename": "board.png"}]' in captured["body"]
+
+
+def test_discord_request_checks_ratelimit_before_sending(monkeypatch):
+    import cordless.ratelimit as ratelimit
+
+    bot = Cordless()
+    calls = []
+    monkeypatch.setattr(ratelimit, "wait_if_needed", lambda method, path: calls.append((method, path)))
+
+    class _Resp:
+        headers = {}
+
+        def __enter__(self_):
+            return self_
+
+        def __exit__(self_, *a):
+            return False
+
+        def read(self_):
+            return b"{}"
+
+    import os
+
+    with (
+        patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
+        patch("urllib.request.urlopen", return_value=_Resp()),
+    ):
+        bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
+
+    assert calls == [("POST", "/channels/123/messages")]
+
+
+def test_discord_request_records_response_headers_on_success(monkeypatch):
+    import cordless.ratelimit as ratelimit
+
+    bot = Cordless()
+    recorded = []
+    monkeypatch.setattr(ratelimit, "record_response", lambda method, path, headers: recorded.append(headers))
+
+    class _Resp:
+        headers = {"X-RateLimit-Remaining": "4", "X-RateLimit-Reset-After": "1"}
+
+        def __enter__(self_):
+            return self_
+
+        def __exit__(self_, *a):
+            return False
+
+        def read(self_):
+            return b"{}"
+
+    import os
+
+    with (
+        patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
+        patch("urllib.request.urlopen", return_value=_Resp()),
+    ):
+        bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
+
+    assert recorded == [_Resp.headers]
+
+
+def test_discord_request_retries_once_on_429_then_succeeds(monkeypatch):
+    import io
+    import os
+    import time
+    import urllib.error
+
+    import cordless.ratelimit as ratelimit
+
+    bot = Cordless()
+    blocked = []
+    monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: blocked.append(retry_after))
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+
+    class _Resp:
+        headers = {}
+
+        def __enter__(self_):
+            return self_
+
+        def __exit__(self_, *a):
+            return False
+
+        def read(self_):
+            return b"{}"
+
+    too_many_requests = urllib.error.HTTPError(
+        "url", 429, "rate limited", {}, io.BytesIO(json.dumps({"retry_after": 0.2}).encode())
+    )
+    responses = [too_many_requests, _Resp()]
+
+    def fake_urlopen(req):
+        resp = responses.pop(0)
+        if isinstance(resp, BaseException):
+            raise resp
+        return resp
+
+    with (
+        patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
+        patch("urllib.request.urlopen", side_effect=fake_urlopen),
+    ):
+        result = bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
+
+    assert result == b"{}"
+    assert blocked == [0.2]
+
+
+def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(monkeypatch):
+    """wait_if_needed must run before every attempt, not just the first - otherwise a
+    sibling call's note_blocked() from a moment ago is never consulted before retrying."""
+    import io
+    import os
+    import time
+    import urllib.error
+
+    import cordless.ratelimit as ratelimit
+
+    bot = Cordless()
+    waits = []
+    monkeypatch.setattr(ratelimit, "wait_if_needed", lambda method, path: waits.append((method, path)))
+    monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: None)
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+
+    class _Resp:
+        headers = {}
+
+        def __enter__(self_):
+            return self_
+
+        def __exit__(self_, *a):
+            return False
+
+        def read(self_):
+            return b"{}"
+
+    too_many_requests = urllib.error.HTTPError(
+        "url", 429, "rate limited", {}, io.BytesIO(json.dumps({"retry_after": 0.1}).encode())
+    )
+    responses = [too_many_requests, _Resp()]
+
+    def fake_urlopen(req):
+        resp = responses.pop(0)
+        if isinstance(resp, BaseException):
+            raise resp
+        return resp
+
+    with (
+        patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
+        patch("urllib.request.urlopen", side_effect=fake_urlopen),
+    ):
+        bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
+
+    assert waits == [("POST", "/channels/123/messages"), ("POST", "/channels/123/messages")]
+
+
+def test_discord_request_gives_up_after_retry_budget_exhausted(monkeypatch):
+    import io
+    import os
+    import time
+    import urllib.error
+
+    bot = Cordless()
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+    # jump straight past _MAX_RETRY_SECONDS on the very first check, so this test
+    # doesn't actually spend 30 real seconds retrying against a mocked 429
+    clock = [0.0]
+
+    def fake_monotonic():
+        clock[0] += 100
+        return clock[0]
+
+    monkeypatch.setattr(time, "monotonic", fake_monotonic)
+
+    def fake_urlopen(req):
+        return (_ for _ in ()).throw(
+            urllib.error.HTTPError("url", 429, "rate limited", {}, io.BytesIO(b'{"retry_after": 0.1}'))
+        )
+
+    with (
+        patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
+        patch("urllib.request.urlopen", side_effect=fake_urlopen),
+        pytest.raises(RuntimeError, match="429"),
+    ):
+        bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
 
 
 # --- load_extension ---

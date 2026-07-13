@@ -14,6 +14,12 @@ from .verify import verify_signature
 
 PING = 1
 
+# How long _discord_request keeps retrying a 429 before giving up. Matches
+# defer_worker's 30s default timeout - callers doing bursty sends from the
+# main function's default 10s timeout should raise `timeout` in
+# cordless.toml or move the work behind defer_worker.
+_MAX_RETRY_SECONDS = 30.0
+
 _OPTION_TYPES = {
     "string": 3,
     "integer": 4,
@@ -202,9 +208,12 @@ class Cordless:
 
     def _discord_request(self, method, path, payload=None, files=None):
         import json
+        import time
         import urllib.error
         import urllib.request
         from importlib.metadata import version as _ver
+
+        from . import ratelimit
 
         token = os.environ["DISCORD_BOT_TOKEN"]
         if files:
@@ -216,21 +225,33 @@ class Cordless:
             body, content_type = json.dumps(payload).encode(), "application/json"
         else:
             body, content_type = None, None
-        req = urllib.request.Request(
-            f"https://discord.com/api/v10{path}",
-            data=body,
-            headers={
-                "Authorization": f"Bot {token}",
-                "User-Agent": f"DiscordBot (https://cordless.dev, {_ver('cordless')})",
-                **({"Content-Type": content_type} if content_type else {}),
-            },
-            method=method,
-        )
-        try:
-            with urllib.request.urlopen(req) as resp:
-                return resp.read()
-        except urllib.error.HTTPError as exc:
-            raise RuntimeError(f"Discord API error {exc.code}: {exc.read().decode()}") from exc
+        headers = {
+            "Authorization": f"Bot {token}",
+            "User-Agent": f"DiscordBot (https://cordless.dev, {_ver('cordless')})",
+            **({"Content-Type": content_type} if content_type else {}),
+        }
+
+        url = f"https://discord.com/api/v10{path}"
+        deadline = time.monotonic() + _MAX_RETRY_SECONDS
+        while True:
+            ratelimit.wait_if_needed(method, path)
+            req = urllib.request.Request(url, data=body, headers=headers, method=method)
+            try:
+                with urllib.request.urlopen(req) as resp:
+                    data = resp.read()
+                    ratelimit.record_response(method, path, resp.headers)
+                    return data
+            except urllib.error.HTTPError as exc:
+                body_out = exc.read()
+                if exc.code == 429 and time.monotonic() < deadline:
+                    try:
+                        retry_after = float(json.loads(body_out).get("retry_after", 1))
+                    except (ValueError, AttributeError):
+                        retry_after = 1.0
+                    ratelimit.note_blocked(method, path, retry_after)
+                    time.sleep(ratelimit.jittered_wait(retry_after))
+                    continue
+                raise RuntimeError(f"Discord API error {exc.code}: {body_out.decode(errors='replace')}") from exc
 
     async def send_message(self, channel_id, content=None, *, embeds=None, components=None, files=None):
         payload = {}

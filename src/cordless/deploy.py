@@ -68,6 +68,7 @@ _KNOWN_DEPLOY_KEYS = {
     "defer_memory",
     "policies",
     "architecture",
+    "ratelimit",
 }
 
 
@@ -406,6 +407,49 @@ def _allow_worker_invoke(iam, role_name, worker_arn):
     )
 
 
+def ratelimit_table_name(function_name):
+    return f"{function_name}-ratelimit"
+
+
+def ensure_ratelimit_table(dynamodb, table_name):
+    try:
+        dynamodb.describe_table(TableName=table_name)
+        return
+    except dynamodb.exceptions.ResourceNotFoundException:
+        pass
+
+    dynamodb.create_table(
+        TableName=table_name,
+        AttributeDefinitions=[{"AttributeName": "pk", "AttributeType": "S"}],
+        KeySchema=[{"AttributeName": "pk", "KeyType": "HASH"}],
+        BillingMode="PAY_PER_REQUEST",
+    )
+    dynamodb.get_waiter("table_exists").wait(TableName=table_name)
+    dynamodb.update_time_to_live(
+        TableName=table_name,
+        TimeToLiveSpecification={"Enabled": True, "AttributeName": "ttl"},
+    )
+
+
+def _allow_ratelimit_table(iam, role_name, table_arn):
+    iam.put_role_policy(
+        RoleName=role_name,
+        PolicyName="cordless-ratelimit-table",
+        PolicyDocument=json.dumps(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": ["dynamodb:GetItem", "dynamodb:PutItem"],
+                        "Resource": table_arn,
+                    }
+                ],
+            }
+        ),
+    )
+
+
 def deploy(
     function_name,
     role_name,
@@ -427,6 +471,7 @@ def deploy(
     policies=None,
     crons=None,
     architecture="x86_64",
+    ratelimit=False,
 ):
     if not function_name:
         raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
@@ -445,6 +490,14 @@ def deploy(
 
     with Spinner("IAM role"):
         role_arn = ensure_iam_role(iam, role_name, extra_policies=policies)
+
+    if ratelimit:
+        table_name = ratelimit_table_name(function_name)
+        with Spinner("rate limit table"):
+            ensure_ratelimit_table(session.client("dynamodb"), table_name)
+            table_arn = f"arn:aws:dynamodb:{region}:{account_id}:table/{table_name}"
+            _allow_ratelimit_table(iam, role_name, table_arn)
+        env = {**env, "CORDLESS_RATELIMIT_TABLE": table_name}
 
     if bundle_cordless:
         with Spinner(f"cordless  {_cordless_version()} (local)"):
@@ -606,7 +659,7 @@ def _wire_crons(events, lam, function_name, target_fn, target_arn, crons):
         )
 
 
-def destroy(function_name, role_name, region, defer_worker=None, layer_name=None):
+def destroy(function_name, role_name, region, defer_worker=None, layer_name=None, ratelimit=False):
     if not function_name:
         raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
 
@@ -662,5 +715,14 @@ def destroy(function_name, role_name, region, defer_worker=None, layer_name=None
         with Spinner(f"Lambda layer  {layer_name}"):
             for v in _list_all_layer_versions(lam, layer_name):
                 lam.delete_layer_version(LayerName=layer_name, VersionNumber=v["Version"])
+
+    if ratelimit:
+        table_name = ratelimit_table_name(function_name)
+        with Spinner(f"rate limit table  {table_name}"):
+            dynamodb = session.client("dynamodb")
+            try:
+                dynamodb.delete_table(TableName=table_name)
+            except dynamodb.exceptions.ResourceNotFoundException:
+                pass
 
     print(f"  ✓ destroyed {function_name}")

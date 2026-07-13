@@ -172,6 +172,28 @@ def test_non_2xx_status_raises(fake_conn):
         cordless.webhook.execute("123", "abc", {"content": "hi"})
 
 
+def test_execute_retries_on_429_with_retry_after(fake_conn, monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(cordless.webhook.time, "sleep", lambda s: sleeps.append(s))
+    fake_conn.responses = [(429, json.dumps({"retry_after": 0.4}).encode()), (200, b"{}")]
+
+    status, _ = cordless.webhook.execute("123", "abc", {"content": "hi"})
+
+    assert status == 200
+    assert sleeps == [0.4]
+    assert len(fake_conn.requests) == 2
+
+
+def test_execute_gives_up_after_retries(fake_conn, monkeypatch):
+    monkeypatch.setattr(cordless.webhook.time, "sleep", lambda s: None)
+    fake_conn.responses = [(429, b"{}"), (429, b"{}"), (429, b"{}")]
+
+    with pytest.raises(RuntimeError, match="Discord API error 429"):
+        cordless.webhook.execute("123", "abc", {"content": "hi"})
+
+    assert len(fake_conn.requests) == 3
+
+
 # --- Cordless.execute_webhook / edit_webhook_message / delete_webhook_message ---
 
 

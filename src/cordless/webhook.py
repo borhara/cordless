@@ -8,6 +8,7 @@ response path.
 
 import json
 import re
+import time
 from http.client import HTTPSConnection
 
 from ._multipart import build_multipart_body
@@ -49,17 +50,35 @@ def build_payload(content, embeds, components, *, username=None, avatar_url=None
 
 
 def _request(method, path, body=None, content_type=None):
-    conn = HTTPSConnection("discord.com", timeout=_TIMEOUT)
-    try:
-        headers = {"User-Agent": "cordless"}
-        if content_type is not None:
-            headers["Content-Type"] = content_type
-        conn.request(method, path, body, headers)
-        resp = conn.getresponse()
-        status = resp.status
-        data = resp.read()
-    finally:
-        conn.close()
+    """Make a webhooks/{id}/{token}/... call, retrying on 429 (honouring retry_after).
+
+    A webhook's id+token pair is its own credential and its own bucket, not
+    shared with anything else, so a local retry is all that's needed here.
+    """
+    headers = {"User-Agent": "cordless"}
+    if content_type is not None:
+        headers["Content-Type"] = content_type
+
+    status, data = 0, b""
+    for attempt in range(3):
+        conn = HTTPSConnection("discord.com", timeout=_TIMEOUT)
+        try:
+            conn.request(method, path, body, headers)
+            resp = conn.getresponse()
+            status = resp.status
+            data = resp.read()
+        finally:
+            conn.close()
+
+        if status == 429 and attempt < 2:
+            try:
+                retry_after = float(json.loads(data).get("retry_after", 1))
+            except (ValueError, AttributeError):
+                retry_after = 1.0
+            time.sleep(min(retry_after, 5))
+            continue
+        break
+
     if status >= 300:
         raise RuntimeError(f"Discord API error {status}: {data.decode(errors='replace')}")
     return status, data
