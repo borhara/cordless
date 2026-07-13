@@ -172,6 +172,36 @@ def test_shared_roundtrip_through_real_dynamo(dynamo_table):
     assert ratelimit._shared_block("POST /channels/2/messages") is None
 
 
+def test_shared_block_is_a_plain_float_not_decimal(dynamo_table):
+    """boto3's resource API deserializes DynamoDB Numbers as decimal.Decimal, which
+    blows up when wait_if_needed subtracts a float time.time() from it. Regression
+    test for that - assert the type, not just the value, so a mocked-only shared
+    return can't hide it again."""
+    import time
+
+    ratelimit._put_shared("POST /channels/1/messages", time.time() + 10)
+    result = ratelimit._shared_block("POST /channels/1/messages")
+    assert isinstance(result, float)
+    result - time.time()  # would raise TypeError if this were still a Decimal
+
+
+def test_wait_if_needed_works_end_to_end_against_real_dynamo(dynamo_table, monkeypatch):
+    """The actual bug: wait_if_needed's blocked_until - time.time() raised
+    TypeError against a real DynamoDB-backed table because _shared_block
+    returned a Decimal, never caught by tests that monkeypatched _shared_block
+    to return plain floats instead of exercising a real table round-trip."""
+    import time
+
+    monkeypatch.setattr(random, "uniform", lambda a, b: a)
+    slept = []
+    monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
+
+    ratelimit._put_shared("POST /channels/1/messages", time.time() + 0.2)
+    ratelimit.wait_if_needed("POST", "/channels/1/messages")  # would raise TypeError pre-fix
+
+    assert slept
+
+
 def test_shared_block_fails_open_when_table_missing(monkeypatch):
     monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, "does-not-exist")
     with mock_aws():

@@ -89,7 +89,9 @@ def _shared_block(key):
         item = _table().get_item(Key={"pk": key}).get("Item")
     except Exception:
         return None  # fail-open: a DynamoDB hiccup should never block sending
-    return item["blocked_until"] if item else None
+    # boto3's resource API deserializes DynamoDB's Number type as decimal.Decimal,
+    # not float - cast here so callers can freely mix it with time.time() etc.
+    return float(item["blocked_until"]) if item else None
 
 
 def _put_shared(key, blocked_until):
