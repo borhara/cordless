@@ -216,6 +216,7 @@ def _deploy(args):
         policies=cfg.get("policies"),
         crons=crons,
         architecture=args.architecture or cfg.get("architecture", "x86_64"),
+        ratelimit=bool(cfg.get("ratelimit", False)),
     )
 
     if args.register:
@@ -271,6 +272,7 @@ def _destroy(args):
         region=region,
         defer_worker=defer_worker,
         layer_name=layer_name,
+        ratelimit=bool(cfg.get("ratelimit", False)),
     )
 
 

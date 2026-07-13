@@ -16,6 +16,8 @@ from cordless.deploy import (
     deploy,
     destroy,
     ensure_iam_role,
+    ensure_ratelimit_table,
+    ratelimit_table_name,
 )
 
 REGION = "us-east-1"
@@ -454,3 +456,105 @@ def test_destroy_removes_worker(deploy_patches, monkeypatch):
     lam = boto3.client("lambda", region_name=REGION)
     exists, _ = _function_exists(lam, "my-bot-worker")
     assert not exists
+
+
+# ---------------------------------------------------------------------------
+# Rate limit table
+# ---------------------------------------------------------------------------
+
+
+@mock_aws
+def test_ensure_ratelimit_table_creates_table():
+    dynamodb = boto3.client("dynamodb", region_name=REGION)
+    ensure_ratelimit_table(dynamodb, "my-bot-ratelimit")
+    assert dynamodb.describe_table(TableName="my-bot-ratelimit")["Table"]["TableStatus"] == "ACTIVE"
+
+
+@mock_aws
+def test_ensure_ratelimit_table_is_idempotent():
+    dynamodb = boto3.client("dynamodb", region_name=REGION)
+    ensure_ratelimit_table(dynamodb, "my-bot-ratelimit")
+    ensure_ratelimit_table(dynamodb, "my-bot-ratelimit")  # would raise if it tried to re-create
+
+
+@mock_aws
+def test_deploy_creates_ratelimit_table_when_enabled(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches, ratelimit=True))
+    dynamodb = boto3.client("dynamodb", region_name=REGION)
+    assert dynamodb.describe_table(TableName="my-bot-ratelimit")["Table"]["TableStatus"] == "ACTIVE"
+
+
+@mock_aws
+def test_deploy_skips_ratelimit_table_when_disabled(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches))
+    dynamodb = boto3.client("dynamodb", region_name=REGION)
+    with pytest.raises(dynamodb.exceptions.ResourceNotFoundException):
+        dynamodb.describe_table(TableName="my-bot-ratelimit")
+
+
+@mock_aws
+def test_deploy_sets_ratelimit_table_env_var(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches, ratelimit=True))
+    lam = boto3.client("lambda", region_name=REGION)
+    env_vars = lam.get_function_configuration(FunctionName="my-bot").get("Environment", {}).get("Variables", {})
+    assert env_vars.get("CORDLESS_RATELIMIT_TABLE") == "my-bot-ratelimit"
+
+
+@mock_aws
+def test_deploy_sets_ratelimit_table_env_var_on_worker_too(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches, ratelimit=True, defer_worker="my-bot-worker"))
+    lam = boto3.client("lambda", region_name=REGION)
+    env_vars = lam.get_function_configuration(FunctionName="my-bot-worker").get("Environment", {}).get("Variables", {})
+    assert env_vars.get("CORDLESS_RATELIMIT_TABLE") == "my-bot-ratelimit"
+
+
+@mock_aws
+def test_deploy_grants_ratelimit_table_access(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches, ratelimit=True))
+    policy = iam.get_role_policy(RoleName="my-bot-role", PolicyName="cordless-ratelimit-table")
+    assert "dynamodb:PutItem" in policy["PolicyDocument"]["Statement"][0]["Action"]
+
+
+@mock_aws
+def test_deploy_is_idempotent_with_ratelimit_enabled(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    kwargs = _base_deploy_kwargs(deploy_patches, ratelimit=True)
+    deploy(**kwargs)
+    deploy(**kwargs)  # would raise if the table create wasn't idempotent
+
+
+@mock_aws
+def test_destroy_removes_ratelimit_table(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches, ratelimit=True))
+    destroy("my-bot", "my-bot-role", REGION, ratelimit=True)
+    dynamodb = boto3.client("dynamodb", region_name=REGION)
+    with pytest.raises(dynamodb.exceptions.ResourceNotFoundException):
+        dynamodb.describe_table(TableName=ratelimit_table_name("my-bot"))
+
+
+@mock_aws
+def test_destroy_leaves_ratelimit_table_when_flag_omitted(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches, ratelimit=True))
+    destroy("my-bot", "my-bot-role", REGION)
+    dynamodb = boto3.client("dynamodb", region_name=REGION)
+    assert dynamodb.describe_table(TableName=ratelimit_table_name("my-bot"))["Table"]["TableStatus"] == "ACTIVE"
+
+
+@mock_aws
+def test_destroy_is_safe_when_ratelimit_table_never_existed():
+    destroy("my-bot", "my-bot-role", REGION, ratelimit=True)

@@ -226,6 +226,14 @@ def test_destroy_prompt_aborts_on_no(tmp_path, monkeypatch):
     mock_destroy.assert_not_called()
 
 
+def test_destroy_passes_ratelimit_flag_from_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "cordless.toml").write_text('[deploy]\nfunction = "mybot"\nregion = "us-east-1"\nratelimit = true\n')
+    with patch("cordless.deploy.destroy") as mock_destroy:
+        main(["destroy", "--yes"])
+    assert mock_destroy.call_args.kwargs["ratelimit"] is True
+
+
 # ---------------------------------------------------------------------------
 # deploy arg->config precedence
 # ---------------------------------------------------------------------------
@@ -253,6 +261,22 @@ def test_deploy_falls_back_to_config(tmp_path, monkeypatch):
     kwargs = mock_deploy.call_args.kwargs
     assert kwargs["function_name"] == "from-toml"
     assert kwargs["region"] == "eu-west-1"
+
+
+def test_deploy_passes_ratelimit_flag_from_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "cordless.toml").write_text('[deploy]\nfunction = "mybot"\nregion = "us-east-1"\nratelimit = true\n')
+    with patch("cordless.deploy.deploy") as mock_deploy:
+        main(["deploy"])
+    assert mock_deploy.call_args.kwargs["ratelimit"] is True
+
+
+def test_deploy_ratelimit_defaults_to_false(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "cordless.toml").write_text('[deploy]\nfunction = "mybot"\nregion = "us-east-1"\n')
+    with patch("cordless.deploy.deploy") as mock_deploy:
+        main(["deploy"])
+    assert mock_deploy.call_args.kwargs["ratelimit"] is False
 
 
 def test_deploy_env_flag_overlays_dot_env(tmp_path, monkeypatch):
