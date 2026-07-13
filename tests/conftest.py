@@ -6,6 +6,7 @@ class FakeDiscordResponse:
 
     def __init__(self, payload):
         self._payload = payload
+        self.headers = {}
 
     def read(self):
         return json.dumps(self._payload).encode()
