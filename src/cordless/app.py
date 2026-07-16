@@ -6,6 +6,7 @@ import os
 import re
 from typing import Literal, Union, get_args, get_origin
 
+from ._rest._mixin import RESTMixin
 from .context import _FLAG_UI_KIT, Context, _contains_uikit
 from .errors import CordlessError
 from .register import sync_commands
@@ -157,7 +158,7 @@ def option(
     return opt
 
 
-class Cordless:
+class Cordless(RESTMixin):
     def __init__(self, public_key=None):
         self.router = Router()
         self.public_key = public_key
