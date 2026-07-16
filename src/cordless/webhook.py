@@ -12,6 +12,7 @@ import time
 from http.client import HTTPSConnection
 
 from ._multipart import build_multipart_body
+from ._useragent import USER_AGENT
 from .context import _FLAG_UI_KIT, _attach_files, _contains_uikit
 
 _TIMEOUT = 10
@@ -55,7 +56,7 @@ def _request(method, path, body=None, content_type=None):
     A webhook's id+token pair is its own credential and its own bucket, not
     shared with anything else, so a local retry is all that's needed here.
     """
-    headers = {"User-Agent": "cordless"}
+    headers = {"User-Agent": USER_AGENT}
     if content_type is not None:
         headers["Content-Type"] = content_type
 

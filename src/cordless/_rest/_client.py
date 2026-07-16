@@ -11,10 +11,10 @@ import os
 import time
 import urllib.error
 import urllib.request
-from importlib.metadata import version as _ver
 
 from .. import ratelimit
 from .._multipart import build_multipart_body
+from .._useragent import USER_AGENT
 from ..context import _attach_files
 
 # How long a request keeps retrying a 429 before giving up. Matches
@@ -36,7 +36,7 @@ def request_raw(method, path, payload=None, files=None, token=None):
         body, content_type = None, None
     headers = {
         "Authorization": f"Bot {token}",
-        "User-Agent": f"DiscordBot (https://cordless.dev, {_ver('cordless')})",
+        "User-Agent": USER_AGENT,
         **({"Content-Type": content_type} if content_type else {}),
     }
 
