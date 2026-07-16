@@ -4,6 +4,8 @@ import json
 import time
 from http.client import HTTPSConnection
 
+from ._useragent import USER_AGENT
+
 _TIMEOUT = 10
 
 # Pre-create the Lambda client at import time so cold-start invocations don't
@@ -54,7 +56,7 @@ def _request(method, path, body=None, content_type=None, retry_404=False):
     channel buckets - there's nothing for the cross-invocation coordination
     in ratelimit.py to usefully do here, just a local retry.
     """
-    headers = {"User-Agent": "cordless"}
+    headers = {"User-Agent": USER_AGENT}
     if content_type:
         headers["Content-Type"] = content_type
 

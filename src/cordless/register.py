@@ -4,12 +4,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-API_BASE = "https://discord.com/api/v10"
+from ._useragent import USER_AGENT
 
-# Discord's API sits behind Cloudflare, which blocks urllib's default
-# "Python-urllib/x.y" User-Agent outright (403, error code 1010) regardless
-# of whether the credentials are valid. Any descriptive User-Agent avoids it.
-USER_AGENT = "cordless (https://github.com/borhara/cordless)"
+API_BASE = "https://discord.com/api/v10"
 
 
 def _get_application_id(bot_token):
