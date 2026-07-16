@@ -4,48 +4,15 @@ import inspect
 import json
 import os
 import re
-import threading
-from http.client import HTTPException, HTTPSConnection
 from typing import Literal, Union, get_args, get_origin
 
-from .context import _FLAG_UI_KIT, Context, _attach_files, _contains_uikit, _validate_content_length
+from .context import _FLAG_UI_KIT, Context, _contains_uikit, _validate_content_length
 from .errors import CordlessError
 from .register import sync_commands
 from .router import Router
 from .verify import verify_signature
 
 PING = 1
-
-# How long _discord_request keeps retrying a 429 before giving up. Matches
-# defer_worker's 30s default timeout - callers doing bursty sends from the
-# main function's default 10s timeout should raise `timeout` in
-# cordless.toml or move the work behind defer_worker.
-_MAX_RETRY_SECONDS = 30.0
-
-# Kept open across invocations in a warm Lambda container, so most requests
-# skip the TLS handshake instead of paying for it every time.
-_conn = None
-_conn_lock = threading.Lock()
-
-
-def _send_discord_request(method, path, body, headers):
-    global _conn
-    with _conn_lock:
-        if _conn is None:
-            _conn = HTTPSConnection("discord.com")
-        try:
-            _conn.request(method, path, body, headers)
-            resp = _conn.getresponse()
-            data = resp.read()
-        except (HTTPException, OSError):
-            # the other end closed the kept-alive connection, reconnect once
-            _conn.close()
-            _conn = HTTPSConnection("discord.com")
-            _conn.request(method, path, body, headers)
-            resp = _conn.getresponse()
-            data = resp.read()
-        return resp.status, resp.headers, data
-
 
 _OPTION_TYPES = {
     "string": 3,
@@ -308,45 +275,9 @@ class Cordless:
         return decorator
 
     def _discord_request(self, method, path, payload=None, files=None):
-        import json
-        import time
-        from importlib.metadata import version as _ver
+        from ._rest import _client
 
-        from . import ratelimit
-
-        token = os.environ["DISCORD_BOT_TOKEN"]
-        if files:
-            from ._multipart import build_multipart_body
-
-            _attach_files(payload, files)
-            body, content_type = build_multipart_body(payload, files)
-        elif payload is not None:
-            body, content_type = json.dumps(payload).encode(), "application/json"
-        else:
-            body, content_type = None, None
-        headers = {
-            "Authorization": f"Bot {token}",
-            "User-Agent": f"DiscordBot (https://cordless.dev, {_ver('cordless')})",
-            **({"Content-Type": content_type} if content_type else {}),
-        }
-
-        full_path = f"/api/v10{path}"
-        deadline = time.monotonic() + _MAX_RETRY_SECONDS
-        while True:
-            ratelimit.wait_if_needed(method, path)
-            status, resp_headers, data = _send_discord_request(method, full_path, body, headers)
-            if status < 300:
-                ratelimit.record_response(method, path, resp_headers)
-                return data
-            if status == 429 and time.monotonic() < deadline:
-                try:
-                    retry_after = float(json.loads(data).get("retry_after", 1))
-                except (ValueError, AttributeError):
-                    retry_after = 1.0
-                ratelimit.note_blocked(method, path, retry_after)
-                time.sleep(ratelimit.jittered_wait(retry_after))
-                continue
-            raise RuntimeError(f"Discord API error {status}: {data.decode(errors='replace')}")
+        return _client.request_raw(method, path, payload, files, token=os.environ["DISCORD_BOT_TOKEN"])
 
     async def send_message(self, channel_id, content=None, *, embeds=None, components=None, files=None):
         """Send a message as the bot. Requires `DISCORD_BOT_TOKEN`, callable
