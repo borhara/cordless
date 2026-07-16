@@ -6,6 +6,7 @@ import os
 import re
 from typing import Literal, Union, get_args, get_origin
 
+from ._rest._mixin import RESTMixin
 from .context import _FLAG_UI_KIT, Context, _contains_uikit, _validate_content_length
 from .errors import CordlessError
 from .register import sync_commands
@@ -189,7 +190,7 @@ def option(
     return opt
 
 
-class Cordless:
+class Cordless(RESTMixin):
     def __init__(self, public_key=None):
         """`public_key` is your app's hex-encoded public key from the Discord
         Developer Portal. Every request is verified against it (Ed25519) and
