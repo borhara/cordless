@@ -511,6 +511,10 @@ def deploy(
             _allow_ratelimit_table(iam, role_name, table_arn)
         env = {**env, "CORDLESS_RATELIMIT_TABLE": table_name}
 
+    from . import upload as _upload
+
+    _upload.pynacl_bundle_failed = False
+
     if bundle_cordless:
         with Spinner(f"cordless  {_cordless_version()} (local)"):
             layer_arn = None
@@ -526,6 +530,11 @@ def deploy(
             python_version=python_version,
             architecture=architecture,
         )
+
+    # printed after both spinners above have stopped animating, so it can't
+    # get overwritten by their mid-spin redraws
+    if _upload.pynacl_bundle_failed:
+        print("  cordless: could not bundle pynacl, using the slower pure-Python signature verification")
 
     try:
         exists, function_arn = _function_exists(lam, function_name)

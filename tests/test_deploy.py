@@ -343,6 +343,26 @@ def test_deploy_is_idempotent(deploy_patches, monkeypatch):
 
 
 @mock_aws
+def test_deploy_warns_when_pynacl_bundle_failed(deploy_patches, monkeypatch, capsys):
+    import cordless.upload
+
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    cordless.upload.pynacl_bundle_failed = False
+
+    def _fresh_zip_with_pynacl_failure(*a, **kw):
+        cordless.upload.pynacl_bundle_failed = True
+        return _minimal_zip(deploy_patches)
+
+    monkeypatch.setattr(cordless.deploy, "build_function_zip", _fresh_zip_with_pynacl_failure)
+
+    url = deploy(**_base_deploy_kwargs(deploy_patches))
+
+    assert url  # deploy must still succeed, not raise
+    assert "could not bundle pynacl" in capsys.readouterr().out
+
+
+@mock_aws
 def test_deploy_creates_worker_when_configured(deploy_patches, monkeypatch):
     iam = boto3.client("iam", region_name=REGION)
     monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))

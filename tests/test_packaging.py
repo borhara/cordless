@@ -3,7 +3,17 @@
 import os
 import zipfile
 
+import pytest
+
+import cordless.upload
 from cordless.deploy import _packages_cache_dir, build_function_zip, load_config
+
+
+@pytest.fixture(autouse=True)
+def _reset_pynacl_bundle_failed():
+    cordless.upload.pynacl_bundle_failed = False
+    yield
+    cordless.upload.pynacl_bundle_failed = False
 
 
 def _zip_names(zip_path):
@@ -233,6 +243,7 @@ def test_layer_extras_dir_returns_none_when_fetch_fails(monkeypatch):
     monkeypatch.setattr(cordless.deploy, "_ensure_packages", boom)
 
     assert cordless.upload._layer_extras_dir("3.12") is None
+    assert cordless.upload.pynacl_bundle_failed is True
 
 
 def test_layer_zip_without_runtime_skips_extras(monkeypatch):

@@ -13,15 +13,21 @@ def _cordless_package_dir():
     return os.path.dirname(spec.origin)
 
 
+# Set when a fetch fails, so deploy() can warn once the spinner has stopped
+# animating instead of mid-spin, where print() gets stomped by its redraws.
+pynacl_bundle_failed = False
+
+
 def _layer_extras_dir(python_version, architecture="x86_64"):
     """Fetch pynacl (fast Ed25519 verify) for the layer. Never fails the deploy -
     falls back to the pure-Python verify path if the fetch doesn't work out."""
+    global pynacl_bundle_failed
     from .deploy import _ensure_packages
 
     try:
         return _ensure_packages(["pynacl"], python_version, architecture)
-    except Exception as exc:
-        print(f"cordless: could not bundle pynacl ({exc}), falling back to pure-Python signature verification")
+    except Exception:
+        pynacl_bundle_failed = True
         return None
 
 
