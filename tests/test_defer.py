@@ -130,6 +130,7 @@ def fake_conn(monkeypatch):
     FakeHTTPSConnection.requests = []
     FakeHTTPSConnection.responses = []
     monkeypatch.setattr(cordless.defer, "HTTPSConnection", FakeHTTPSConnection)
+    monkeypatch.setattr(cordless.defer, "_conn", None)
     return FakeHTTPSConnection
 
 
