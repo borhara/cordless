@@ -8,8 +8,9 @@ response path.
 
 import json
 import re
+import threading
 import time
-from http.client import HTTPSConnection
+from http.client import HTTPException, HTTPSConnection
 
 from ._multipart import build_multipart_body
 from .context import _FLAG_UI_KIT, _attach_files, _contains_uikit
@@ -17,6 +18,29 @@ from .context import _FLAG_UI_KIT, _attach_files, _contains_uikit
 _TIMEOUT = 10
 
 _URL_RE = re.compile(r"discord(?:app)?\.com/api(?:/v\d+)?/webhooks/(\d+)/([\w-]+)")
+
+# Kept open across invocations in a warm Lambda container, so most requests
+# skip the TLS handshake instead of paying for it every time.
+_conn = None
+_conn_lock = threading.Lock()
+
+
+def _send(method, path, body, headers):
+    global _conn
+    with _conn_lock:
+        if _conn is None:
+            _conn = HTTPSConnection("discord.com", timeout=_TIMEOUT)
+        try:
+            _conn.request(method, path, body, headers)
+            resp = _conn.getresponse()
+            return resp.status, resp.read()
+        except (HTTPException, OSError):
+            # the other end closed the kept-alive connection, reconnect once
+            _conn.close()
+            _conn = HTTPSConnection("discord.com", timeout=_TIMEOUT)
+            _conn.request(method, path, body, headers)
+            resp = _conn.getresponse()
+            return resp.status, resp.read()
 
 
 def parse_webhook_url(url):
@@ -61,14 +85,7 @@ def _request(method, path, body=None, content_type=None):
 
     status, data = 0, b""
     for attempt in range(3):
-        conn = HTTPSConnection("discord.com", timeout=_TIMEOUT)
-        try:
-            conn.request(method, path, body, headers)
-            resp = conn.getresponse()
-            status = resp.status
-            data = resp.read()
-        finally:
-            conn.close()
+        status, data = _send(method, path, body, headers)
 
         if status == 429 and attempt < 2:
             try:

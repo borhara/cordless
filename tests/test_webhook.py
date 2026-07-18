@@ -99,6 +99,7 @@ def fake_conn(monkeypatch):
     FakeHTTPSConnection.requests = []
     FakeHTTPSConnection.responses = []
     monkeypatch.setattr(cordless.webhook, "HTTPSConnection", FakeHTTPSConnection)
+    monkeypatch.setattr(cordless.webhook, "_conn", None)
     return FakeHTTPSConnection
 
 
