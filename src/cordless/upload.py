@@ -14,10 +14,15 @@ def _cordless_package_dir():
 
 
 def _layer_extras_dir(python_version, architecture="x86_64"):
-    """Fetch pynacl (fast Ed25519 verify) for the layer."""
+    """Fetch pynacl (fast Ed25519 verify) for the layer. Never fails the deploy -
+    falls back to the pure-Python verify path if the fetch doesn't work out."""
     from .deploy import _ensure_packages
 
-    return _ensure_packages(["pynacl"], python_version, architecture)
+    try:
+        return _ensure_packages(["pynacl"], python_version, architecture)
+    except Exception as exc:
+        print(f"cordless: could not bundle pynacl ({exc}), falling back to pure-Python signature verification")
+        return None
 
 
 def build_layer_zip(python_version=None, architecture="x86_64"):
