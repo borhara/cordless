@@ -70,7 +70,10 @@ _KNOWN_DEPLOY_KEYS = {
     "architecture",
     "ratelimit",
     "endpoint",
+    "keep-warm",
 }
+
+_DEFAULT_KEEPWARM_SCHEDULE = "rate(5 minutes)"
 
 
 def load_config(source_dir):
@@ -560,6 +563,7 @@ def deploy(
     architecture=None,
     ratelimit=False,
     endpoint=None,
+    keep_warm=None,
 ):
     if not function_name:
         raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
@@ -724,6 +728,9 @@ def deploy(
         with Spinner(f"cron schedules ({len(crons)})"):
             _wire_crons(events, lam, function_name, cron_target, cron_arn, crons)
 
+    with Spinner("keep-warm"):
+        _wire_keepwarm(session.client("events"), lam, function_name, function_arn, keep_warm)
+
     success(url)
     return url
 
@@ -780,6 +787,60 @@ def _wire_crons(events, lam, function_name, target_fn, target_arn, crons):
         )
 
 
+def _keepwarm_schedule(keep_warm):
+    if keep_warm is True:
+        return _DEFAULT_KEEPWARM_SCHEDULE
+    if isinstance(keep_warm, str):
+        return keep_warm
+    return None
+
+
+def _wire_keepwarm(events, lam, function_name, function_arn, keep_warm):
+    """Ping the main function directly on a schedule so it doesn't go cold
+    between real invocations. Always targets the main function, never the
+    worker - regular crons can't do this, since they all share one target
+    (defer_worker if it's set, otherwise the main function)."""
+    schedule = _keepwarm_schedule(keep_warm)
+    if not schedule:
+        _remove_keepwarm(events, lam, function_name)
+        return
+
+    rule_name = f"{function_name}-keepwarm"
+    statement_id = "cordless-keepwarm"
+    rule_arn = events.put_rule(Name=rule_name, ScheduleExpression=schedule)["RuleArn"]
+    events.put_targets(
+        Rule=rule_name,
+        Targets=[{"Id": "cordless", "Arn": function_arn, "Input": json.dumps({"_cordless_keepwarm": True})}],
+    )
+    try:
+        lam.remove_permission(FunctionName=function_name, StatementId=statement_id)
+    except lam.exceptions.ResourceNotFoundException:
+        pass
+    lam.add_permission(
+        FunctionName=function_name,
+        StatementId=statement_id,
+        Action="lambda:InvokeFunction",
+        Principal="events.amazonaws.com",
+        SourceArn=rule_arn,
+    )
+
+
+def _remove_keepwarm(events, lam, function_name):
+    rule_name = f"{function_name}-keepwarm"
+    try:
+        targets = events.list_targets_by_rule(Rule=rule_name).get("Targets", [])
+    except events.exceptions.ResourceNotFoundException:
+        return
+    target_ids = [t["Id"] for t in targets]
+    if target_ids:
+        events.remove_targets(Rule=rule_name, Ids=target_ids)
+    events.delete_rule(Name=rule_name)
+    try:
+        lam.remove_permission(FunctionName=function_name, StatementId="cordless-keepwarm")
+    except lam.exceptions.ResourceNotFoundException:
+        pass
+
+
 def destroy(function_name, role_name, region, defer_worker=None, layer_name=None, ratelimit=False):
     if not function_name:
         raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
@@ -810,6 +871,9 @@ def destroy(function_name, role_name, region, defer_worker=None, layer_name=None
             if target_ids:
                 events.remove_targets(Rule=rule["Name"], Ids=target_ids)
             events.delete_rule(Name=rule["Name"])
+
+    with Spinner("keep-warm"):
+        _remove_keepwarm(events, lam, function_name)
 
     for fn in [function_name] + ([defer_worker] if defer_worker else []):
         with Spinner(f"Lambda  {fn}"):

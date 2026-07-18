@@ -218,6 +218,7 @@ def _deploy(args):
         architecture=args.architecture or cfg.get("architecture"),
         ratelimit=bool(cfg.get("ratelimit", False)),
         endpoint=args.endpoint or cfg.get("endpoint"),
+        keep_warm=cfg.get("keep-warm"),
     )
 
     if args.register:

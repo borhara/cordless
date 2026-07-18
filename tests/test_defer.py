@@ -268,6 +268,20 @@ def test_cron_runs_via_worker_handler():
     assert ran == ["tick"]
 
 
+def test_keepwarm_returns_without_dispatching_anything():
+    bot = Cordless()
+    ran = []
+
+    @bot.cron("rate(1 day)")
+    async def daily():
+        ran.append("daily")
+
+    handler = bot.handler()
+    result = handler({"_cordless_keepwarm": True})
+    assert result is None
+    assert ran == []
+
+
 def test_unknown_cron_raises():
     from cordless.errors import CordlessError
 

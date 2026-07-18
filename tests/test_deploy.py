@@ -13,7 +13,9 @@ from cordless.deploy import (
     _ensure_function_url,
     _function_exists,
     _publish_cordless_layer,
+    _remove_keepwarm,
     _wire_crons,
+    _wire_keepwarm,
     deploy,
     destroy,
     ensure_iam_role,
@@ -389,6 +391,63 @@ def test_wire_crons_is_idempotent(aws_clients, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# _wire_keepwarm / _remove_keepwarm
+# ---------------------------------------------------------------------------
+
+
+def test_wire_keepwarm_creates_rule_targeting_main(aws_clients, tmp_path):
+    """The whole point: this must always target the main function directly,
+    never a defer_worker - regular crons can't do that, since they all share
+    one target."""
+    iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    fn_arn = _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    _wire_keepwarm(events, lam, "my-fn", fn_arn, True)
+
+    rules = events.list_rules(NamePrefix="my-fn-keepwarm")["Rules"]
+    assert len(rules) == 1
+    assert rules[0]["ScheduleExpression"] == "rate(5 minutes)"
+    targets = events.list_targets_by_rule(Rule="my-fn-keepwarm")["Targets"]
+    assert targets[0]["Arn"] == fn_arn
+    assert json.loads(targets[0]["Input"]) == {"_cordless_keepwarm": True}
+
+
+def test_wire_keepwarm_accepts_custom_schedule(aws_clients, tmp_path):
+    iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    fn_arn = _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    _wire_keepwarm(events, lam, "my-fn", fn_arn, "rate(10 minutes)")
+
+    rules = events.list_rules(NamePrefix="my-fn-keepwarm")["Rules"]
+    assert rules[0]["ScheduleExpression"] == "rate(10 minutes)"
+
+
+def test_wire_keepwarm_is_idempotent(aws_clients, tmp_path):
+    iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    fn_arn = _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    _wire_keepwarm(events, lam, "my-fn", fn_arn, True)
+    _wire_keepwarm(events, lam, "my-fn", fn_arn, True)
+    assert len(events.list_rules(NamePrefix="my-fn-keepwarm")["Rules"]) == 1
+
+
+def test_wire_keepwarm_false_removes_existing_rule(aws_clients, tmp_path):
+    iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    fn_arn = _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    _wire_keepwarm(events, lam, "my-fn", fn_arn, True)
+    _wire_keepwarm(events, lam, "my-fn", fn_arn, None)
+    assert events.list_rules(NamePrefix="my-fn-keepwarm")["Rules"] == []
+
+
+def test_remove_keepwarm_is_safe_when_nothing_exists(aws_clients, tmp_path):
+    iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    _remove_keepwarm(events, lam, "my-fn")  # must not raise
+
+
+# ---------------------------------------------------------------------------
 # deploy / destroy integration
 # ---------------------------------------------------------------------------
 
@@ -555,6 +614,53 @@ def test_deploy_wires_crons(deploy_patches, monkeypatch):
     events = boto3.client("events", region_name=REGION)
     rules = events.list_rules(NamePrefix="my-bot-cron-")["Rules"]
     assert any(r["Name"] == "my-bot-cron-daily" for r in rules)
+
+
+@mock_aws
+def test_deploy_keepwarm_targets_main_even_with_defer_worker(deploy_patches, monkeypatch):
+    """The whole reason this feature exists: regular crons all go to
+    defer_worker when it's set, leaving the main function - the one every
+    Discord interaction hits first - with nothing keeping it warm."""
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(
+        **_base_deploy_kwargs(
+            deploy_patches,
+            defer_worker="my-bot-worker",
+            crons={"daily": "rate(1 day)"},
+            keep_warm=True,
+        )
+    )
+    lam = boto3.client("lambda", region_name=REGION)
+    events = boto3.client("events", region_name=REGION)
+
+    main_arn = lam.get_function_configuration(FunctionName="my-bot")["FunctionArn"]
+    targets = events.list_targets_by_rule(Rule="my-bot-keepwarm")["Targets"]
+    assert targets[0]["Arn"] == main_arn
+
+    # the regular cron, meanwhile, still goes to the worker as usual
+    worker_arn = lam.get_function_configuration(FunctionName="my-bot-worker")["FunctionArn"]
+    cron_targets = events.list_targets_by_rule(Rule="my-bot-cron-daily")["Targets"]
+    assert cron_targets[0]["Arn"] == worker_arn
+
+
+@mock_aws
+def test_deploy_without_keepwarm_does_not_create_a_rule(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches))
+    events = boto3.client("events", region_name=REGION)
+    assert events.list_rules(NamePrefix="my-bot-keepwarm")["Rules"] == []
+
+
+@mock_aws
+def test_destroy_removes_keepwarm_rule(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches, keep_warm=True))
+    destroy(function_name="my-bot", role_name="my-bot-role", region=REGION)
+    events = boto3.client("events", region_name=REGION)
+    assert events.list_rules(NamePrefix="my-bot-keepwarm")["Rules"] == []
 
 
 @mock_aws

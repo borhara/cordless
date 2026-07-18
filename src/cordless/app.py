@@ -442,7 +442,10 @@ class Cordless:
 
     def handler(self):
         def _handler(event, context=None):
-            cron_name = (event or {}).get("_cordless_cron")
+            event = event or {}
+            if event.get("_cordless_keepwarm"):
+                return None  # just here to keep the container warm, nothing to do
+            cron_name = event.get("_cordless_cron")
             if cron_name:
                 return self.run_cron(cron_name)
             return self.handle(event, context)
