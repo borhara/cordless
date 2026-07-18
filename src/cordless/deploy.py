@@ -87,6 +87,17 @@ def load_config(source_dir):
 def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_version="3.12", architecture="x86_64"):
     tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
     tmp.close()
+    # pynacl (bundle_cordless extras) and a user's own `packages = ["pynacl"]`
+    # can resolve to the same cache dir, so this dedupes to avoid writing the
+    # same file into the zip twice
+    written = set()
+
+    def _write(zf, abs_path, arcname):
+        if arcname in written:
+            return
+        written.add(arcname)
+        zf.write(abs_path, arcname)
+
     with zipfile.ZipFile(tmp.name, "w", zipfile.ZIP_DEFLATED) as zf:
         for root, dirs, files in os.walk(source_dir):
             dirs[:] = [d for d in dirs if not _exclude_dir(d)]
@@ -94,7 +105,7 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                 if _exclude_file(fname):
                     continue
                 abs_path = os.path.join(root, fname)
-                zf.write(abs_path, os.path.relpath(abs_path, source_dir))
+                _write(zf, abs_path, os.path.relpath(abs_path, source_dir))
 
         if bundle_cordless:
             from .upload import _cordless_package_dir, _layer_extras_dir
@@ -107,7 +118,7 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                     if fname.endswith(".pyc"):
                         continue
                     abs_path = os.path.join(root, fname)
-                    zf.write(abs_path, os.path.relpath(abs_path, pkg_parent))
+                    _write(zf, abs_path, os.path.relpath(abs_path, pkg_parent))
             # include dist-info/egg-info so importlib.metadata works inside Lambda
             import glob
 
@@ -116,7 +127,7 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                     for root, dirs, files in os.walk(dist_info):
                         for fname in files:
                             abs_path = os.path.join(root, fname)
-                            zf.write(abs_path, os.path.relpath(abs_path, pkg_parent))
+                            _write(zf, abs_path, os.path.relpath(abs_path, pkg_parent))
 
             # same pynacl bundling the layer path gets, so bundle_cordless doesn't
             # silently fall back to slow signature verification
@@ -128,7 +139,7 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                         if fname.endswith(".pyc"):
                             continue
                         abs_path = os.path.join(root, fname)
-                        zf.write(abs_path, os.path.relpath(abs_path, extras_dir))
+                        _write(zf, abs_path, os.path.relpath(abs_path, extras_dir))
         if packages:
             pkg_dir = _ensure_packages(packages, python_version, architecture)
             for root, dirs, files in os.walk(pkg_dir):
@@ -137,7 +148,7 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                     if fname.endswith(".pyc"):
                         continue
                     abs_path = os.path.join(root, fname)
-                    zf.write(abs_path, os.path.relpath(abs_path, pkg_dir))
+                    _write(zf, abs_path, os.path.relpath(abs_path, pkg_dir))
 
     return tmp.name
 

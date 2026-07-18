@@ -38,6 +38,16 @@ def build_layer_zip(python_version=None, architecture="x86_64"):
 
     tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
     tmp.close()
+    # cordless's own files and the pynacl extras can overlap (e.g. a stray
+    # dotfile at the root of both trees), so dedupe to avoid writing the same
+    # zip entry twice
+    written = set()
+
+    def _write(zf, abs_path, arcname):
+        if arcname in written:
+            return
+        written.add(arcname)
+        zf.write(abs_path, arcname)
 
     with zipfile.ZipFile(tmp.name, "w", zipfile.ZIP_DEFLATED) as zf:
         for root, dirs, files in os.walk(pkg_dir):
@@ -47,7 +57,7 @@ def build_layer_zip(python_version=None, architecture="x86_64"):
                     continue
                 abs_path = os.path.join(root, fname)
                 rel_path = os.path.relpath(abs_path, site_dir)
-                zf.write(abs_path, os.path.join("python", rel_path))
+                _write(zf, abs_path, os.path.join("python", rel_path))
 
         import glob
 
@@ -57,7 +67,7 @@ def build_layer_zip(python_version=None, architecture="x86_64"):
                     for fname in files:
                         abs_path = os.path.join(root, fname)
                         rel_path = os.path.relpath(abs_path, site_dir)
-                        zf.write(abs_path, os.path.join("python", rel_path))
+                        _write(zf, abs_path, os.path.join("python", rel_path))
 
         extras_dir = _layer_extras_dir(python_version, architecture) if python_version else None
         if extras_dir:
@@ -68,7 +78,7 @@ def build_layer_zip(python_version=None, architecture="x86_64"):
                         continue
                     abs_path = os.path.join(root, fname)
                     rel_path = os.path.relpath(abs_path, extras_dir)
-                    zf.write(abs_path, os.path.join("python", rel_path))
+                    _write(zf, abs_path, os.path.join("python", rel_path))
 
     return tmp.name
 
