@@ -302,7 +302,9 @@ _INIT_TOML = """\
 [deploy]
 function = "{name}"
 endpoint = "{endpoint}"
-# region = "eu-west-2"
+# us-east-1 is closest to Discord's own API infrastructure - EU-hosted bots
+# typically see ~140-160ms to Discord's API, US-hosted ~20-30ms
+region = "us-east-1"
 """
 
 _INIT_ENV = """\
