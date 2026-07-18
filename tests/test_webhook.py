@@ -1,10 +1,8 @@
 """Webhook support: URL parsing, payload building, and the execute/edit/delete/manage flows."""
 
 import json
-from unittest.mock import patch
 
 import pytest
-from conftest import FakeDiscordResponse
 
 import cordless.webhook
 from cordless.app import Cordless

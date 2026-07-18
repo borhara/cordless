@@ -46,6 +46,7 @@ def _send_discord_request(method, path, body, headers):
             data = resp.read()
         return resp.status, resp.headers, data
 
+
 _OPTION_TYPES = {
     "string": 3,
     "integer": 4,

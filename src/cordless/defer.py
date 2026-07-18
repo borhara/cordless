@@ -30,6 +30,7 @@ def _send(method, path, body, headers):
             resp = _conn.getresponse()
             return resp.status, resp.read()
 
+
 # Pre-create the Lambda client at import time so cold-start invocations don't
 # pay the boto3 initialisation cost inside Discord's 3-second response window.
 try:
