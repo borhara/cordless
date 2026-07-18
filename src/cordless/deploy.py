@@ -97,7 +97,7 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                 zf.write(abs_path, os.path.relpath(abs_path, source_dir))
 
         if bundle_cordless:
-            from .upload import _cordless_package_dir
+            from .upload import _cordless_package_dir, _layer_extras_dir
 
             pkg_dir = _cordless_package_dir()
             pkg_parent = os.path.dirname(pkg_dir)
@@ -117,6 +117,18 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                         for fname in files:
                             abs_path = os.path.join(root, fname)
                             zf.write(abs_path, os.path.relpath(abs_path, pkg_parent))
+
+            # same pynacl bundling the layer path gets, so bundle_cordless doesn't
+            # silently fall back to slow signature verification
+            extras_dir = _layer_extras_dir(python_version, architecture)
+            if extras_dir:
+                for root, dirs, files in os.walk(extras_dir):
+                    dirs[:] = [d for d in dirs if d != "__pycache__"]
+                    for fname in files:
+                        if fname.endswith(".pyc"):
+                            continue
+                        abs_path = os.path.join(root, fname)
+                        zf.write(abs_path, os.path.relpath(abs_path, extras_dir))
         if packages:
             pkg_dir = _ensure_packages(packages, python_version, architecture)
             for root, dirs, files in os.walk(pkg_dir):
