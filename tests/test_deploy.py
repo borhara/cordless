@@ -249,6 +249,35 @@ def test_ensure_function_url_grants_both_required_permission_statements(aws_clie
     assert invoke_function_stmt.get("InvokedViaFunctionUrl") is True
 
 
+def test_ensure_function_url_heals_missing_permission_on_existing_url(aws_clients, tmp_path):
+    """A function whose URL config was created by an older cordless version (or
+    a partially failed earlier deploy) may already have the URL but be missing
+    the lambda:InvokeFunction statement. Calling _ensure_function_url again -
+    e.g. on a routine redeploy - must add the missing statement, not skip
+    straight past it because the URL config already exists."""
+    iam, lam = aws_clients["iam"], aws_clients["lam"]
+    role_arn = _make_role(iam)
+    _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+
+    # simulate the old, incomplete setup: URL config + only the first statement
+    lam.create_function_url_config(FunctionName="my-fn", AuthType="NONE")
+    lam.add_permission(
+        FunctionName="my-fn",
+        StatementId="FunctionURLAllowPublicAccess",
+        Action="lambda:InvokeFunctionUrl",
+        Principal="*",
+        FunctionUrlAuthType="NONE",
+    )
+    policy = json.loads(lam.get_policy(FunctionName="my-fn")["Policy"])
+    assert {s["Action"] for s in policy["Statement"]} == {"lambda:InvokeFunctionUrl"}
+
+    _ensure_function_url(lam, "my-fn")
+
+    policy = json.loads(lam.get_policy(FunctionName="my-fn")["Policy"])
+    actions = {stmt["Action"] for stmt in policy["Statement"]}
+    assert actions == {"lambda:InvokeFunctionUrl", "lambda:InvokeFunction"}
+
+
 # ---------------------------------------------------------------------------
 # _list_all_apis / _list_all_layer_versions (pagination)
 # ---------------------------------------------------------------------------

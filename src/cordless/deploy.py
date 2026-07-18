@@ -437,10 +437,16 @@ def _ensure_function_url(lam, function_name):
     it ever reaches the handler, which is exactly what silently breaks
     Discord's endpoint verification (it never gets any response to sign
     against, just a flat rejection).
+
+    Both add_permission calls run every time, even when the URL config
+    already exists - not just on first creation. A function whose URL was
+    created by an older cordless version (or a partially failed earlier
+    attempt) may already have the config but be missing one or both
+    permission statements; returning early here would leave it stuck
+    broken instead of healing it on the next deploy.
     """
     try:
         config = lam.get_function_url_config(FunctionName=function_name)
-        return config["FunctionUrl"]
     except lam.exceptions.ResourceNotFoundException:
         config = lam.create_function_url_config(FunctionName=function_name, AuthType="NONE")
 
