@@ -185,7 +185,7 @@ def test_pick_returns_none_when_all_none():
 
 def test_init_creates_scaffold(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    main(["init", "mybot"])
+    main(["init", "mybot", "--endpoint", "function_url"])
     assert (tmp_path / "lambda_function.py").exists()
     assert (tmp_path / "cordless.toml").exists()
     assert (tmp_path / ".env.example").exists()
@@ -197,9 +197,47 @@ def test_init_creates_scaffold(tmp_path, monkeypatch):
 def test_init_skips_existing_files(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "lambda_function.py").write_text("existing")
-    main(["init"])
+    main(["init", "--endpoint", "function_url"])
     assert (tmp_path / "lambda_function.py").read_text() == "existing"
     assert "already exists" in capsys.readouterr().out
+
+
+def test_init_endpoint_flag_writes_toml_value(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    main(["init", "--endpoint", "api_gateway"])
+    assert 'endpoint = "api_gateway"' in (tmp_path / "cordless.toml").read_text()
+
+
+def test_init_without_endpoint_flag_prompts_when_interactive(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    with patch("builtins.input", return_value="2"):
+        main(["init"])
+    assert 'endpoint = "api_gateway"' in (tmp_path / "cordless.toml").read_text()
+
+
+def test_init_prompt_accepts_endpoint_name_not_just_number(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    with patch("builtins.input", return_value="function_url"):
+        main(["init"])
+    assert 'endpoint = "function_url"' in (tmp_path / "cordless.toml").read_text()
+
+
+def test_init_prompt_rejects_invalid_input_and_asks_again(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    with patch("builtins.input", side_effect=["banana", "1"]):
+        main(["init"])
+    assert 'endpoint = "function_url"' in (tmp_path / "cordless.toml").read_text()
+
+
+def test_init_without_endpoint_flag_fails_fast_when_not_interactive(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    with pytest.raises(SystemExit, match="--endpoint"):
+        main(["init"])
+    assert not (tmp_path / "cordless.toml").exists()
 
 
 # ---------------------------------------------------------------------------

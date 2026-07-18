@@ -69,6 +69,7 @@ _KNOWN_DEPLOY_KEYS = {
     "policies",
     "architecture",
     "ratelimit",
+    "endpoint",
 }
 
 
@@ -411,6 +412,63 @@ def _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account
     return endpoint
 
 
+def _has_api_gateway(apigw, function_name):
+    api_name = f"{function_name}-api"
+    return any(a["Name"] == api_name for a in _list_all_apis(apigw))
+
+
+def _has_function_url(lam, function_name):
+    try:
+        lam.get_function_url_config(FunctionName=function_name)
+        return True
+    except lam.exceptions.ResourceNotFoundException:
+        return False
+
+
+def _ensure_function_url(lam, function_name):
+    """Like _ensure_api_gateway, but a direct Lambda Function URL - no API
+    Gateway hop, no separate service to provision or tear down (deleting the
+    function removes its Function URL along with it).
+
+    A public (AuthType=NONE) function URL needs two resource-policy
+    statements, not one: lambda:InvokeFunctionUrl, and - required by AWS
+    since October 2025 - a second lambda:InvokeFunction statement gated on
+    InvokedViaFunctionUrl. Without the second one every request 403s before
+    it ever reaches the handler, which is exactly what silently breaks
+    Discord's endpoint verification (it never gets any response to sign
+    against, just a flat rejection).
+    """
+    try:
+        config = lam.get_function_url_config(FunctionName=function_name)
+        return config["FunctionUrl"]
+    except lam.exceptions.ResourceNotFoundException:
+        config = lam.create_function_url_config(FunctionName=function_name, AuthType="NONE")
+
+    try:
+        lam.add_permission(
+            FunctionName=function_name,
+            StatementId="FunctionURLAllowPublicAccess",
+            Action="lambda:InvokeFunctionUrl",
+            Principal="*",
+            FunctionUrlAuthType="NONE",
+        )
+    except lam.exceptions.ResourceConflictException:
+        pass
+
+    try:
+        lam.add_permission(
+            FunctionName=function_name,
+            StatementId="FunctionURLInvokeAllowPublicAccess",
+            Action="lambda:InvokeFunction",
+            Principal="*",
+            InvokedViaFunctionUrl=True,
+        )
+    except lam.exceptions.ResourceConflictException:
+        pass
+
+    return config["FunctionUrl"]
+
+
 def _allow_worker_invoke(iam, role_name, worker_arn):
     iam.put_role_policy(
         RoleName=role_name,
@@ -495,6 +553,7 @@ def deploy(
     crons=None,
     architecture=None,
     ratelimit=False,
+    endpoint=None,
 ):
     if not function_name:
         raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
@@ -518,6 +577,16 @@ def deploy(
             architecture = existing_config.get("Architectures", ["x86_64"])[0]
         except lam.exceptions.ResourceNotFoundException:
             architecture = "arm64"
+
+    if endpoint is None:
+        # keep whichever endpoint an existing function already has; only a
+        # brand new function gets the simpler, lower-latency default
+        if _has_function_url(lam, function_name):
+            endpoint = "function_url"
+        elif _has_api_gateway(apigw, function_name):
+            endpoint = "api_gateway"
+        else:
+            endpoint = "function_url"
 
     print()
 
@@ -589,8 +658,12 @@ def deploy(
                     architecture=architecture,
                 )
 
-        with Spinner("API Gateway"):
-            url = _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id)
+        if endpoint == "function_url":
+            with Spinner("function URL"):
+                url = _ensure_function_url(lam, function_name)
+        else:
+            with Spinner("API Gateway"):
+                url = _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id)
 
         if defer_worker:
             w_exists, worker_arn = _function_exists(lam, defer_worker)

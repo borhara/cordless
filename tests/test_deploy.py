@@ -10,6 +10,7 @@ import cordless.deploy
 from cordless.deploy import (
     _allow_worker_invoke,
     _ensure_api_gateway,
+    _ensure_function_url,
     _function_exists,
     _publish_cordless_layer,
     _wire_crons,
@@ -206,6 +207,48 @@ def test_ensure_api_gateway_is_idempotent(aws_clients, tmp_path):
     assert len(apigw.get_apis()["Items"]) == 1
 
 
+def test_ensure_function_url_creates_url(aws_clients, tmp_path):
+    iam, lam = aws_clients["iam"], aws_clients["lam"]
+    role_arn = _make_role(iam)
+    _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    url = _ensure_function_url(lam, "my-fn")
+    assert url
+    assert lam.get_function_url_config(FunctionName="my-fn")["FunctionUrl"] == url
+
+
+def test_ensure_function_url_is_idempotent(aws_clients, tmp_path):
+    iam, lam = aws_clients["iam"], aws_clients["lam"]
+    role_arn = _make_role(iam)
+    _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    url1 = _ensure_function_url(lam, "my-fn")
+    url2 = _ensure_function_url(lam, "my-fn")
+    assert url1 == url2
+
+
+def test_ensure_function_url_grants_both_required_permission_statements(aws_clients, tmp_path):
+    """AWS requires two resource-policy statements for a public (AuthType=NONE)
+    function URL, not one - lambda:InvokeFunctionUrl, and (since October 2025)
+    a second lambda:InvokeFunction statement gated on InvokedViaFunctionUrl.
+    Without the second one every request 403s before it reaches the handler,
+    which is what silently broke Discord's endpoint verification."""
+    iam, lam = aws_clients["iam"], aws_clients["lam"]
+    role_arn = _make_role(iam)
+    _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    _ensure_function_url(lam, "my-fn")
+
+    policy = json.loads(lam.get_policy(FunctionName="my-fn")["Policy"])
+    actions = {stmt["Action"] for stmt in policy["Statement"]}
+    assert "lambda:InvokeFunctionUrl" in actions
+    assert "lambda:InvokeFunction" in actions
+
+    # moto represents InvokedViaFunctionUrl as a flat statement key rather than
+    # the real Condition:{Bool:{lambda:InvokedViaFunctionUrl}} shape AWS uses,
+    # so this checks moto's shape - the real shape was verified by hand against
+    # live AWS, which is what actually confirmed the fix
+    invoke_function_stmt = next(s for s in policy["Statement"] if s["Action"] == "lambda:InvokeFunction")
+    assert invoke_function_stmt.get("InvokedViaFunctionUrl") is True
+
+
 # ---------------------------------------------------------------------------
 # _list_all_apis / _list_all_layer_versions (pagination)
 # ---------------------------------------------------------------------------
@@ -394,6 +437,55 @@ def test_deploy_explicit_architecture_always_wins(deploy_patches, monkeypatch):
     lam = boto3.client("lambda", region_name=REGION)
     config = lam.get_function_configuration(FunctionName="my-bot")
     assert config["Architectures"] == ["x86_64"]
+
+
+@mock_aws
+def test_deploy_defaults_new_function_to_function_url(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches))
+    lam = boto3.client("lambda", region_name=REGION)
+    config = lam.get_function_url_config(FunctionName="my-bot")
+    assert config["FunctionUrl"]
+
+
+@mock_aws
+def test_deploy_keeps_existing_api_gateway_when_unspecified(deploy_patches, monkeypatch):
+    """A redeploy that doesn't ask for a specific endpoint must not silently
+    switch an existing API Gateway deployment over to a Function URL."""
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    kwargs = _base_deploy_kwargs(deploy_patches)
+    deploy(**kwargs, endpoint="api_gateway")
+    deploy(**kwargs)  # no endpoint given this time
+    lam = boto3.client("lambda", region_name=REGION)
+    with pytest.raises(lam.exceptions.ResourceNotFoundException):
+        lam.get_function_url_config(FunctionName="my-bot")
+    apigw = boto3.client("apigatewayv2", region_name=REGION)
+    apis = apigw.get_apis()["Items"]
+    assert any(a["Name"] == "my-bot-api" for a in apis)
+
+
+@mock_aws
+def test_deploy_keeps_existing_function_url_when_unspecified(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    kwargs = _base_deploy_kwargs(deploy_patches)
+    deploy(**kwargs, endpoint="function_url")
+    deploy(**kwargs)  # no endpoint given this time
+    lam = boto3.client("lambda", region_name=REGION)
+    config = lam.get_function_url_config(FunctionName="my-bot")
+    assert config["FunctionUrl"]
+
+
+@mock_aws
+def test_deploy_explicit_endpoint_always_wins(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches, endpoint="api_gateway"))
+    lam = boto3.client("lambda", region_name=REGION)
+    with pytest.raises(lam.exceptions.ResourceNotFoundException):
+        lam.get_function_url_config(FunctionName="my-bot")
 
 
 @mock_aws
