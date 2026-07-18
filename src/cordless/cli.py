@@ -215,7 +215,7 @@ def _deploy(args):
         defer_memory=int(cfg.get("defer_memory", 256)),
         policies=cfg.get("policies"),
         crons=crons,
-        architecture=args.architecture or cfg.get("architecture", "x86_64"),
+        architecture=args.architecture or cfg.get("architecture"),
         ratelimit=bool(cfg.get("ratelimit", False)),
     )
 
@@ -571,7 +571,10 @@ def main(argv=None):
         "--defer-timeout", metavar="SECONDS", default=None, help="Worker Lambda timeout in seconds (default: 30)"
     )
     deploy_cmd.add_argument(
-        "--architecture", default=None, choices=["x86_64", "arm64"], help="Lambda architecture (default: x86_64)"
+        "--architecture",
+        default=None,
+        choices=["x86_64", "arm64"],
+        help="Lambda architecture (default: arm64 for a new function, unchanged for an existing one)",
     )
     deploy_cmd.add_argument(
         "--verbose",

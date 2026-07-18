@@ -363,6 +363,40 @@ def test_deploy_warns_when_pynacl_bundle_failed(deploy_patches, monkeypatch, cap
 
 
 @mock_aws
+def test_deploy_defaults_new_function_to_arm64(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches))
+    lam = boto3.client("lambda", region_name=REGION)
+    config = lam.get_function_configuration(FunctionName="my-bot")
+    assert config["Architectures"] == ["arm64"]
+
+
+@mock_aws
+def test_deploy_keeps_existing_architecture_when_unspecified(deploy_patches, monkeypatch):
+    """AWS won't let an existing function's architecture change in place, so a
+    redeploy that doesn't ask for a specific architecture must not try to flip it."""
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    kwargs = _base_deploy_kwargs(deploy_patches)
+    deploy(**kwargs, architecture="x86_64")
+    deploy(**kwargs)  # no architecture given this time
+    lam = boto3.client("lambda", region_name=REGION)
+    config = lam.get_function_configuration(FunctionName="my-bot")
+    assert config["Architectures"] == ["x86_64"]
+
+
+@mock_aws
+def test_deploy_explicit_architecture_always_wins(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches, architecture="x86_64"))
+    lam = boto3.client("lambda", region_name=REGION)
+    config = lam.get_function_configuration(FunctionName="my-bot")
+    assert config["Architectures"] == ["x86_64"]
+
+
+@mock_aws
 def test_deploy_creates_worker_when_configured(deploy_patches, monkeypatch):
     iam = boto3.client("iam", region_name=REGION)
     monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))

@@ -493,7 +493,7 @@ def deploy(
     defer_memory=256,
     policies=None,
     crons=None,
-    architecture="x86_64",
+    architecture=None,
     ratelimit=False,
 ):
     if not function_name:
@@ -508,6 +508,16 @@ def deploy(
     lam = session.client("lambda")
     apigw = session.client("apigatewayv2")
     account_id = session.client("sts").get_caller_identity()["Account"]
+
+    if architecture is None:
+        # AWS won't let an existing function's architecture change in place, so
+        # an unset architecture keeps whatever's already deployed. arm64 is only
+        # the default for a function that doesn't exist yet.
+        try:
+            existing_config = lam.get_function_configuration(FunctionName=function_name)
+            architecture = existing_config.get("Architectures", ["x86_64"])[0]
+        except lam.exceptions.ResourceNotFoundException:
+            architecture = "arm64"
 
     print()
 
