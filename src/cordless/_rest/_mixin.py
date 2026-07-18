@@ -18,6 +18,9 @@ class RESTMixin:
     def start_thread_without_message(self, channel_id, name, **kwargs):
         return threads.start_thread_without_message(channel_id, name, **kwargs)
 
+    def start_thread_from_forum(self, channel_id, name, **kwargs):
+        return threads.start_thread_from_forum(channel_id, name, **kwargs)
+
     def join_thread(self, channel_id):
         return threads.join_thread(channel_id)
 

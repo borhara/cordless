@@ -20,6 +20,29 @@ def start_thread_without_message(channel_id, name, *, thread_type=11, invitable=
     return Thread.from_dict(data)
 
 
+async def start_thread_from_forum(
+    channel_id,
+    name,
+    *,
+    message,
+    applied_tags=None,
+    auto_archive_duration=None,
+    rate_limit_per_user=0,
+    token=None,
+    files=None,
+):
+    payload = {"name": name, "rate_limit_per_user": rate_limit_per_user, "message": {"content": message}}
+
+    if applied_tags:
+        payload["applied_tags"] = applied_tags
+
+    if auto_archive_duration:
+        payload["auto_archive_duration"] = auto_archive_duration
+
+    data = _client.request("POST", f"/channels/{channel_id}/threads", payload, files=files, token=token)
+    return Thread.from_dict(data)
+
+
 def join_thread(channel_id, token=None):
     _client.request("PUT", f"/channels/{channel_id}/thread-members/@me", token=token)
 
