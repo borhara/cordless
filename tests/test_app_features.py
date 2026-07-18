@@ -527,63 +527,30 @@ def test_edit_message_passes_files_through_to_discord_request():
     assert captured["files"] == files
 
 
-class FakeHTTPSConnection:
-    """Stub for cordless.app.HTTPSConnection. One instance per fresh connection,
-    but requests/responses are tracked on the class so tests can see every
-    call even across a reconnect."""
-
-    requests = []
-    responses = []  # list of (status, headers, body) consumed per request
-
-    def __init__(self, host):
-        self.host = host
-
-    def request(self, method, path, body, headers):
-        FakeHTTPSConnection.requests.append({"method": method, "path": path, "body": body, "headers": headers})
-
-    def getresponse(self):
-        status, headers, body = FakeHTTPSConnection.responses.pop(0)
-        return type("R", (), {"status": status, "headers": headers, "read": lambda self: body})()
-
-    def close(self):
-        pass
-
-
-@pytest.fixture
-def fake_conn(monkeypatch):
-    import cordless.app
-
-    FakeHTTPSConnection.requests = []
-    FakeHTTPSConnection.responses = []
-    monkeypatch.setattr(cordless.app, "HTTPSConnection", FakeHTTPSConnection)
-    monkeypatch.setattr(cordless.app, "_conn", None)
-    return FakeHTTPSConnection
-
-
-def test_discord_request_attaches_files_metadata_and_builds_multipart(fake_conn):
+def test_discord_request_attaches_files_metadata_and_builds_multipart(fake_app_conn):
     import os
 
-    fake_conn.responses = [(200, {}, b"{}")]
+    fake_app_conn.responses = [(200, {}, b"{}")]
 
     with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}):
         bot = Cordless()
         bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}, [("board.png", b"\x89PNG...")])
 
-    sent = fake_conn.requests[0]
+    sent = fake_app_conn.requests[0]
     assert sent["headers"]["Content-Type"].startswith("multipart/form-data; boundary=")
     assert b'name="files[0]"; filename="board.png"' in sent["body"]
     assert b'name="payload_json"' in sent["body"]
     assert b'"attachments": [{"id": 0, "filename": "board.png"}]' in sent["body"]
 
 
-def test_discord_request_checks_ratelimit_before_sending(fake_conn, monkeypatch):
+def test_discord_request_checks_ratelimit_before_sending(fake_app_conn, monkeypatch):
     import os
 
     import cordless.ratelimit as ratelimit
 
     calls = []
     monkeypatch.setattr(ratelimit, "wait_if_needed", lambda method, path: calls.append((method, path)))
-    fake_conn.responses = [(200, {}, b"{}")]
+    fake_app_conn.responses = [(200, {}, b"{}")]
 
     with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}):
         bot = Cordless()
@@ -592,7 +559,7 @@ def test_discord_request_checks_ratelimit_before_sending(fake_conn, monkeypatch)
     assert calls == [("POST", "/channels/123/messages")]
 
 
-def test_discord_request_records_response_headers_on_success(fake_conn, monkeypatch):
+def test_discord_request_records_response_headers_on_success(fake_app_conn, monkeypatch):
     import os
 
     import cordless.ratelimit as ratelimit
@@ -600,7 +567,7 @@ def test_discord_request_records_response_headers_on_success(fake_conn, monkeypa
     recorded = []
     monkeypatch.setattr(ratelimit, "record_response", lambda method, path, headers: recorded.append(headers))
     resp_headers = {"X-RateLimit-Remaining": "4", "X-RateLimit-Reset-After": "1"}
-    fake_conn.responses = [(200, resp_headers, b"{}")]
+    fake_app_conn.responses = [(200, resp_headers, b"{}")]
 
     with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}):
         bot = Cordless()
@@ -609,7 +576,7 @@ def test_discord_request_records_response_headers_on_success(fake_conn, monkeypa
     assert recorded == [resp_headers]
 
 
-def test_discord_request_retries_once_on_429_then_succeeds(fake_conn, monkeypatch):
+def test_discord_request_retries_once_on_429_then_succeeds(fake_app_conn, monkeypatch):
     import os
     import time
 
@@ -618,7 +585,7 @@ def test_discord_request_retries_once_on_429_then_succeeds(fake_conn, monkeypatc
     blocked = []
     monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: blocked.append(retry_after))
     monkeypatch.setattr(time, "sleep", lambda s: None)
-    fake_conn.responses = [
+    fake_app_conn.responses = [
         (429, {}, json.dumps({"retry_after": 0.2}).encode()),
         (200, {}, b"{}"),
     ]
@@ -631,7 +598,7 @@ def test_discord_request_retries_once_on_429_then_succeeds(fake_conn, monkeypatc
     assert blocked == [0.2]
 
 
-def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(fake_conn, monkeypatch):
+def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(fake_app_conn, monkeypatch):
     """wait_if_needed must run before every attempt, not just the first - otherwise a
     sibling call's note_blocked() from a moment ago is never consulted before retrying."""
     import os
@@ -643,7 +610,7 @@ def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(fake_conn, mon
     monkeypatch.setattr(ratelimit, "wait_if_needed", lambda method, path: waits.append((method, path)))
     monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: None)
     monkeypatch.setattr(time, "sleep", lambda s: None)
-    fake_conn.responses = [
+    fake_app_conn.responses = [
         (429, {}, json.dumps({"retry_after": 0.1}).encode()),
         (200, {}, b"{}"),
     ]
@@ -655,7 +622,7 @@ def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(fake_conn, mon
     assert waits == [("POST", "/channels/123/messages"), ("POST", "/channels/123/messages")]
 
 
-def test_discord_request_gives_up_after_retry_budget_exhausted(fake_conn, monkeypatch):
+def test_discord_request_gives_up_after_retry_budget_exhausted(fake_app_conn, monkeypatch):
     import os
     import time
 
@@ -669,7 +636,7 @@ def test_discord_request_gives_up_after_retry_budget_exhausted(fake_conn, monkey
         return clock[0]
 
     monkeypatch.setattr(time, "monotonic", fake_monotonic)
-    fake_conn.responses = [(429, {}, b'{"retry_after": 0.1}')] * 5
+    fake_app_conn.responses = [(429, {}, b'{"retry_after": 0.1}')] * 5
 
     with (
         patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
