@@ -85,10 +85,18 @@ def note_blocked(method, path, retry_after):
     _put_shared(key, blocked_until)
 
 
-def _table():
-    import boto3
+_tables = {}
 
-    return boto3.resource("dynamodb").Table(os.environ[_TABLE_ENV_VAR])
+
+def _table():
+    name = os.environ[_TABLE_ENV_VAR]
+    table = _tables.get(name)
+    if table is None:
+        import boto3
+
+        table = boto3.resource("dynamodb").Table(name)
+        _tables[name] = table
+    return table
 
 
 def _shared_block(key):
