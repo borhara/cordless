@@ -543,9 +543,7 @@ def test_health_check_reports_ratelimit_table_status(aws_clients, tmp_path):
     table_name = ratelimit_table_name("my-fn")
     ensure_ratelimit_table(dynamodb, table_name)
 
-    checks = _health_check(
-        lam, apigw, events, dynamodb, "my-fn", None, "function_url", None, False, True, table_name
-    )
+    checks = _health_check(lam, apigw, events, dynamodb, "my-fn", None, "function_url", None, False, True, table_name)
 
     label_map = {label: (ok, detail) for ok, label, detail in checks}
     assert label_map["Rate limit table"] == (True, "ACTIVE")
