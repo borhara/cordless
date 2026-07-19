@@ -569,7 +569,7 @@ def deploy(
         raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
 
     from ._aws import get_session
-    from ._progress import Spinner, success
+    from ._progress import Spinner, success, summary
 
     session = get_session(region)
     region = region or session.region_name
@@ -630,11 +630,6 @@ def deploy(
             python_version=python_version,
             architecture=architecture,
         )
-
-    # printed after both spinners above have stopped animating, so it can't
-    # get overwritten by their mid-spin redraws
-    if _upload.pynacl_bundle_failed:
-        print("  cordless: could not bundle pynacl, using the slower pure-Python signature verification")
 
     try:
         exists, function_arn = _function_exists(lam, function_name)
@@ -731,6 +726,16 @@ def deploy(
     with Spinner("keep-warm"):
         _wire_keepwarm(session.client("events"), lam, function_name, function_arn, keep_warm)
 
+    summary(
+        [
+            (True, "Runtime", runtime),
+            (
+                not _upload.pynacl_bundle_failed,
+                "Signature verification",
+                "pynacl" if not _upload.pynacl_bundle_failed else "pure-Python Ed25519 (slower than pynacl)",
+            ),
+        ]
+    )
     success(url)
     return url
 

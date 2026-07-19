@@ -7,6 +7,7 @@ import time
 _FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 _GREEN = "\033[32m"
 _RED = "\033[31m"
+_YELLOW = "\033[33m"
 _DIM = "\033[2m"
 _BOLD = "\033[1m"
 _RESET = "\033[0m"
@@ -64,3 +65,15 @@ def success(message):
         print(f"\n  {_BOLD}{_GREEN}✓{_RESET}  {message}\n")
     else:
         print(f"\n✓  {message}\n")
+
+
+def summary(lines):
+    """Print a short list of (ok, label, detail) status lines, e.g. what
+    runtime and signature verification method a deploy actually ended up
+    with - printed once, at the end, in its own clearly marked block, so it
+    can't get missed or stomped by an earlier spinner."""
+    print()
+    print(f"  {_DIM}── summary ──{_RESET}")
+    for ok, label, detail in lines:
+        mark = f"{_GREEN}✓{_RESET}" if ok else f"{_YELLOW}⚠{_RESET}"
+        print(f"  {mark} {label}: {detail}")

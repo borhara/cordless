@@ -490,7 +490,35 @@ def test_deploy_warns_when_pynacl_bundle_failed(deploy_patches, monkeypatch, cap
     url = deploy(**_base_deploy_kwargs(deploy_patches))
 
     assert url  # deploy must still succeed, not raise
-    assert "could not bundle pynacl" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "Signature verification: pure-Python Ed25519 (slower than pynacl)" in out
+    assert "⚠" in out
+
+
+@mock_aws
+def test_deploy_summary_shows_pynacl_when_bundled(deploy_patches, monkeypatch, capsys):
+    import cordless.upload
+
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    cordless.upload.pynacl_bundle_failed = False
+
+    deploy(**_base_deploy_kwargs(deploy_patches))
+
+    out = capsys.readouterr().out
+    assert "Signature verification: pynacl" in out
+    assert "✓" in out
+
+
+@mock_aws
+def test_deploy_summary_shows_runtime(deploy_patches, monkeypatch, capsys):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+
+    deploy(**_base_deploy_kwargs(deploy_patches, runtime="python3.13"))
+
+    out = capsys.readouterr().out
+    assert "Runtime: python3.13" in out
 
 
 @mock_aws
