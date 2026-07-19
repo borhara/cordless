@@ -12,6 +12,7 @@ from cordless.deploy import (
     _ensure_api_gateway,
     _ensure_function_url,
     _function_exists,
+    _health_check,
     _publish_cordless_layer,
     _remove_keepwarm,
     _wire_crons,
@@ -448,6 +449,109 @@ def test_remove_keepwarm_is_safe_when_nothing_exists(aws_clients, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# _health_check (describe-only, no AWS cost)
+# ---------------------------------------------------------------------------
+
+
+def test_health_check_all_green_when_everything_is_wired_correctly(aws_clients, tmp_path):
+    iam, lam, apigw, events = aws_clients["iam"], aws_clients["lam"], aws_clients["apigw"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    fn_arn = _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    _ensure_function_url(lam, "my-fn")
+    _wire_crons(events, lam, "my-fn", "my-fn", fn_arn, {"daily": "rate(1 day)"})
+    _wire_keepwarm(events, lam, "my-fn", fn_arn, True)
+
+    checks = _health_check(
+        lam, apigw, events, None, "my-fn", None, "function_url", {"daily": "rate(1 day)"}, True, False, None
+    )
+
+    assert checks
+    assert all(ok for ok, _, _ in checks)
+
+
+def test_health_check_flags_missing_function_url_permission_statement(aws_clients, tmp_path):
+    """Regression test for the actual bug this session found: a Function URL
+    with only the lambda:InvokeFunctionUrl statement, missing the second
+    lambda:InvokeFunction one, looks fine until a real request 403s."""
+    iam, lam, apigw, events = aws_clients["iam"], aws_clients["lam"], aws_clients["apigw"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    lam.create_function_url_config(FunctionName="my-fn", AuthType="NONE")
+    lam.add_permission(
+        FunctionName="my-fn",
+        StatementId="FunctionURLAllowPublicAccess",
+        Action="lambda:InvokeFunctionUrl",
+        Principal="*",
+        FunctionUrlAuthType="NONE",
+    )
+
+    checks = _health_check(lam, apigw, events, None, "my-fn", None, "function_url", None, False, False, None)
+
+    label_map = {label: (ok, detail) for ok, label, detail in checks}
+    assert label_map["Function URL permissions"][0] is False
+
+
+def test_health_check_flags_missing_cron_rule(aws_clients, tmp_path):
+    iam, lam, apigw, events = aws_clients["iam"], aws_clients["lam"], aws_clients["apigw"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    # note: never actually wired via _wire_crons
+
+    checks = _health_check(
+        lam, apigw, events, None, "my-fn", None, "function_url", {"daily": "rate(1 day)"}, False, False, None
+    )
+
+    label_map = {label: (ok, detail) for ok, label, detail in checks}
+    ok, detail = label_map["Cron rules"]
+    assert ok is False
+    assert "daily" in detail
+
+
+def test_health_check_flags_keepwarm_targeting_wrong_function(aws_clients, tmp_path):
+    """Mirrors the earlier bug where a hand-rolled keep-warm cron ended up
+    also wired to the worker via the normal cron path - a keep-warm rule is
+    only useful if it targets the main function."""
+    iam, lam, apigw, events = aws_clients["iam"], aws_clients["lam"], aws_clients["apigw"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    wrong_arn = _make_function(lam, "my-fn-worker", role_arn, _minimal_zip(tmp_path))
+    _wire_keepwarm(events, lam, "my-fn", wrong_arn, True)
+
+    checks = _health_check(lam, apigw, events, None, "my-fn", None, "function_url", None, True, False, None)
+
+    label_map = {label: (ok, detail) for ok, label, detail in checks}
+    assert label_map["Keep-warm rule"][0] is False
+
+
+def test_health_check_reports_api_gateway_endpoint(aws_clients, tmp_path):
+    iam, lam, apigw, events = aws_clients["iam"], aws_clients["lam"], aws_clients["apigw"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    fn_arn = _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    _ensure_api_gateway(apigw, lam, "my-fn", fn_arn, REGION, ACCOUNT_ID)
+
+    checks = _health_check(lam, apigw, events, None, "my-fn", None, "api_gateway", None, False, False, None)
+
+    label_map = {label: (ok, detail) for ok, label, detail in checks}
+    assert label_map["API Gateway"][0] is True
+
+
+def test_health_check_reports_ratelimit_table_status(aws_clients, tmp_path):
+    iam, lam, apigw, events = aws_clients["iam"], aws_clients["lam"], aws_clients["apigw"], aws_clients["events"]
+    dynamodb = boto3.client("dynamodb", region_name=REGION)
+    role_arn = _make_role(iam)
+    _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    table_name = ratelimit_table_name("my-fn")
+    ensure_ratelimit_table(dynamodb, table_name)
+
+    checks = _health_check(
+        lam, apigw, events, dynamodb, "my-fn", None, "function_url", None, False, True, table_name
+    )
+
+    label_map = {label: (ok, detail) for ok, label, detail in checks}
+    assert label_map["Rate limit table"] == (True, "ACTIVE")
+
+
+# ---------------------------------------------------------------------------
 # deploy / destroy integration
 # ---------------------------------------------------------------------------
 
@@ -519,6 +623,20 @@ def test_deploy_summary_shows_runtime(deploy_patches, monkeypatch, capsys):
 
     out = capsys.readouterr().out
     assert "Runtime: python3.13" in out
+
+
+@mock_aws
+def test_deploy_summary_includes_health_check(deploy_patches, monkeypatch, capsys):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+
+    deploy(**_base_deploy_kwargs(deploy_patches, keep_warm=True, crons={"daily": "rate(1 day)"}))
+
+    out = capsys.readouterr().out
+    assert "Function: Active" in out
+    assert "Function URL permissions: both required statements present" in out
+    assert "Cron rules: all present" in out
+    assert "Keep-warm rule: targets main function" in out
 
 
 @mock_aws

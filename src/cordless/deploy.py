@@ -603,6 +603,7 @@ def deploy(
     with Spinner("IAM role"):
         role_arn = ensure_iam_role(iam, role_name, extra_policies=policies)
 
+    table_name = None
     if ratelimit:
         table_name = ratelimit_table_name(function_name)
         with Spinner("rate limit table"):
@@ -726,6 +727,20 @@ def deploy(
     with Spinner("keep-warm"):
         _wire_keepwarm(session.client("events"), lam, function_name, function_arn, keep_warm)
 
+    health = _health_check(
+        lam,
+        apigw,
+        session.client("events"),
+        session.client("dynamodb"),
+        function_name,
+        defer_worker,
+        endpoint,
+        crons,
+        keep_warm,
+        ratelimit,
+        table_name,
+    )
+
     summary(
         [
             (True, "Runtime", runtime),
@@ -734,10 +749,101 @@ def deploy(
                 "Signature verification",
                 "pynacl" if not _upload.pynacl_bundle_failed else "pure-Python Ed25519 (slower than pynacl)",
             ),
+            *health,
         ]
     )
     success(url)
     return url
+
+
+def _health_check(
+    lam,
+    apigw,
+    events,
+    dynamodb,
+    function_name,
+    defer_worker,
+    endpoint,
+    crons,
+    keep_warm,
+    ratelimit,
+    table_name,
+):
+    """Describe-only post-deploy checks - no invocations, no AWS cost. Confirms
+    the pieces deploy() just wired are actually present and in the expected
+    shape, not just that the API calls that created them didn't raise.
+    Returns a list of (ok, label, detail) tuples for summary()."""
+    checks = []
+
+    try:
+        config = lam.get_function_configuration(FunctionName=function_name)
+        state = config.get("State", "unknown")
+        checks.append((state == "Active", "Function", state))
+    except Exception as exc:
+        checks.append((False, "Function", f"could not verify ({exc})"))
+
+    if defer_worker:
+        try:
+            config = lam.get_function_configuration(FunctionName=defer_worker)
+            state = config.get("State", "unknown")
+            checks.append((state == "Active", "Worker function", state))
+        except Exception as exc:
+            checks.append((False, "Worker function", f"could not verify ({exc})"))
+
+    if endpoint == "function_url":
+        try:
+            lam.get_function_url_config(FunctionName=function_name)
+            policy = json.loads(lam.get_policy(FunctionName=function_name)["Policy"])
+            actions = {s["Action"] for s in policy["Statement"]}
+            has_both = {"lambda:InvokeFunctionUrl", "lambda:InvokeFunction"}.issubset(actions)
+            checks.append(
+                (
+                    has_both,
+                    "Function URL permissions",
+                    "both required statements present" if has_both else "missing lambda:InvokeFunction statement",
+                )
+            )
+        except Exception as exc:
+            checks.append((False, "Function URL", f"could not verify ({exc})"))
+    else:
+        try:
+            api_name = f"{function_name}-api"
+            exists = any(a["Name"] == api_name for a in _list_all_apis(apigw))
+            checks.append((exists, "API Gateway", "present" if exists else "not found"))
+        except Exception as exc:
+            checks.append((False, "API Gateway", f"could not verify ({exc})"))
+
+    if crons:
+        target = defer_worker or function_name
+        missing = []
+        for name in crons:
+            rule_name = f"{function_name}-cron-{name}"
+            try:
+                targets = events.list_targets_by_rule(Rule=rule_name).get("Targets", [])
+                if not any(t["Arn"].endswith(f":{target}") for t in targets):
+                    missing.append(name)
+            except events.exceptions.ResourceNotFoundException:
+                missing.append(name)
+        detail = "all present" if not missing else f"missing/misdirected: {', '.join(missing)}"
+        checks.append((not missing, "Cron rules", detail))
+
+    if keep_warm:
+        rule_name = f"{function_name}-keepwarm"
+        try:
+            targets = events.list_targets_by_rule(Rule=rule_name).get("Targets", [])
+            ok = any(t["Arn"].endswith(f":{function_name}") for t in targets)
+            checks.append((ok, "Keep-warm rule", "targets main function" if ok else "not targeting main function"))
+        except events.exceptions.ResourceNotFoundException:
+            checks.append((False, "Keep-warm rule", "not found"))
+
+    if ratelimit:
+        try:
+            state = dynamodb.describe_table(TableName=table_name)["Table"]["TableStatus"]
+            checks.append((state == "ACTIVE", "Rate limit table", state))
+        except Exception as exc:
+            checks.append((False, "Rate limit table", f"could not verify ({exc})"))
+
+    return checks
 
 
 def _wire_crons(events, lam, function_name, target_fn, target_arn, crons):
