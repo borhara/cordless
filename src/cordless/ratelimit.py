@@ -72,7 +72,9 @@ def wait_if_needed(method, path):
     candidates = [t for t in (cached[1] if cached else None, _shared_block(key)) if t]
     blocked_until = max(candidates, default=None)
     if blocked_until and blocked_until > time.time():
-        time.sleep(jittered_wait(blocked_until - time.time()))
+        wait = jittered_wait(blocked_until - time.time())
+        print(f"[cordless] rate limit: waiting {wait:.2f}s on {key}")
+        time.sleep(wait)
 
 
 def note_blocked(method, path, retry_after):

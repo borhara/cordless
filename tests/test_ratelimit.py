@@ -135,6 +135,36 @@ def test_wait_if_needed_sleeps_on_local_state_even_if_shared_check_fails(monkeyp
     assert slept and slept[0] <= ratelimit._MAX_WAIT
 
 
+def test_wait_if_needed_logs_when_it_actually_waits(monkeypatch, capsys):
+    """The only way to see a rate-limit wait happen today is this log line -
+    silent latency is exactly what's hard to debug, so this must not regress
+    into a no-op print or disappear."""
+    monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
+    import time
+
+    monkeypatch.setattr(ratelimit, "_shared_block", lambda key: None)
+    monkeypatch.setattr(ratelimit, "_put_shared", lambda key, blocked_until: None)
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+
+    ratelimit.note_blocked("POST", "/channels/1/messages", 0.3)
+    ratelimit.wait_if_needed("POST", "/channels/1/messages")
+
+    out = capsys.readouterr().out
+    assert "rate limit" in out
+    assert "POST /channels/1/messages" in out
+
+
+def test_wait_if_needed_does_not_log_when_comfortably_clear(monkeypatch, capsys):
+    monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
+    ratelimit.record_response(
+        "POST", "/channels/1/messages", {"X-RateLimit-Remaining": "5", "X-RateLimit-Reset-After": "5"}
+    )
+
+    ratelimit.wait_if_needed("POST", "/channels/1/messages")
+
+    assert capsys.readouterr().out == ""
+
+
 def test_wait_if_needed_prefers_the_later_of_local_and_shared_block(monkeypatch):
     monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
     import time
