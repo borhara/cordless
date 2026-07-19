@@ -35,6 +35,7 @@ class Cog:
         nsfw=False,
         ephemeral=False,
         guild_ids=None,
+        user_installable=False,
     ):
         """Same parameters as `Cordless.command`. Handlers registered here
         take effect once the cog is passed to `bot.add_cog(cog)`."""
@@ -54,6 +55,7 @@ class Cog:
                         "nsfw": nsfw,
                         "ephemeral": ephemeral,
                         "guild_ids": guild_ids,
+                        "user_installable": user_installable,
                     },
                 )
             )
@@ -118,6 +120,7 @@ class Cog:
                         "name": name,
                         "dm_permission": dm_permission,
                         "guild_ids": guild_ids,
+                        "user_installable": user_installable,
                     },
                 )
             )
@@ -125,7 +128,7 @@ class Cog:
 
         return decorator
 
-    def message_command(self, name, dm_permission=True, guild_ids=None):
+    def message_command(self, name, dm_permission=True, guild_ids=None, user_installable=False):
         """Same as `Cordless.message_command`."""
 
         def decorator(func):
@@ -137,6 +140,7 @@ class Cog:
                         "name": name,
                         "dm_permission": dm_permission,
                         "guild_ids": guild_ids,
+                        "user_installable": user_installable,
                     },
                 )
             )

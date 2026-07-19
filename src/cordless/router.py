@@ -20,6 +20,17 @@ MODAL_SUBMIT = 5
 _SUB_COMMAND = 1
 _SUB_COMMAND_GROUP = 2
 
+# Discord's integration_types/contexts values, for user_installable=True.
+# Not exposed publicly: user_installable is the one knob that matters (can
+# people run this from a DM/group chat with someone other than the bot,
+# after installing it to their own account), so there's no reason to make
+# callers juggle these two raw arrays themselves.
+_INTEGRATION_TYPE_GUILD_INSTALL = 0
+_INTEGRATION_TYPE_USER_INSTALL = 1
+_CONTEXT_GUILD = 0
+_CONTEXT_BOT_DM = 1
+_CONTEXT_PRIVATE_CHANNEL = 2
+
 
 class Router:
     def __init__(self):
@@ -41,6 +52,7 @@ class Router:
         default_member_permissions=None,
         nsfw=False,
         guild_ids=None,
+        user_installable=False,
     ):
         if cmd_type == 1:
             for existing, meta in self.commands.items():
@@ -63,6 +75,7 @@ class Router:
             "default_member_permissions": default_member_permissions,
             "nsfw": nsfw,
             "guild_ids": list(guild_ids) if guild_ids else None,
+            "user_installable": user_installable,
         }
 
     def register_button(self, custom_id, handler):
@@ -99,6 +112,17 @@ class Router:
         """Every distinct guild referenced by any command's guild_ids."""
         return sorted({gid for m in self.commands.values() for gid in (m.get("guild_ids") or [])})
 
+    @staticmethod
+    def _apply_installability(cmd, user_installable):
+        """contexts/integration_types replace dm_permission for the modern
+        install model, so when this is set, dm_permission is left off
+        entirely rather than sent alongside a field that supersedes it."""
+        if user_installable:
+            cmd["integration_types"] = [_INTEGRATION_TYPE_GUILD_INSTALL, _INTEGRATION_TYPE_USER_INSTALL]
+            cmd["contexts"] = [_CONTEXT_GUILD, _CONTEXT_BOT_DM, _CONTEXT_PRIVATE_CHANNEL]
+            return True
+        return False
+
     def _definitions(self, commands):
         flat = {}  # name → meta
         subs = {}  # top-level name → {path → meta}
@@ -122,7 +146,9 @@ class Router:
             if cmd_type in (2, 3):
                 # Context menu commands: no description, no options
                 cmd = {"name": name, "type": cmd_type}
-                if not meta.get("dm_permission", True):
+                if not self._apply_installability(cmd, meta.get("user_installable")) and not meta.get(
+                    "dm_permission", True
+                ):
                     cmd["dm_permission"] = False
                 result.append(cmd)
                 continue
@@ -132,7 +158,9 @@ class Router:
                 "type": 1,
                 "options": meta["options"],
             }
-            if not meta.get("dm_permission", True):
+            if not self._apply_installability(cmd, meta.get("user_installable")) and not meta.get(
+                "dm_permission", True
+            ):
                 cmd["dm_permission"] = False
             if meta.get("default_member_permissions") is not None:
                 cmd["default_member_permissions"] = str(meta["default_member_permissions"])
@@ -183,7 +211,10 @@ class Router:
                 "type": 1,
                 "options": options,
             }
-            if any(not m.get("dm_permission", True) for m in entries.values()):
+            installable = self._apply_installability(
+                cmd, any(m.get("user_installable") for m in entries.values())
+            )
+            if not installable and any(not m.get("dm_permission", True) for m in entries.values()):
                 cmd["dm_permission"] = False
             # Discord only accepts these at the top level, so combine across
             # subcommands: union the permission bits (most restrictive wins)

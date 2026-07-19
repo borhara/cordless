@@ -421,6 +421,72 @@ def test_subcommand_parent_without_permissions_stays_open():
     assert "nsfw" not in parent
 
 
+def test_command_not_user_installable_by_default():
+    bot = Cordless()
+
+    @bot.command("ping", description="Check the bot is alive")
+    async def ping(ctx):
+        pass
+
+    definition = bot.router.command_definitions()[0]
+    assert "integration_types" not in definition
+    assert "contexts" not in definition
+
+
+def test_user_installable_command_sets_integration_types_and_contexts():
+    bot = Cordless()
+
+    @bot.command("ping", description="Check the bot is alive", user_installable=True)
+    async def ping(ctx):
+        pass
+
+    definition = bot.router.command_definitions()[0]
+    assert definition["integration_types"] == [0, 1]
+    assert definition["contexts"] == [0, 1, 2]
+
+
+def test_user_installable_command_omits_dm_permission():
+    """contexts supersedes dm_permission - sending both is asking for trouble,
+    so a user_installable command never gets a dm_permission key at all,
+    regardless of what dm_permission was passed as."""
+    bot = Cordless()
+
+    @bot.command("ping", description="Check the bot is alive", user_installable=True, dm_permission=False)
+    async def ping(ctx):
+        pass
+
+    definition = bot.router.command_definitions()[0]
+    assert "dm_permission" not in definition
+
+
+def test_user_installable_context_menu_command():
+    bot = Cordless()
+
+    @bot.user_command("Inspect User", user_installable=True)
+    async def inspect(ctx):
+        pass
+
+    definition = bot.router.command_definitions()[0]
+    assert definition["integration_types"] == [0, 1]
+    assert definition["contexts"] == [0, 1, 2]
+
+
+def test_subcommand_user_installable_propagates_to_parent():
+    bot = Cordless()
+
+    @bot.command("admin/ban", description="Ban a user")
+    async def ban(ctx):
+        pass
+
+    @bot.command("admin/kick", description="Kick a user", user_installable=True)
+    async def kick(ctx):
+        pass
+
+    parent = next(d for d in bot.router.command_definitions() if d["name"] == "admin")
+    assert parent["integration_types"] == [0, 1]
+    assert parent["contexts"] == [0, 1, 2]
+
+
 def test_subcommand_group_definitions_structure():
     bot = Cordless()
 

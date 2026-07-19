@@ -322,6 +322,21 @@ def test_cog_command_guild_ids_threads_through_to_router():
     assert bot.router.scoped_command_definitions(None) == []
 
 
+def test_cog_command_user_installable_threads_through_to_router():
+    admin = Cog()
+
+    @admin.command("purge", user_installable=True)
+    async def purge(ctx):
+        await ctx.send("done")
+
+    bot = Cordless()
+    bot.add_cog(admin)
+
+    cmd = next(d for d in bot.router.command_definitions() if d["name"] == "purge")
+    assert cmd["integration_types"] == [0, 1]
+    assert cmd["contexts"] == [0, 1, 2]
+
+
 def test_cog_command_options_from_signature():
     shop = Cog()
 

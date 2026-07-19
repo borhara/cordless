@@ -226,6 +226,7 @@ class Cordless:
         nsfw=False,
         ephemeral=False,
         guild_ids=None,
+        user_installable=False,
     ):
         """Register a slash command.
 
@@ -259,6 +260,7 @@ class Cordless:
                 default_member_permissions=default_member_permissions,
                 nsfw=nsfw,
                 guild_ids=guild_ids,
+                user_installable=user_installable,
             )
             return func
 
@@ -568,23 +570,37 @@ class Cordless:
 
         return decorator
 
-    def user_command(self, name, dm_permission=True, guild_ids=None):
+    def user_command(self, name, dm_permission=True, guild_ids=None, user_installable=False):
         """Register a User context menu command (right-click → Apps → name)."""
 
         def decorator(func):
             self.router.register_command(
-                name, func, description=None, options=[], dm_permission=dm_permission, cmd_type=2, guild_ids=guild_ids
+                name,
+                func,
+                description=None,
+                options=[],
+                dm_permission=dm_permission,
+                cmd_type=2,
+                guild_ids=guild_ids,
+                user_installable=user_installable,
             )
             return func
 
         return decorator
 
-    def message_command(self, name, dm_permission=True, guild_ids=None):
+    def message_command(self, name, dm_permission=True, guild_ids=None, user_installable=False):
         """Register a Message context menu command (right-click message → Apps → name)."""
 
         def decorator(func):
             self.router.register_command(
-                name, func, description=None, options=[], dm_permission=dm_permission, cmd_type=3, guild_ids=guild_ids
+                name,
+                func,
+                description=None,
+                options=[],
+                dm_permission=dm_permission,
+                cmd_type=3,
+                guild_ids=guild_ids,
+                user_installable=user_installable,
             )
             return func
 
@@ -714,6 +730,7 @@ class Cordless:
                     default_member_permissions=kwargs.get("default_member_permissions"),
                     nsfw=kwargs.get("nsfw", False),
                     guild_ids=kwargs.get("guild_ids"),
+                    user_installable=kwargs.get("user_installable", False),
                 )
             elif ctype == "button":
                 if kwargs.get("defer"):
@@ -741,6 +758,7 @@ class Cordless:
                     dm_permission=kwargs["dm_permission"],
                     cmd_type=2,
                     guild_ids=kwargs.get("guild_ids"),
+                    user_installable=kwargs.get("user_installable", False),
                 )
             elif ctype == "message_command":
                 self.router.register_command(
@@ -751,6 +769,7 @@ class Cordless:
                     dm_permission=kwargs["dm_permission"],
                     cmd_type=3,
                     guild_ids=kwargs.get("guild_ids"),
+                    user_installable=kwargs.get("user_installable", False),
                 )
 
     def sync_commands(self, bot_token=None, client_id=None, client_secret=None, guild_id=None):
