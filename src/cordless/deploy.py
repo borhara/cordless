@@ -219,14 +219,14 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                 _write(zf, abs_path, os.path.relpath(abs_path, source_dir))
 
         if bundle_cordless:
-            from .upload import _cordless_package_dir, _layer_extras_dir
+            from .upload import _cordless_package_dir, _is_runtime_file, _layer_extras_dir
 
             pkg_dir = _cordless_package_dir()
             pkg_parent = os.path.dirname(pkg_dir)
             for root, dirs, files in os.walk(pkg_dir):
                 dirs[:] = [d for d in dirs if d != "__pycache__"]
                 for fname in files:
-                    if fname.endswith(".pyc"):
+                    if not _is_runtime_file(fname):
                         continue
                     abs_path = os.path.join(root, fname)
                     _write(zf, abs_path, os.path.relpath(abs_path, pkg_parent))

@@ -5,6 +5,15 @@ import zipfile
 
 _LAMBDA_RUNTIMES = ["python3.10", "python3.11", "python3.12", "python3.13", "python3.14"]
 
+# Local-machine-only tooling (the `cordless deploy`/`cordless dev` CLI itself)
+# that never runs inside a deployed Lambda - excluded from both the layer and
+# bundle_cordless, since shipping it there is dead weight, not a runtime need.
+_CLI_ONLY_FILES = {"deploy.py", "cli.py", "dev.py", "upload.py", "_aws.py", "_progress.py", "_env.py"}
+
+
+def _is_runtime_file(fname):
+    return fname not in _CLI_ONLY_FILES and not fname.endswith(".pyc")
+
 
 def _cordless_package_dir():
     spec = importlib.util.find_spec("cordless")
@@ -53,7 +62,7 @@ def build_layer_zip(python_version=None, architecture="x86_64"):
         for root, dirs, files in os.walk(pkg_dir):
             dirs[:] = [d for d in dirs if d != "__pycache__"]
             for fname in files:
-                if fname.endswith(".pyc"):
+                if not _is_runtime_file(fname):
                     continue
                 abs_path = os.path.join(root, fname)
                 rel_path = os.path.relpath(abs_path, site_dir)

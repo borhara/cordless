@@ -235,7 +235,57 @@ def test_bundle_cordless_includes_egg_info(tmp_path, monkeypatch):
         os.unlink(zip_path)
 
 
+def test_bundle_cordless_excludes_cli_only_files(tmp_path, monkeypatch):
+    """deploy.py/cli.py/dev.py/etc. only run on the local machine that runs
+    `cordless deploy`/`cordless dev` - bundling them into the Lambda zip
+    is dead weight, never a runtime need."""
+    import cordless.deploy
+    import cordless.upload
+
+    pkg_dir = tmp_path / "site-packages" / "cordless"
+    _make_tree(
+        pkg_dir,
+        ["app.py", "__init__.py", "deploy.py", "cli.py", "dev.py", "upload.py", "_aws.py", "_progress.py", "_env.py"],
+    )
+    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
+    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": None)
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "lambda_function.py").write_text("x")
+
+    zip_path = cordless.deploy.build_function_zip(str(src), bundle_cordless=True)
+    try:
+        names = _zip_names(zip_path)
+        assert "cordless/app.py" in names
+        for cli_only in ("deploy.py", "cli.py", "dev.py", "upload.py", "_aws.py", "_progress.py", "_env.py"):
+            assert f"cordless/{cli_only}" not in names
+    finally:
+        os.unlink(zip_path)
+
+
 # --- layer zip ---
+
+
+def test_layer_zip_excludes_cli_only_files(tmp_path, monkeypatch):
+    import cordless.upload
+
+    pkg_dir = tmp_path / "site-packages" / "cordless"
+    _make_tree(
+        pkg_dir,
+        ["app.py", "__init__.py", "deploy.py", "cli.py", "dev.py", "upload.py", "_aws.py", "_progress.py", "_env.py"],
+    )
+    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
+    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": None)
+
+    zip_path = cordless.upload.build_layer_zip("3.12")
+    try:
+        names = _zip_names(zip_path)
+        assert "python/cordless/app.py" in names
+        for cli_only in ("deploy.py", "cli.py", "dev.py", "upload.py", "_aws.py", "_progress.py", "_env.py"):
+            assert f"python/cordless/{cli_only}" not in names
+    finally:
+        os.unlink(zip_path)
 
 
 def test_layer_zip_bundles_pynacl_extras(tmp_path, monkeypatch):
