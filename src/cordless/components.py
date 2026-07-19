@@ -2,6 +2,10 @@
 
 
 class _ButtonStyle:
+    """`Button.style` values: `PRIMARY` (1), `SECONDARY` (2), `SUCCESS` (3),
+    `DANGER` (4), `LINK` (5, takes `url` instead of `custom_id`), `PREMIUM`
+    (6, takes only `sku_id`)."""
+
     PRIMARY = 1
     SECONDARY = 2
     SUCCESS = 3
@@ -14,6 +18,8 @@ ButtonStyle = _ButtonStyle()
 
 
 class SelectOption:
+    """One option in a `StringSelect`. `default=True` pre-selects it."""
+
     def __init__(self, label, value, description=None, emoji=None, default=False):
         self.label = label
         self.value = value
@@ -33,6 +39,9 @@ class SelectOption:
 
 
 class Button:
+    """`style` is a `ButtonStyle`. `emoji` is a partial emoji dict, e.g.
+    `{"name": "👋"}` or `{"id": "1234", "name": "custom"}`."""
+
     def __init__(self, label=None, custom_id=None, style=1, url=None, emoji=None, disabled=False, sku_id=None):
         self.label = label
         self.custom_id = custom_id
@@ -63,6 +72,8 @@ class Button:
 
 
 class ActionRow:
+    """Wraps up to 5 buttons or 1 select."""
+
     def __init__(self, components):
         self.components = list(components)
 
@@ -71,6 +82,8 @@ class ActionRow:
 
 
 class StringSelect:
+    """A select menu with a fixed list of `SelectOption`s."""
+
     def __init__(self, custom_id, options, placeholder=None, min_values=1, max_values=1, disabled=False):
         self.custom_id = custom_id
         self.options = options
@@ -119,18 +132,28 @@ class _EntitySelect:
 
 
 class UserSelect(_EntitySelect):
+    """A select menu populated with the guild's members, resolved by Discord."""
+
     _type = 5
 
 
 class RoleSelect(_EntitySelect):
+    """A select menu populated with the guild's roles, resolved by Discord."""
+
     _type = 6
 
 
 class MentionableSelect(_EntitySelect):
+    """A select menu populated with both members and roles, resolved by Discord."""
+
     _type = 7
 
 
 class ChannelSelect(_EntitySelect):
+    """A select menu populated with the guild's channels, resolved by
+    Discord. `channel_types` is a list of Discord channel type ints, e.g.
+    `[0, 2]` for text + voice."""
+
     _type = 8
 
     def __init__(self, custom_id, channel_types=None, placeholder=None, min_values=1, max_values=1, disabled=False):
@@ -145,6 +168,8 @@ class ChannelSelect(_EntitySelect):
 
 
 class _TextInputStyle:
+    """`TextInput.style` values: `SHORT` (1) or `PARAGRAPH` (2)."""
+
     SHORT = 1
     PARAGRAPH = 2
 
@@ -153,6 +178,8 @@ TextInputStyle = _TextInputStyle()
 
 
 class TextInput:
+    """A field inside a `Modal`. `value` pre-fills it."""
+
     def __init__(
         self, custom_id, label, style=1, min_length=None, max_length=None, required=True, value=None, placeholder=None
     ):
@@ -181,6 +208,8 @@ class TextInput:
 
 
 class Modal:
+    """Takes up to 5 `TextInput`s (each wrapped in its own row automatically)."""
+
     def __init__(self, custom_id, title, *components):
         self.custom_id = custom_id
         self.title = title
@@ -200,6 +229,9 @@ class Modal:
 
 
 class Container:
+    """Components v2 layout block. `accent_color` is an integer color for
+    the left-edge bar."""
+
     is_ui_kit = True
 
     def __init__(self, components, accent_color=None, spoiler=False):
@@ -217,6 +249,9 @@ class Container:
 
 
 class Section:
+    """Components v2 layout block. Holds up to 3 `TextDisplay`s with an
+    optional `Thumbnail` or `Button` accessory."""
+
     is_ui_kit = True
 
     def __init__(self, *components, accessory=None):
@@ -231,6 +266,8 @@ class Section:
 
 
 class TextDisplay:
+    """Components v2 layout block: a block of markdown text."""
+
     is_ui_kit = True
 
     def __init__(self, content):
@@ -241,6 +278,9 @@ class TextDisplay:
 
 
 class Thumbnail:
+    """Components v2 layout block: a small image, typically used as a
+    `Section`'s accessory."""
+
     is_ui_kit = True
 
     def __init__(self, url, description=None, spoiler=False):
@@ -258,11 +298,13 @@ class Thumbnail:
 
 
 class File:
+    """Components v2 layout block: a file attached to this message. `url`
+    must be an `"attachment://filename"` reference, matching a file
+    uploaded alongside this message."""
+
     is_ui_kit = True
 
     def __init__(self, url, spoiler=False):
-        # `url` must be an attachment reference, e.g. "attachment://report.pdf",
-        # matching a file uploaded alongside this message.
         self.url = url
         self.spoiler = spoiler
 
@@ -274,6 +316,9 @@ class File:
 
 
 class MediaGallery:
+    """Components v2 layout block: a gallery of images/videos. `items` are
+    dicts, e.g. `{"media": {"url": "..."}}`."""
+
     is_ui_kit = True
 
     def __init__(self, *items):
@@ -284,6 +329,9 @@ class MediaGallery:
 
 
 class Separator:
+    """Components v2 layout block: visual spacing between other blocks.
+    `spacing` is `1` (small) or `2` (large)."""
+
     is_ui_kit = True
 
     def __init__(self, divider=True, spacing=1):

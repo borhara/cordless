@@ -2,6 +2,8 @@
 
 
 class EmbedField:
+    """What `Embed.add_field` creates; you rarely construct it directly."""
+
     def __init__(self, name, value, inline=False):
         self.name = name
         self.value = value
@@ -15,6 +17,10 @@ class EmbedField:
 
 
 class Embed:
+    """`color` is an integer (`0x5865F2`); `timestamp` accepts a `datetime`
+    or ISO 8601 string. All setters return the embed, so calls chain:
+    `Embed(title="Hi").set_footer("a footer").add_field("name", "value")`."""
+
     def __init__(self, title=None, description=None, color=None, url=None, timestamp=None):
         self.title = title
         self.description = description
@@ -28,20 +34,25 @@ class Embed:
         self._fields = []
 
     def set_footer(self, text, icon_url=None):
+        """Sets the embed's footer text and optional icon. Returns self."""
         self._footer = {"text": text}
         if icon_url is not None:
             self._footer["icon_url"] = icon_url
         return self
 
     def set_image(self, url):
+        """Sets the embed's large image. Returns self."""
         self._image = {"url": url}
         return self
 
     def set_thumbnail(self, url):
+        """Sets the embed's small corner thumbnail. Returns self."""
         self._thumbnail = {"url": url}
         return self
 
     def set_author(self, name, url=None, icon_url=None):
+        """Sets the embed's author line, with an optional link and icon.
+        Returns self."""
         self._author = {"name": name}
         if url is not None:
             self._author["url"] = url
@@ -50,6 +61,7 @@ class Embed:
         return self
 
     def add_field(self, name, value, inline=False):
+        """Appends an `EmbedField`. Returns self."""
         self._fields.append(EmbedField(name, value, inline))
         return self
 

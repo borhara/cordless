@@ -73,6 +73,37 @@ def _attach_files(data, files):
 
 
 class Context:
+    """Every handler receives one of these as `ctx`. Fields not applicable
+    to the current interaction are `None` (or empty). Constructed by
+    cordless itself, not something you instantiate directly.
+
+    | Attribute | |
+    |---|---|
+    | `ctx.user` | The invoking `User` (resolved from the member in guilds, direct in DMs) |
+    | `ctx.member` | Guild `Member` (roles, nick, permissions); `None` in DMs |
+    | `ctx.guild_id` / `ctx.channel_id` | Where the interaction happened |
+    | `ctx.channel` | Partial `Channel` |
+    | `ctx.message` | The `Message` the component sits on (component interactions) |
+    | `ctx.locale` | The invoking user's locale, e.g. `"en-US"` |
+    | `ctx.options` | Dict of option name to value for the invoked (sub)command |
+    | `ctx.attachments` | Dict of attachment id to `Attachment` for `attachment` options |
+    | `ctx.custom_id` | The component/modal's full custom_id |
+    | `ctx.custom_id_args` | Suffix segments when a handler matched by prefix (`"shop:item1"` becomes `["item1"]`) |
+    | `ctx.values` | Selected values/ids for select menus (always a list) |
+    | `ctx.modal_values` | Dict of field custom_id to submitted value (modal submissions) |
+    | `ctx.focused_value` | What the user has typed so far (autocomplete) |
+    | `ctx.target_user` / `ctx.target_member` | Target `User` / `Member` of a user context menu command |
+    | `ctx.target_message` | Target `Message` of a message context menu command |
+    | `ctx.interaction_id` / `ctx.token` | The interaction's id and token |
+    | `ctx.interaction` | The full raw interaction payload, for anything not surfaced above |
+
+    `User`, `Member`, `Message`, `Channel`, and `Attachment` are thin
+    wrappers around Discord's raw object, not dicts. Every field Discord
+    sends is available as an attribute, e.g. `ctx.user.username`. Fields not
+    on the underlying payload raise `AttributeError` rather than silently
+    returning `None`.
+    """
+
     def __init__(self, interaction, *, _worker_mode=False):
         self.interaction = interaction
         self.response = None
@@ -130,6 +161,10 @@ class Context:
         files=None,
         allowed_mentions=None,
     ):
+        """Send the response. `msg` and `content` are interchangeable
+        (positional vs keyword). `files` is a list of `(filename, bytes)`
+        tuples. In a deferred handler, `send` edits the loading message
+        instead of creating a new one."""
         if self._worker_mode:
             return await self.followup(
                 msg,
@@ -161,6 +196,9 @@ class Context:
         files=None,
         allowed_mentions=None,
     ):
+        """Manual replica of what decorator `defer=True` sends automatically:
+        same shape as `send`. You normally don't call this yourself, it's
+        what `send`/`edit` fall through to in worker mode."""
         from .defer import patch_followup, patch_followup_with_files
 
         data = _build_message_data(msg, content, embeds, components, ephemeral, allowed_mentions)
@@ -178,6 +216,8 @@ class Context:
     async def send_followup(
         self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, allowed_mentions=None
     ):
+        """Deferred handlers only: post an additional, separate message
+        (doesn't touch the original loading message)."""
         from .defer import post_followup
 
         data = _build_message_data(msg, content, embeds, components, ephemeral, allowed_mentions)
@@ -185,11 +225,14 @@ class Context:
         return {"_cordless_followup": True}
 
     async def delete_original(self):
+        """Deferred handlers only: delete the original loading message."""
         from .defer import delete_original as _delete
 
         _delete(self.interaction.get("application_id"), self.token)
 
     async def edit(self, msg=None, *, content=None, embeds=None, components=None, files=None, allowed_mentions=None):
+        """Update the message the component sits on (buttons/selects). No
+        `ephemeral`: a message's visibility can't change after creation."""
         if self._worker_mode:
             return await self.followup(
                 msg,
@@ -209,6 +252,9 @@ class Context:
         return self.response
 
     async def defer(self, ephemeral=False):
+        """Loading state, for commands/modals. You don't normally call this
+        yourself; decorator `defer=True` handles the ack and runs your
+        handler on the worker."""
         data = {"type": _DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE}
         if ephemeral:
             data["data"] = {"flags": _FLAG_EPHEMERAL}
@@ -221,10 +267,14 @@ class Context:
         return self.response
 
     async def send_modal(self, modal):
+        """Show a `Modal`. Must be the first response; you can't defer, then
+        open a modal."""
         self.response = _response({"type": _MODAL, "data": modal.to_dict()})
         return self.response
 
     async def respond_autocomplete(self, choices):
+        """The manual piece underneath an `@bot.autocomplete` handler's
+        returned list. You don't normally call this yourself."""
         self.response = _response({"type": _AUTOCOMPLETE_RESULT, "data": {"choices": choices}})
         return self.response
 

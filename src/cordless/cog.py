@@ -36,6 +36,9 @@ class Cog:
         ephemeral=False,
         guild_ids=None,
     ):
+        """Same parameters as `Cordless.command`. Handlers registered here
+        take effect once the cog is passed to `bot.add_cog(cog)`."""
+
         def decorator(func):
             self._handlers.append(
                 (
@@ -59,6 +62,8 @@ class Cog:
         return decorator
 
     def button(self, custom_id, defer=False):
+        """Same as `Cordless.button`."""
+
         def decorator(func):
             self._handlers.append(("button", func, {"custom_id": custom_id, "defer": defer}))
             return func
@@ -66,6 +71,8 @@ class Cog:
         return decorator
 
     def select(self, custom_id, defer=False):
+        """Same as `Cordless.select`."""
+
         def decorator(func):
             self._handlers.append(("select", func, {"custom_id": custom_id, "defer": defer}))
             return func
@@ -73,6 +80,8 @@ class Cog:
         return decorator
 
     def modal(self, custom_id, defer=False):
+        """Same as `Cordless.modal`."""
+
         def decorator(func):
             self._handlers.append(("modal", func, {"custom_id": custom_id, "defer": defer}))
             return func
@@ -80,6 +89,8 @@ class Cog:
         return decorator
 
     def autocomplete(self, cmd_name, option_name):
+        """Same as `Cordless.autocomplete`."""
+
         def decorator(func):
             self._handlers.append(
                 (
@@ -96,6 +107,8 @@ class Cog:
         return decorator
 
     def user_command(self, name, dm_permission=True, guild_ids=None):
+        """Same as `Cordless.user_command`."""
+
         def decorator(func):
             self._handlers.append(
                 (
@@ -113,6 +126,8 @@ class Cog:
         return decorator
 
     def message_command(self, name, dm_permission=True, guild_ids=None):
+        """Same as `Cordless.message_command`."""
+
         def decorator(func):
             self._handlers.append(
                 (

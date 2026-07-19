@@ -72,3 +72,10 @@ line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]  # pycodestyle, pyflakes, isort
+
+[tool.ruff.lint.per-file-ignores]
+# these carry markdown reference tables in docstrings (rendered into
+# cordless.dev's api reference) - a table row can't wrap without breaking
+# as markdown, so line-length doesn't apply the same way it does to code
+"src/cordless/app.py" = ["E501"]
+"src/cordless/context.py" = ["E501"]

@@ -165,7 +165,17 @@ def option(
     min_length=None,
     max_length=None,
 ):
-    """Build a Discord application command option dict."""
+    """Build a Discord application command option dict, for `@bot.command(options=[...])`.
+
+    | Parameter | |
+    |---|---|
+    | `type` | `"string"`, `"integer"`, `"number"`, `"boolean"`, `"user"`, `"channel"`, `"role"`, `"attachment"` |
+    | `required` | Default `False`, note this is the opposite default from inferred options, where a parameter without a default value is required |
+    | `autocomplete` | Pair with `@bot.autocomplete` |
+    | `choices` | List of `{"name": label, "value": value}` dicts; the user must pick one |
+    | `min_value` / `max_value` | Bounds for `integer`/`number` options |
+    | `min_length` / `max_length` | Length bounds for `string` options |
+    """
     if isinstance(type, str) and type not in _OPTION_TYPES:
         raise ValueError(f"Unknown option type {type!r}: expected one of {', '.join(_OPTION_TYPES)}")
     opt = {
@@ -192,6 +202,13 @@ def option(
 
 class Cordless:
     def __init__(self, public_key=None):
+        """`public_key` is your app's hex-encoded public key from the Discord
+        Developer Portal. Every request is verified against it (Ed25519) and
+        rejected with a 401 on mismatch. Passing `None` **disables signature
+        verification**, useful for local tests that post fake interactions,
+        never for a deployed bot. An empty string is treated as a
+        misconfiguration and rejects everything (fails closed rather than
+        open)."""
         self.router = Router()
         self.public_key = public_key
         self.crons = {}
@@ -210,6 +227,20 @@ class Cordless:
         ephemeral=False,
         guild_ids=None,
     ):
+        """Register a slash command.
+
+        | Parameter | |
+        |---|---|
+        | `name` | 1-32 lowercase letters, digits, `-` or `_`; validated at decoration time. Use `parent/sub` or `parent/group/sub` paths for subcommands |
+        | `description` | Shown in Discord's command picker |
+        | `options` | List of option dicts (build with `option()`). When omitted, options are inferred from the handler's typed parameters: `str`, `int`, `float`, `bool`, `Literal[...]` for fixed choices, and `Optional[T]` / `T \\| None` (unwrapped to `T`; a default value is what makes the option optional) |
+        | `defer` | Respond via the worker Lambda |
+        | `dm_permission` | Set `False` to hide the command in DMs |
+        | `default_member_permissions` | Permission bitfield members need to see the command |
+        | `nsfw` | Restrict to age-verified channels |
+        | `ephemeral` | Only meaningful with `defer=True`: makes the loading state and final reply private. For non-deferred commands, use `ctx.send(ephemeral=True)` instead |
+        | `guild_ids` | Scope this command to specific guilds instead of registering it globally |
+        """
         _validate_command_name(name)
 
         def decorator(func):
@@ -275,6 +306,10 @@ class Cordless:
             raise RuntimeError(f"Discord API error {status}: {data.decode(errors='replace')}")
 
     async def send_message(self, channel_id, content=None, *, embeds=None, components=None, files=None):
+        """Send a message as the bot. Requires `DISCORD_BOT_TOKEN`, callable
+        from anywhere with no interaction to respond to, typically cron
+        handlers. `files` is a list of `(filename, bytes)` tuples, same as
+        `ctx.send`/`ctx.edit`."""
         payload = {}
         if content is not None:
             payload["content"] = content
@@ -291,6 +326,9 @@ class Cordless:
         )
 
     async def edit_message(self, channel_id, message_id, content=None, *, embeds=None, components=None, files=None):
+        """Edit a message the bot previously sent. Requires
+        `DISCORD_BOT_TOKEN`. `files` is a list of `(filename, bytes)`
+        tuples, same as `ctx.send`/`ctx.edit`."""
         payload = {}
         if content is not None:
             payload["content"] = content
@@ -307,6 +345,7 @@ class Cordless:
         )
 
     async def delete_message(self, channel_id, message_id):
+        """Delete a message. Requires `DISCORD_BOT_TOKEN`."""
         import asyncio
 
         await asyncio.get_event_loop().run_in_executor(
@@ -391,6 +430,7 @@ class Cordless:
         )
 
     async def add_role(self, guild_id, user_id, role_id):
+        """Grant a role to a guild member. Requires `DISCORD_BOT_TOKEN`."""
         import asyncio
 
         await asyncio.get_event_loop().run_in_executor(
@@ -398,6 +438,7 @@ class Cordless:
         )
 
     async def remove_role(self, guild_id, user_id, role_id):
+        """Remove a role from a guild member. Requires `DISCORD_BOT_TOKEN`."""
         import asyncio
 
         await asyncio.get_event_loop().run_in_executor(
@@ -436,11 +477,20 @@ class Cordless:
 
     @property
     def worker_handler(self):
+        """The worker Lambda's entrypoint, required when `defer_worker` is
+        set in `cordless.toml`. Assign at module level in `lambda_function.py`:
+        `worker_handler = bot.worker_handler`. If any command uses
+        `defer=True`, deploying without this assignment fails the worker
+        with "Handler 'worker_handler' missing"."""
         from .worker import make_worker_handler
 
         return make_worker_handler(self)
 
     def handler(self):
+        """Returns the main Lambda entrypoint. Assign at module level in
+        `lambda_function.py`: `handler = bot.handler()`. Wraps `handle()`
+        plus keep-warm pings and `@bot.cron` dispatch."""
+
         def _handler(event, context=None):
             event = event or {}
             if event.get("_cordless_keepwarm"):
@@ -466,12 +516,19 @@ class Cordless:
         return decorator
 
     def run_cron(self, name):
+        """Run a registered `@bot.cron` handler by name, synchronously. Used
+        by `cordless cron NAME` and the deployed EventBridge target; you
+        don't normally call this yourself."""
         entry = self.crons.get(name)
         if entry is None:
             raise CordlessError(f"Unknown cron: {name}")
         return asyncio.run(entry["handler"]())
 
     def button(self, custom_id, defer=False):
+        """Register a handler for a button click. Prefix matching applies:
+        `custom_id="shop"` also matches `"shop:item1:2"`, with the suffix
+        segments landing on `ctx.custom_id_args`."""
+
         def decorator(func):
             if defer:
                 func._defer = True
@@ -482,6 +539,11 @@ class Cordless:
         return decorator
 
     def select(self, custom_id, defer=False):
+        """Register a handler for a select menu. Prefix matching applies:
+        `custom_id="shop"` also matches `"shop:item1:2"`, with the suffix
+        segments landing on `ctx.custom_id_args`. Selected values are on
+        `ctx.values`."""
+
         def decorator(func):
             if defer:
                 func._defer = True
@@ -492,6 +554,11 @@ class Cordless:
         return decorator
 
     def modal(self, custom_id, defer=False):
+        """Register a handler for a modal submission. Prefix matching
+        applies: `custom_id="shop"` also matches `"shop:item1:2"`, with the
+        suffix segments landing on `ctx.custom_id_args`. Submitted field
+        values are on `ctx.modal_values`."""
+
         def decorator(func):
             if defer:
                 func._defer = True
@@ -524,6 +591,10 @@ class Cordless:
         return decorator
 
     def autocomplete(self, cmd_name, option_name):
+        """Handler for an option marked `autocomplete=True`. Return a list of
+        strings (filtered against the typed value for you) or choice dicts
+        (sent as-is)."""
+
         def decorator(func):
             self.router.register_autocomplete(cmd_name, option_name, func)
             return func
@@ -531,10 +602,18 @@ class Cordless:
         return decorator
 
     def error(self, func):
+        """Register the error handler, called as `(ctx, exc)`. If it sends a
+        response (or returns one), that becomes the interaction's response;
+        otherwise the exception propagates."""
         self.router.register_error_handler(func)
         return func
 
     def guard(self, fn):
+        """Attach a guard that runs before the handler. Guards reject by
+        **raising**: a falsy return value is ignored, not treated as a
+        rejection. Can be sync or async; runs for commands, buttons, selects,
+        and modals alike."""
+
         def decorator(handler):
             handler._guard = fn
             return handler
@@ -542,6 +621,11 @@ class Cordless:
         return decorator
 
     def handle(self, event, context=None):
+        """Process one raw Lambda event dict: verifies the signature and
+        dispatches it to the right registered handler. Most bots use
+        `handler()` instead, which wraps this plus keep-warm pings and
+        `@bot.cron` dispatch, call this directly only if you're building a
+        custom Lambda entrypoint."""
         body = _extract_body(event)
 
         # None means verification is deliberately off (local/testing); an empty
