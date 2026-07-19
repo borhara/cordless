@@ -11,7 +11,7 @@ from http.server import ThreadingHTTPServer
 import pytest
 
 import cordless.dev as dev
-from cordless.dev import Reloader, _load_env, _local_invoke_worker, _make_handler, _start_tunnel
+from cordless.dev import Reloader, _load_env, _local_invoke_worker, _make_handler, _start_tunnel, _wait_for_tunnel
 
 
 @pytest.fixture
@@ -113,6 +113,32 @@ def test_start_tunnel_returns_none_url_when_no_match_found(monkeypatch):
 
     assert proc is fake_proc
     assert url is None
+
+
+def test_wait_for_tunnel_returns_true_once_reachable(monkeypatch):
+    calls = {"n": 0}
+
+    def fake_urlopen(url, timeout=None):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise OSError("not yet")
+        return object()
+
+    monkeypatch.setattr(dev.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(dev.time, "sleep", lambda _: None)
+
+    assert _wait_for_tunnel("https://example.trycloudflare.com") is True
+    assert calls["n"] == 3
+
+
+def test_wait_for_tunnel_gives_up_after_timeout(monkeypatch):
+    monkeypatch.setattr(dev.urllib.request, "urlopen", lambda *a, **kw: (_ for _ in ()).throw(OSError("down")))
+    monkeypatch.setattr(dev.time, "sleep", lambda _: None)
+
+    ticks = iter([0, 1, 20])  # first call in the while-condition, then past the deadline
+    monkeypatch.setattr(dev.time, "monotonic", lambda: next(ticks, 20))
+
+    assert _wait_for_tunnel("https://example.trycloudflare.com", timeout=10) is False
 
 
 # --- HTTP round-trip ---

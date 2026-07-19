@@ -14,6 +14,8 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 _WATCH_EXCLUDE = {".git", ".venv", "venv", "__pycache__", "node_modules", ".pytest_cache", "dist", "build"}
@@ -152,6 +154,24 @@ def _start_tunnel(port):
     return proc, url
 
 
+def _wait_for_tunnel(url, timeout=10.0, interval=0.5):
+    """cloudflared prints the quick-tunnel URL to stderr a beat before
+    Cloudflare's edge actually starts routing it - hitting it (or handing
+    it to Discord) right away can 502. Poll the real round trip (edge ->
+    cloudflared -> our own do_GET) until it answers, so 'paste this into
+    Discord' isn't printed a moment before the URL is actually live.
+    Best-effort: gives up after `timeout` and lets the caller print the
+    URL anyway rather than blocking dev startup indefinitely."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            urllib.request.urlopen(url, timeout=2)
+            return True
+        except Exception:
+            time.sleep(interval)
+    return False
+
+
 def run_dev(target, port=8787, tunnel=True, source_dir=".", environment=None):
     source_dir = os.path.abspath(source_dir)
     sys.path.insert(0, source_dir)
@@ -167,6 +187,12 @@ def run_dev(target, port=8787, tunnel=True, source_dir=".", environment=None):
     bot = reloader.get()  # fail fast on import errors before binding the port
 
     server = ThreadingHTTPServer(("127.0.0.1", port), _make_handler(reloader))
+    # start serving now, on a thread, so _wait_for_tunnel's own request
+    # below has something to actually round-trip against - the socket is
+    # already bound at this point, but nothing accepts from it until
+    # serve_forever's loop is running
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
 
     print()
     print("  cordless dev")
@@ -176,6 +202,9 @@ def run_dev(target, port=8787, tunnel=True, source_dir=".", environment=None):
     if tunnel:
         tunnel_proc, url = _start_tunnel(port)
         if url:
+            if not _wait_for_tunnel(url):
+                print()
+                print("  (tunnel isn't answering yet - if Discord rejects this URL, wait a few seconds and re-save it)")
             print(f"  public  {url}")
             print()
             print("  paste the public url into your app's Interactions Endpoint URL")
@@ -205,10 +234,12 @@ def run_dev(target, port=8787, tunnel=True, source_dir=".", environment=None):
     print()
 
     try:
-        server.serve_forever()
+        while server_thread.is_alive():
+            server_thread.join(timeout=1)
     except KeyboardInterrupt:
         print()
     finally:
+        server.shutdown()
         server.server_close()
         if tunnel_proc:
             tunnel_proc.terminate()
