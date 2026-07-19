@@ -3,7 +3,7 @@ import os
 import tempfile
 import zipfile
 
-_LAMBDA_RUNTIMES = ["python3.10", "python3.11", "python3.12", "python3.13"]
+_LAMBDA_RUNTIMES = ["python3.10", "python3.11", "python3.12", "python3.13", "python3.14"]
 
 
 def _cordless_package_dir():
