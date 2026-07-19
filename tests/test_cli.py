@@ -382,6 +382,29 @@ def test_deploy_env_flag_mixes_bare_name_and_key_value(tmp_path, monkeypatch):
     assert env["EXTRA"] == "1"
 
 
+def test_deploy_falls_back_to_process_environment_when_no_dotenv(tmp_path, monkeypatch):
+    """CI runners don't ship a .env file - the two Discord credentials nearly
+    every deploy needs must still come through if they're just set as real
+    environment variables (e.g. from a CI secret)."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DISCORD_PUBLIC_KEY", "ci-public-key")
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "ci-bot-token")
+    with patch("cordless.deploy.deploy") as mock_deploy:
+        main(["deploy", "--function", "fn"])
+    env = mock_deploy.call_args.kwargs["env"]
+    assert env["DISCORD_PUBLIC_KEY"] == "ci-public-key"
+    assert env["DISCORD_BOT_TOKEN"] == "ci-bot-token"
+
+
+def test_deploy_dotenv_takes_precedence_over_process_environment(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DISCORD_PUBLIC_KEY", "shell-key")
+    (tmp_path / ".env").write_text("DISCORD_PUBLIC_KEY=dotenv-key\n")
+    with patch("cordless.deploy.deploy") as mock_deploy:
+        main(["deploy", "--function", "fn"])
+    assert mock_deploy.call_args.kwargs["env"]["DISCORD_PUBLIC_KEY"] == "dotenv-key"
+
+
 def test_environment_from_argv_env_flag_bare_value_is_a_name():
     assert _environment_from_argv(["deploy", "--env", "FOO=bar", "--function", "x"]) is None
     assert _environment_from_argv(["deploy", "--env", "dev"]) == "dev"

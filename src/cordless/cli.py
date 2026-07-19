@@ -186,6 +186,12 @@ def _deploy(args):
 
     environment = resolve_environment(args.environment or env_flag_environment)
     merged_env = {**read_dotenv(source_dir, environment), **cfg.get("env", {}), **env}
+    # CI runners rarely ship a .env file (rightly, it'd mean committing secrets) - fall
+    # back to whatever's already in the process environment for the two Discord
+    # credentials nearly every deploy needs, same as `register` already does.
+    for key in ("DISCORD_PUBLIC_KEY", "DISCORD_BOT_TOKEN"):
+        if not merged_env.get(key) and os.environ.get(key):
+            merged_env[key] = os.environ[key]
     if not merged_env.get("DISCORD_PUBLIC_KEY"):
         print("  warning: DISCORD_PUBLIC_KEY is empty or missing - Discord cannot validate the endpoint")
 
