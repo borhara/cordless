@@ -543,6 +543,27 @@ def test_discord_request_attaches_files_metadata_and_builds_multipart(fake_app_c
     assert b'"attachments": [{"id": 0, "filename": "board.png"}]' in sent["body"]
 
 
+def test_discord_request_reconnects_when_kept_alive_connection_is_dropped(fake_app_conn, monkeypatch):
+    """A warm connection reused across invocations can get closed by Discord's
+    end between requests - _send_discord_request must close it, open a fresh
+    one, and retry the same request once rather than blowing up."""
+    import os
+
+    import cordless.app
+
+    monkeypatch.setattr(cordless.app, "_conn", fake_app_conn("discord.com"))
+    fake_app_conn.raise_once = OSError("connection reset by peer")
+    fake_app_conn.responses = [(200, {}, b"{}")]
+
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}):
+        bot = Cordless()
+        data = bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
+
+    assert data == b"{}"
+    assert fake_app_conn.close_calls == 1
+    assert len(fake_app_conn.requests) == 1  # only the retried request actually went through
+
+
 def test_discord_request_checks_ratelimit_before_sending(fake_app_conn, monkeypatch):
     import os
 

@@ -76,31 +76,52 @@ def test_build_payload_includes_username_avatar_tts():
 class FakeHTTPSConnection:
     requests = []
     responses = []
+    raise_once = None  # set to an exception instance to make the next request() raise
+    close_calls = 0
 
     def __init__(self, host, timeout=None):
         self.host = host
         self.timeout = timeout
 
     def request(self, method, url, body, headers):
-        FakeHTTPSConnection.requests.append(
-            {"method": method, "url": url, "body": body, "headers": headers, "timeout": self.timeout}
-        )
+        cls = FakeHTTPSConnection
+        if cls.raise_once is not None:
+            exc = cls.raise_once
+            cls.raise_once = None
+            raise exc
+        cls.requests.append({"method": method, "url": url, "body": body, "headers": headers, "timeout": self.timeout})
 
     def getresponse(self):
         status, body = FakeHTTPSConnection.responses.pop(0) if FakeHTTPSConnection.responses else (200, b"{}")
         return type("R", (), {"status": status, "read": lambda self: body})()
 
     def close(self):
-        pass
+        FakeHTTPSConnection.close_calls += 1
 
 
 @pytest.fixture
 def fake_conn(monkeypatch):
     FakeHTTPSConnection.requests = []
     FakeHTTPSConnection.responses = []
+    FakeHTTPSConnection.raise_once = None
+    FakeHTTPSConnection.close_calls = 0
     monkeypatch.setattr(cordless.webhook, "HTTPSConnection", FakeHTTPSConnection)
     monkeypatch.setattr(cordless.webhook, "_conn", None)
     return FakeHTTPSConnection
+
+
+def test_send_reconnects_when_kept_alive_connection_is_dropped(fake_conn, monkeypatch):
+    """A warm connection reused across invocations can get closed by Discord's
+    end between requests - _send must close it, open a fresh one, and retry
+    the same request once rather than blowing up."""
+    monkeypatch.setattr(cordless.webhook, "_conn", fake_conn("discord.com"))
+    fake_conn.raise_once = OSError("connection reset by peer")
+    fake_conn.responses = [(200, b"{}")]
+
+    cordless.webhook.execute("123", "abc", {"content": "hi"})
+
+    assert fake_conn.close_calls == 1
+    assert len(fake_conn.requests) == 1  # only the retried request actually went through
 
 
 def test_execute_posts_to_webhook_url(fake_conn):

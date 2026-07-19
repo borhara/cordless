@@ -107,28 +107,35 @@ def test_worker_dispatch_reraises_handler_errors(patched):
 class FakeHTTPSConnection:
     requests = []
     responses = []  # list of (status, body) consumed per request
+    raise_once = None  # set to an exception instance to make the next request() raise
+    close_calls = 0
 
     def __init__(self, host, timeout=None):
         self.host = host
         self.timeout = timeout
 
     def request(self, method, url, body, headers):
-        FakeHTTPSConnection.requests.append(
-            {"method": method, "url": url, "body": body, "headers": headers, "timeout": self.timeout}
-        )
+        cls = FakeHTTPSConnection
+        if cls.raise_once is not None:
+            exc = cls.raise_once
+            cls.raise_once = None
+            raise exc
+        cls.requests.append({"method": method, "url": url, "body": body, "headers": headers, "timeout": self.timeout})
 
     def getresponse(self):
         status, body = FakeHTTPSConnection.responses.pop(0) if FakeHTTPSConnection.responses else (200, b"{}")
         return type("R", (), {"status": status, "read": lambda self: body})()
 
     def close(self):
-        pass
+        FakeHTTPSConnection.close_calls += 1
 
 
 @pytest.fixture
 def fake_conn(monkeypatch):
     FakeHTTPSConnection.requests = []
     FakeHTTPSConnection.responses = []
+    FakeHTTPSConnection.raise_once = None
+    FakeHTTPSConnection.close_calls = 0
     monkeypatch.setattr(cordless.defer, "HTTPSConnection", FakeHTTPSConnection)
     monkeypatch.setattr(cordless.defer, "_conn", None)
     return FakeHTTPSConnection
@@ -153,6 +160,22 @@ def test_followup_with_multiple_files_uploads_all(fake_conn):
 def test_followup_content_type_falls_back_to_octet_stream(fake_conn):
     cordless.defer.patch_followup_with_files("app", "tok", {}, [("blob.xyz123", b"x")])
     assert b"Content-Type: application/octet-stream" in fake_conn.requests[0]["body"]
+
+
+def test_send_reconnects_when_kept_alive_connection_is_dropped(fake_conn, monkeypatch):
+    """A warm connection reused across invocations can get closed by Discord's
+    end between requests - _send must close it, open a fresh one, and retry
+    the same request once rather than blowing up."""
+    monkeypatch.setattr(cordless.defer, "_conn", fake_conn("discord.com"))
+    fake_conn.raise_once = OSError("connection reset by peer")
+    fake_conn.responses = [(200, b"{}")]
+
+    status, body = cordless.defer.patch_followup("app", "tok", {"content": "hi"})
+
+    assert status == 200
+    assert body == b"{}"
+    assert fake_conn.close_calls == 1
+    assert len(fake_conn.requests) == 1  # only the retried request actually went through
 
 
 def test_patch_retries_on_404(fake_conn, monkeypatch):
