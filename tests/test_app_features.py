@@ -350,6 +350,113 @@ def test_cog_command_options_from_signature():
     assert _body(got)["data"]["content"] == "2x potion"
 
 
+def test_cog_button_dispatch():
+    admin = Cog()
+    got = {}
+
+    @admin.button("confirm")
+    async def confirm(ctx):
+        got["args"] = ctx.custom_id_args
+        await ctx.edit("ok")
+
+    bot = Cordless()
+    bot.add_cog(admin)
+
+    _handle(bot, {"type": 3, "id": "1", "token": "t", "data": {"custom_id": "confirm:1"}})
+    assert got["args"] == ["1"]
+
+
+def test_cog_select_dispatch():
+    admin = Cog()
+    got = {}
+
+    @admin.select("pick")
+    async def pick(ctx):
+        got["args"] = ctx.custom_id_args
+        await ctx.edit("ok")
+
+    bot = Cordless()
+    bot.add_cog(admin)
+
+    result = _handle(
+        bot,
+        {"type": 3, "id": "1", "token": "t", "data": {"custom_id": "pick:page2", "component_type": 3, "values": ["a"]}},
+    )
+    assert result["statusCode"] == 200
+    assert got["args"] == ["page2"]
+
+
+def test_cog_modal_dispatch():
+    admin = Cog()
+    got = {}
+
+    @admin.modal("form")
+    async def form(ctx):
+        got["args"] = ctx.custom_id_args
+        await ctx.send("ok")
+
+    bot = Cordless()
+    bot.add_cog(admin)
+
+    result = _handle(bot, {"type": 5, "id": "1", "token": "t", "data": {"custom_id": "form:step2", "components": []}})
+    assert result["statusCode"] == 200
+    assert got["args"] == ["step2"]
+
+
+def test_cog_autocomplete_dispatch():
+    shop = Cog()
+
+    @shop.command("search")
+    async def search(ctx):
+        await ctx.send("results")
+
+    @shop.autocomplete("search", "query")
+    async def search_autocomplete(ctx):
+        await ctx.respond_autocomplete([{"name": "foo", "value": "foo"}])
+
+    bot = Cordless()
+    bot.add_cog(shop)
+
+    result = _handle(
+        bot,
+        {
+            "type": 4,
+            "id": "1",
+            "token": "tok",
+            "data": {"name": "search", "options": [{"name": "query", "value": "fo", "focused": True}]},
+        },
+    )
+    assert _body(result)["type"] == 8
+
+
+def test_cog_user_command_registered_as_context_menu():
+    admin = Cog()
+
+    @admin.user_command("Inspect User")
+    async def inspect(ctx):
+        await ctx.send("inspected")
+
+    bot = Cordless()
+    bot.add_cog(admin)
+
+    cmd = next(d for d in bot.router.command_definitions() if d["name"] == "Inspect User")
+    assert cmd["type"] == 2
+
+
+def test_cog_message_command_registered_as_context_menu():
+    admin = Cog()
+
+    @admin.message_command("Report")
+    async def report(ctx):
+        await ctx.send("reported")
+
+    bot = Cordless()
+    bot.add_cog(admin)
+
+    cmd = next(d for d in bot.router.command_definitions() if d["name"] == "Report")
+    assert cmd["type"] == 3
+
+
 # --- custom_id prefix matching + args ---
 
 
