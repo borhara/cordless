@@ -10,7 +10,8 @@ from http.server import ThreadingHTTPServer
 
 import pytest
 
-from cordless.dev import Reloader, _load_env, _local_invoke_worker, _make_handler
+import cordless.dev as dev
+from cordless.dev import Reloader, _load_env, _local_invoke_worker, _make_handler, _start_tunnel
 
 
 @pytest.fixture
@@ -70,6 +71,48 @@ def test_reloader_reloads_on_change(bot_project):
 
     second = reloader.get()
     assert second is not first
+
+
+# --- cloudflared tunnel ---
+
+
+class _FakeProc:
+    def __init__(self, stderr_lines):
+        self.stderr = iter(stderr_lines)
+        self.terminated = False
+
+    def terminate(self):
+        self.terminated = True
+
+
+def test_start_tunnel_returns_none_when_cloudflared_not_installed(monkeypatch):
+    monkeypatch.setattr(dev.shutil, "which", lambda name: None)
+    assert _start_tunnel(8787) == (None, None)
+
+
+def test_start_tunnel_extracts_url_from_stderr(monkeypatch):
+    monkeypatch.setattr(dev.shutil, "which", lambda name: "/usr/local/bin/cloudflared")
+    fake_proc = _FakeProc(["starting tunnel\n", "https://my-tunnel-name.trycloudflare.com\n", "other noise\n"])
+    monkeypatch.setattr(dev.subprocess, "Popen", lambda *a, **kw: fake_proc)
+
+    proc, url = _start_tunnel(8787)
+
+    assert proc is fake_proc
+    assert url == "https://my-tunnel-name.trycloudflare.com"
+
+
+def test_start_tunnel_returns_none_url_when_no_match_found(monkeypatch):
+    """cloudflared started but never printed a recognizable tunnel URL - the
+    caller must be able to tell 'process is running, no url yet' apart from
+    'cloudflared not installed' so it prints the right message either way."""
+    monkeypatch.setattr(dev.shutil, "which", lambda name: "/usr/local/bin/cloudflared")
+    fake_proc = _FakeProc(["some unrelated startup line\n"])
+    monkeypatch.setattr(dev.subprocess, "Popen", lambda *a, **kw: fake_proc)
+
+    proc, url = _start_tunnel(8787)
+
+    assert proc is fake_proc
+    assert url is None
 
 
 # --- HTTP round-trip ---
