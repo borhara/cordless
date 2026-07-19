@@ -1,11 +1,18 @@
 import os
 import sys
+import time
 from unittest.mock import patch
 
+import boto3
 import pytest
 from conftest import FakeDiscordResponse
+from moto import mock_aws
 
 from cordless.cli import _environment_from_argv, _pick, main
+
+_LOGS_REGION = "us-east-1"
+os.environ.setdefault("AWS_ACCESS_KEY_ID", "testing")
+os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "testing")
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -403,3 +410,124 @@ def test_deploy_setup_resolves_against_source_not_cwd(tmp_path, monkeypatch):
         assert sys.modules["db"].calls == [True]
     finally:
         sys.modules.pop("db", None)
+
+
+# ---------------------------------------------------------------------------
+# logs
+# ---------------------------------------------------------------------------
+
+
+def _seed_log_group(function_name, messages, region=_LOGS_REGION):
+    cw = boto3.client("logs", region_name=region)
+    log_group = f"/aws/lambda/{function_name}"
+    cw.create_log_group(logGroupName=log_group)
+    cw.create_log_stream(logGroupName=log_group, logStreamName="stream-1")
+    now_ms = int(time.time() * 1000)
+    cw.put_log_events(
+        logGroupName=log_group,
+        logStreamName="stream-1",
+        logEvents=[{"timestamp": now_ms, "message": m} for m in messages],
+    )
+    return cw
+
+
+def test_logs_requires_function_name_when_none_configured(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit, match="Function name required"):
+        main(["logs", "--region", _LOGS_REGION])
+
+
+def test_logs_worker_requires_defer_worker_in_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit, match="no defer_worker configured"):
+        main(["logs", "--worker", "--region", _LOGS_REGION])
+
+
+def test_logs_requires_region(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
+    with pytest.raises(SystemExit, match="Region is required"):
+        main(["logs", "--function", "my-fn"])
+
+
+def test_logs_prints_matching_events(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with mock_aws():
+        _seed_log_group("my-fn", ["hello from lambda"])
+        main(["logs", "--function", "my-fn", "--region", _LOGS_REGION])
+
+    assert "hello from lambda" in capsys.readouterr().out
+
+
+class _FakeLogsClient:
+    class exceptions:
+        class ResourceNotFoundException(Exception):
+            pass
+
+    def __init__(self, pages):
+        self._pages = list(pages)
+        self.calls = 0
+
+    def filter_log_events(self, **kwargs):
+        self.calls += 1
+        return self._pages.pop(0)
+
+
+def test_logs_dedupes_events_seen_across_pagination(tmp_path, monkeypatch, capsys):
+    """The same event id can show up in more than one filter_log_events page
+    (a real risk when new events land mid-pagination) - it must only print
+    once. moto always returns everything in a single page, so this drives a
+    fake client directly to actually force the duplicate across two pages."""
+    monkeypatch.chdir(tmp_path)
+
+    event = {"eventId": "e1", "timestamp": int(time.time() * 1000), "message": "dup line"}
+    fake_client = _FakeLogsClient([{"events": [event], "nextToken": "next"}, {"events": [event]}])
+
+    class _FakeSession:
+        def client(self, name):
+            assert name == "logs"
+            return fake_client
+
+    monkeypatch.setattr("cordless._aws.get_session", lambda region, validate=False: _FakeSession())
+    main(["logs", "--function", "my-fn", "--region", _LOGS_REGION])
+
+    out = capsys.readouterr().out
+    assert out.count("dup line") == 1
+    assert fake_client.calls == 2  # both pages were actually fetched
+
+
+def test_logs_missing_log_group_raises_helpful_error(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with mock_aws():
+        with pytest.raises(SystemExit, match="Log group not found"):
+            main(["logs", "--function", "does-not-exist", "--region", _LOGS_REGION])
+
+
+def test_logs_worker_reads_defer_worker_from_config(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "cordless.toml").write_text('[deploy]\ndefer_worker = "my-fn-worker"\n')
+    with mock_aws():
+        _seed_log_group("my-fn-worker", ["worker log line"])
+        main(["logs", "--worker", "--region", _LOGS_REGION])
+
+    assert "worker log line" in capsys.readouterr().out
+
+
+def test_logs_follow_polls_again_until_interrupted(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with mock_aws():
+        _seed_log_group("my-fn", ["first line"])
+
+        calls = []
+
+        def fake_sleep(seconds):
+            calls.append(seconds)
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(time, "sleep", fake_sleep)
+        main(["logs", "--function", "my-fn", "--region", _LOGS_REGION, "--follow"])
+
+    assert calls == [2]
+    out = capsys.readouterr().out
+    assert "first line" in out
+    assert "following" in out
