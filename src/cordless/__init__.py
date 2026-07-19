@@ -33,6 +33,7 @@ from .errors import (
     UnknownModalError,
     UnsupportedInteractionError,
 )
+from .models import Attachment, Channel, Member, Message, User
 
 __all__ = [
     "Cordless",
@@ -55,6 +56,12 @@ __all__ = [
     # Embeds
     "Embed",
     "EmbedField",
+    # Models
+    "Attachment",
+    "Channel",
+    "Member",
+    "Message",
+    "User",
     # UI Kit
     "Container",
     "File",

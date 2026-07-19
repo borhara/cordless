@@ -191,6 +191,72 @@ def test_select_values_on_context():
     assert ctx.values == ["red", "blue"]
 
 
+# --- user / member attribute access ---
+
+
+def test_user_exposes_attributes_in_guild():
+    ctx = _make_ctx(
+        member={
+            "nick": "Nick",
+            "user": {"id": "1", "username": "testuser", "global_name": "Test User"},
+        }
+    )
+    assert ctx.user.username == "testuser"
+    assert ctx.user.id == "1"
+    assert ctx.user.display_name == "Test User"
+    assert ctx.member.nick == "Nick"
+    assert ctx.member.display_name == "Nick"
+    assert ctx.member.user.username == "testuser"
+
+
+def test_user_exposes_attributes_in_dm():
+    ctx = _make_ctx(user={"id": "2", "username": "testuser"})
+    assert ctx.user.username == "testuser"
+    assert ctx.user.display_name == "testuser"
+    assert ctx.member is None
+
+
+def test_user_missing_attribute_raises():
+    ctx = _make_ctx(user={"id": "2", "username": "testuser"})
+    try:
+        ctx.user.email
+    except AttributeError:
+        pass
+    else:
+        raise AssertionError("expected AttributeError for missing field")
+
+
+# --- message / channel / attachment attribute access ---
+
+
+def test_message_and_channel_expose_attributes():
+    ctx = _make_ctx(
+        message={"id": "10", "content": "hi", "author": {"id": "1", "username": "testuser"}},
+        channel={"id": "20", "name": "general"},
+    )
+    assert ctx.message.content == "hi"
+    assert ctx.message.author.username == "testuser"
+    assert ctx.channel.name == "general"
+
+
+def test_message_and_channel_absent_are_none():
+    ctx = _make_ctx()
+    assert ctx.message is None
+    assert ctx.channel is None
+
+
+def test_attachment_exposes_attributes():
+    ctx = _make_ctx(
+        data={
+            "name": "upload",
+            "options": [{"name": "file", "type": 11, "value": "att-1"}],
+            "resolved": {"attachments": {"att-1": {"filename": "cat.png", "size": 12}}},
+        }
+    )
+    assert ctx.attachments["att-1"].filename == "cat.png"
+    assert ctx.attachments["att-1"].size == 12
+
+
 # --- context menu: target attributes ---
 
 
@@ -212,7 +278,9 @@ def test_target_user_from_user_command():
         }
     )
     assert ctx.target_user == {"id": "999", "username": "alice"}
+    assert ctx.target_user.username == "alice"
     assert ctx.target_member == {"nick": "Alice"}
+    assert ctx.target_member.nick == "Alice"
     assert ctx.target_message is None
 
 
@@ -233,6 +301,7 @@ def test_target_message_from_message_command():
         }
     )
     assert ctx.target_message == {"id": "555", "content": "hello world"}
+    assert ctx.target_message.content == "hello world"
     assert ctx.target_user is None
     assert ctx.target_member is None
 

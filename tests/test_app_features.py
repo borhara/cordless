@@ -542,7 +542,7 @@ def test_attachments_resolved_from_interaction():
             },
         },
     )
-    assert got["attachment"]["filename"] == "cat.png"
+    assert got["attachment"].filename == "cat.png"
 
 
 def test_empty_public_key_rejects_invalid_signature():

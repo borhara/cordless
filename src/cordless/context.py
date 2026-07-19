@@ -2,6 +2,7 @@ import base64
 import json
 
 from ._multipart import build_multipart_body
+from .models import Attachment, Channel, Member, Message, User, _wrap
 
 _CHANNEL_MESSAGE_WITH_SOURCE = 4
 _UPDATE_MESSAGE = 7
@@ -82,10 +83,10 @@ class Context:
         # Suffix segments when a handler matched by prefix, e.g. "shop:item1" → ["item1"]
         self.custom_id_args = []
         self.options = {opt["name"]: opt["value"] for opt in _leaf_options(data) if "value" in opt}
-        self.user = (interaction.get("member") or {}).get("user") or interaction.get("user")
-        self.member = interaction.get("member")
-        self.message = interaction.get("message")
-        self.channel = interaction.get("channel")
+        self.user = _wrap(User, (interaction.get("member") or {}).get("user") or interaction.get("user"))
+        self.member = _wrap(Member, interaction.get("member"))
+        self.message = _wrap(Message, interaction.get("message"))
+        self.channel = _wrap(Channel, interaction.get("channel"))
         self.locale = interaction.get("locale")
         self.guild_id = interaction.get("guild_id")
         self.channel_id = interaction.get("channel_id")
@@ -112,11 +113,11 @@ class Context:
         resolved = data.get("resolved", {})
         # Attachment options (type 11): ctx.options holds the id,
         # ctx.attachments[id] holds the filename/url/size metadata
-        self.attachments = resolved.get("attachments", {})
+        self.attachments = {att_id: Attachment(att) for att_id, att in resolved.get("attachments", {}).items()}
         target_id = data.get("target_id")
-        self.target_user = resolved.get("users", {}).get(target_id) if target_id else None
-        self.target_member = resolved.get("members", {}).get(target_id) if target_id else None
-        self.target_message = resolved.get("messages", {}).get(target_id) if target_id else None
+        self.target_user = _wrap(User, resolved.get("users", {}).get(target_id)) if target_id else None
+        self.target_member = _wrap(Member, resolved.get("members", {}).get(target_id)) if target_id else None
+        self.target_message = _wrap(Message, resolved.get("messages", {}).get(target_id)) if target_id else None
 
     async def send(
         self,
