@@ -108,7 +108,7 @@ class Cog:
 
         return decorator
 
-    def user_command(self, name, dm_permission=True, guild_ids=None):
+    def user_command(self, name, dm_permission=True, guild_ids=None, user_installable=False):
         """Same as `Cordless.user_command`."""
 
         def decorator(func):
