@@ -1,6 +1,9 @@
+import ast
 import hashlib
 import json
 import os
+import re
+import sys
 import tempfile
 import time
 import tomllib
@@ -86,6 +89,110 @@ def load_config(source_dir):
     for key in sorted(unknown):
         print(f"cordless: unknown [deploy] key {key!r} in cordless.toml (ignored)")
     return cfg
+
+
+# always available on a deployed function regardless of `packages`: boto3/botocore
+# ship with every Lambda Python runtime, nacl comes from cordless's own layer, and
+# "cordless" is this project itself
+_ALWAYS_AVAILABLE_IMPORTS = {"boto3", "botocore", "nacl", "cordless"}
+
+# distribution name -> import name, for the common cases where they differ, so a
+# correctly-declared package doesn't get flagged as an unresolved import. Not
+# exhaustive - just the ones people actually hit.
+_DIST_TO_IMPORT_NAME = {
+    "pillow": "pil",
+    "pyyaml": "yaml",
+    "beautifulsoup4": "bs4",
+    "python-dotenv": "dotenv",
+    "opencv-python": "cv2",
+    "opencv-python-headless": "cv2",
+    "scikit-learn": "sklearn",
+    "python-dateutil": "dateutil",
+    "protobuf": "google",
+    "pyjwt": "jwt",
+    "pynacl": "nacl",
+}
+
+# directories that are real project files (so still zipped) but never run on
+# Lambda, so their imports (test frameworks etc.) shouldn't count against packages
+_SCAN_EXCLUDE_DIRS = {"tests", "test"}
+
+
+def _declared_package_names(packages):
+    """Bare, lowercase distribution names from `packages`, stripped of version
+    specifiers/extras/markers, e.g. "pillow==11.2.0" -> "pillow"."""
+    names = set()
+    for spec in packages or ():
+        name = re.split(r"[<>=!~\[; ]", spec, maxsplit=1)[0].strip().lower()
+        if name:
+            names.add(name)
+    return names
+
+
+def _local_module_names(source_dir):
+    """Top-level modules/packages that are this project's own code, not a pip
+    dependency - anything sitting directly in source_dir."""
+    names = set()
+    try:
+        entries = os.listdir(source_dir)
+    except OSError:
+        return names
+    for entry in entries:
+        if entry.endswith(".py"):
+            names.add(entry[:-3])
+        elif os.path.isdir(os.path.join(source_dir, entry)) and not _exclude_dir(entry):
+            names.add(entry)
+    return names
+
+
+def _imported_top_level_names(source_dir):
+    """Every top-level module name imported anywhere in the files that get
+    bundled into the zip. Static (ast-based), so it can't see imports gated
+    behind a runtime condition (try/except ImportError, sys.version checks)."""
+    names = set()
+    for root, dirs, files in os.walk(source_dir):
+        dirs[:] = [d for d in dirs if not _exclude_dir(d) and d not in _SCAN_EXCLUDE_DIRS]
+        for fname in files:
+            if not fname.endswith(".py") or _exclude_file(fname):
+                continue
+            path = os.path.join(root, fname)
+            try:
+                with open(path, encoding="utf-8") as f:
+                    tree = ast.parse(f.read(), filename=path)
+            except (SyntaxError, OSError, UnicodeDecodeError):
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        names.add(alias.name.split(".")[0])
+                elif isinstance(node, ast.ImportFrom):
+                    if node.level == 0 and node.module:
+                        names.add(node.module.split(".")[0])
+    return names
+
+
+def scan_missing_packages(source_dir, packages=None):
+    """Best-effort: top-level imports in the bundled source that resolve to
+    neither the standard library, this project's own local code, nor a
+    declared `packages` entry - almost always a forgotten `packages` line
+    for something that works fine locally (already installed) but doesn't
+    exist on Lambda. Static analysis, so callers must only ever warn on this
+    (see the `packages` list itself for why this can't be a hard failure)."""
+    declared = _declared_package_names(packages)
+    resolved = set(declared) | _ALWAYS_AVAILABLE_IMPORTS
+    for dist, import_name in _DIST_TO_IMPORT_NAME.items():
+        if dist in declared:
+            resolved.add(import_name)
+
+    local = _local_module_names(source_dir)
+    stdlib = set(sys.stdlib_module_names)
+
+    missing = set()
+    for name in _imported_top_level_names(source_dir):
+        if name in local or name.lower() in stdlib or name.lower() in resolved:
+            continue
+        missing.add(name)
+    return sorted(missing)
 
 
 def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_version="3.12", architecture="x86_64"):
@@ -741,6 +848,19 @@ def deploy(
         table_name,
     )
 
+    missing_packages = scan_missing_packages(source_dir, packages)
+    package_check = (
+        [
+            (
+                False,
+                "Package check",
+                f"{', '.join(missing_packages)} (see https://cordless.dev/guides/deploying/#extra-packages)",
+            )
+        ]
+        if missing_packages
+        else []
+    )
+
     summary(
         [
             (True, "Runtime", runtime),
@@ -749,6 +869,7 @@ def deploy(
                 "Signature verification",
                 "pynacl" if not _upload.pynacl_bundle_failed else "pure-Python Ed25519 (slower than pynacl)",
             ),
+            *package_check,
             *health,
         ]
     )

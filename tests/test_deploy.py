@@ -22,6 +22,7 @@ from cordless.deploy import (
     ensure_iam_role,
     ensure_ratelimit_table,
     ratelimit_table_name,
+    scan_missing_packages,
 )
 
 REGION = "us-east-1"
@@ -638,6 +639,31 @@ def test_deploy_summary_includes_health_check(deploy_patches, monkeypatch, capsy
 
 
 @mock_aws
+def test_deploy_summary_flags_unresolved_import(deploy_patches, monkeypatch, capsys):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    (deploy_patches / "lambda_function.py").write_text("import requests\n")
+
+    deploy(**_base_deploy_kwargs(deploy_patches))
+
+    out = capsys.readouterr().out
+    assert "Package check" in out
+    assert "requests" in out
+
+
+@mock_aws
+def test_deploy_summary_omits_package_check_when_declared(deploy_patches, monkeypatch, capsys):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    (deploy_patches / "lambda_function.py").write_text("import requests\n")
+
+    deploy(**_base_deploy_kwargs(deploy_patches, packages=["requests"]))
+
+    out = capsys.readouterr().out
+    assert "Package check" not in out
+
+
+@mock_aws
 def test_deploy_defaults_new_function_to_arm64(deploy_patches, monkeypatch):
     iam = boto3.client("iam", region_name=REGION)
     monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
@@ -983,3 +1009,56 @@ def test_destroy_leaves_ratelimit_table_when_flag_omitted(deploy_patches, monkey
 @mock_aws
 def test_destroy_is_safe_when_ratelimit_table_never_existed():
     destroy("my-bot", "my-bot-role", REGION, ratelimit=True)
+
+
+# ---------------------------------------------------------------------------
+# scan_missing_packages
+# ---------------------------------------------------------------------------
+
+
+def test_scan_missing_packages_flags_undeclared_third_party_import(tmp_path):
+    (tmp_path / "lambda_function.py").write_text("import requests\n")
+    assert scan_missing_packages(str(tmp_path)) == ["requests"]
+
+
+def test_scan_missing_packages_accepts_declared_package(tmp_path):
+    (tmp_path / "lambda_function.py").write_text("import requests\n")
+    assert scan_missing_packages(str(tmp_path), ["requests==2.31.0"]) == []
+
+
+def test_scan_missing_packages_maps_distribution_name_to_import_name(tmp_path):
+    (tmp_path / "lambda_function.py").write_text("from PIL import Image\n")
+    assert scan_missing_packages(str(tmp_path), ["pillow==11.2.0"]) == []
+
+
+def test_scan_missing_packages_ignores_stdlib(tmp_path):
+    (tmp_path / "lambda_function.py").write_text("import os\nimport json\nfrom typing import Literal\n")
+    assert scan_missing_packages(str(tmp_path)) == []
+
+
+def test_scan_missing_packages_ignores_always_available_imports(tmp_path):
+    (tmp_path / "lambda_function.py").write_text("import boto3\nimport botocore\nfrom cordless import Cordless\n")
+    assert scan_missing_packages(str(tmp_path)) == []
+
+
+def test_scan_missing_packages_ignores_local_package(tmp_path):
+    (tmp_path / "lambda_function.py").write_text("from dungeon import db\n")
+    (tmp_path / "dungeon").mkdir()
+    (tmp_path / "dungeon" / "__init__.py").write_text("")
+    (tmp_path / "dungeon" / "db.py").write_text("")
+    assert scan_missing_packages(str(tmp_path)) == []
+
+
+def test_scan_missing_packages_ignores_relative_imports(tmp_path):
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "__init__.py").write_text("")
+    (tmp_path / "pkg" / "handlers.py").write_text("from . import db\nfrom .db import get\n")
+    (tmp_path / "pkg" / "db.py").write_text("def get(): pass\n")
+    assert scan_missing_packages(str(tmp_path)) == []
+
+
+def test_scan_missing_packages_ignores_imports_under_tests_dir(tmp_path):
+    (tmp_path / "lambda_function.py").write_text("import os\n")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_foo.py").write_text("import pytest\n")
+    assert scan_missing_packages(str(tmp_path)) == []
