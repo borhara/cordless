@@ -13,11 +13,22 @@ def _cordless_package_dir():
     return os.path.dirname(spec.origin)
 
 
+# Set when a fetch fails, so deploy() can warn once the spinner has stopped
+# animating instead of mid-spin, where print() gets stomped by its redraws.
+pynacl_bundle_failed = False
+
+
 def _layer_extras_dir(python_version, architecture="x86_64"):
-    """Fetch pynacl (fast Ed25519 verify) for the layer."""
+    """Fetch pynacl (fast Ed25519 verify) for the layer. Never fails the deploy -
+    falls back to the pure-Python verify path if the fetch doesn't work out."""
+    global pynacl_bundle_failed
     from .deploy import _ensure_packages
 
-    return _ensure_packages(["pynacl"], python_version, architecture)
+    try:
+        return _ensure_packages(["pynacl"], python_version, architecture)
+    except Exception:
+        pynacl_bundle_failed = True
+        return None
 
 
 def build_layer_zip(python_version=None, architecture="x86_64"):
@@ -27,6 +38,16 @@ def build_layer_zip(python_version=None, architecture="x86_64"):
 
     tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
     tmp.close()
+    # cordless's own files and the pynacl extras can overlap (e.g. a stray
+    # dotfile at the root of both trees), so dedupe to avoid writing the same
+    # zip entry twice
+    written = set()
+
+    def _write(zf, abs_path, arcname):
+        if arcname in written:
+            return
+        written.add(arcname)
+        zf.write(abs_path, arcname)
 
     with zipfile.ZipFile(tmp.name, "w", zipfile.ZIP_DEFLATED) as zf:
         for root, dirs, files in os.walk(pkg_dir):
@@ -36,7 +57,7 @@ def build_layer_zip(python_version=None, architecture="x86_64"):
                     continue
                 abs_path = os.path.join(root, fname)
                 rel_path = os.path.relpath(abs_path, site_dir)
-                zf.write(abs_path, os.path.join("python", rel_path))
+                _write(zf, abs_path, os.path.join("python", rel_path))
 
         import glob
 
@@ -46,7 +67,7 @@ def build_layer_zip(python_version=None, architecture="x86_64"):
                     for fname in files:
                         abs_path = os.path.join(root, fname)
                         rel_path = os.path.relpath(abs_path, site_dir)
-                        zf.write(abs_path, os.path.join("python", rel_path))
+                        _write(zf, abs_path, os.path.join("python", rel_path))
 
         extras_dir = _layer_extras_dir(python_version, architecture) if python_version else None
         if extras_dir:
@@ -57,7 +78,7 @@ def build_layer_zip(python_version=None, architecture="x86_64"):
                         continue
                     abs_path = os.path.join(root, fname)
                     rel_path = os.path.relpath(abs_path, extras_dir)
-                    zf.write(abs_path, os.path.join("python", rel_path))
+                    _write(zf, abs_path, os.path.join("python", rel_path))
 
     return tmp.name
 

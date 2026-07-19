@@ -3,7 +3,17 @@
 import os
 import zipfile
 
+import pytest
+
+import cordless.upload
 from cordless.deploy import _packages_cache_dir, build_function_zip, load_config
+
+
+@pytest.fixture(autouse=True)
+def _reset_pynacl_bundle_failed():
+    cordless.upload.pynacl_bundle_failed = False
+    yield
+    cordless.upload.pynacl_bundle_failed = False
 
 
 def _zip_names(zip_path):
@@ -98,6 +108,7 @@ def test_bundle_cordless_includes_dist_info(tmp_path, monkeypatch):
     import cordless.upload
 
     monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
+    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": None)
 
     src = tmp_path / "src"
     src.mkdir()
@@ -108,6 +119,89 @@ def test_bundle_cordless_includes_dist_info(tmp_path, monkeypatch):
         names = _zip_names(zip_path)
         assert "cordless-1.0.0b2.dist-info/METADATA" in names
         assert "cordless-1.0.0b2.dist-info/RECORD" in names
+    finally:
+        os.unlink(zip_path)
+
+
+def test_bundle_cordless_includes_pynacl_extras(tmp_path, monkeypatch):
+    import cordless.deploy
+    import cordless.upload
+
+    pkg_dir = tmp_path / "site-packages" / "cordless"
+    _make_tree(pkg_dir, ["app.py", "__init__.py"])
+    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
+
+    extras = tmp_path / "extras"
+    _make_tree(extras, ["nacl/signing.py", "nacl/_sodium.abi3.so"])
+    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": str(extras))
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "lambda_function.py").write_text("x")
+
+    zip_path = cordless.deploy.build_function_zip(str(src), bundle_cordless=True)
+    try:
+        names = _zip_names(zip_path)
+        assert "nacl/signing.py" in names
+        assert "nacl/_sodium.abi3.so" in names
+    finally:
+        os.unlink(zip_path)
+
+
+def test_bundle_cordless_does_not_double_write_when_packages_overlaps_extras(tmp_path, monkeypatch):
+    """packages = ["pynacl"] plus bundle_cordless=True used to resolve to the same cache
+    dir as the extras fetch and write every file in it twice, which zipfile warns about
+    as a duplicate name."""
+    import warnings
+
+    import cordless.deploy
+    import cordless.upload
+
+    pkg_dir = tmp_path / "site-packages" / "cordless"
+    _make_tree(pkg_dir, ["app.py", "__init__.py"])
+    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
+
+    # _layer_extras_dir and a user's own packages=["pynacl"] can resolve to the
+    # same cache dir in practice, so point both at one shared directory here
+    shared = tmp_path / "shared-pynacl-cache"
+    _make_tree(shared, ["nacl/signing.py", ".lock"])
+    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": str(shared))
+    monkeypatch.setattr(cordless.deploy, "_ensure_packages", lambda pkgs, v, arch: str(shared))
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "lambda_function.py").write_text("x")
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        zip_path = cordless.deploy.build_function_zip(str(src), bundle_cordless=True, packages=["pynacl"])
+    try:
+        with zipfile.ZipFile(zip_path) as zf:
+            names = zf.namelist()
+        assert names.count("nacl/signing.py") == 1
+        assert names.count(".lock") == 1
+    finally:
+        os.unlink(zip_path)
+
+
+def test_bundle_cordless_survives_pynacl_fetch_failure(tmp_path, monkeypatch):
+    import cordless.deploy
+    import cordless.upload
+
+    pkg_dir = tmp_path / "site-packages" / "cordless"
+    _make_tree(pkg_dir, ["app.py", "__init__.py"])
+    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
+    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": None)
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "lambda_function.py").write_text("x")
+
+    zip_path = cordless.deploy.build_function_zip(str(src), bundle_cordless=True)
+    try:
+        names = _zip_names(zip_path)
+        assert any(n.startswith("cordless/") for n in names)
+        assert not any("/nacl/" in n or n.startswith("nacl/") for n in names)
     finally:
         os.unlink(zip_path)
 
@@ -127,6 +221,7 @@ def test_bundle_cordless_includes_egg_info(tmp_path, monkeypatch):
     import cordless.upload
 
     monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
+    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": None)
 
     src = tmp_path / "src"
     src.mkdir()
@@ -160,6 +255,35 @@ def test_layer_zip_bundles_pynacl_extras(tmp_path, monkeypatch):
         os.unlink(zip_path)
 
 
+def test_layer_zip_does_not_double_write_overlapping_names(tmp_path, monkeypatch):
+    """cordless's own files and the pynacl extras can end up producing the same
+    relative zip path, which zipfile warns about as a duplicate name."""
+    import warnings
+
+    import cordless.upload
+
+    pkg_root = tmp_path / "site-packages"
+    pkg_dir = pkg_root / "cordless"
+    _make_tree(pkg_dir, ["app.py", "__init__.py"])
+    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
+
+    extras = tmp_path / "extras"
+    # deliberately overlaps with a path the cordless walk also produces
+    _make_tree(extras, ["cordless/app.py", "nacl/signing.py"])
+    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": str(extras))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        zip_path = cordless.upload.build_layer_zip("3.12")
+    try:
+        with zipfile.ZipFile(zip_path) as zf:
+            names = zf.namelist()
+        assert names.count("python/cordless/app.py") == 1
+        assert "python/nacl/signing.py" in names
+    finally:
+        os.unlink(zip_path)
+
+
 def test_layer_zip_survives_pynacl_fetch_failure(monkeypatch):
     import cordless.upload
 
@@ -172,6 +296,19 @@ def test_layer_zip_survives_pynacl_fetch_failure(monkeypatch):
         assert not any("/nacl/" in n for n in names)
     finally:
         os.unlink(zip_path)
+
+
+def test_layer_extras_dir_returns_none_when_fetch_fails(monkeypatch):
+    import cordless.deploy
+    import cordless.upload
+
+    def boom(pkgs, python_version, architecture):
+        raise RuntimeError("no matching wheel")
+
+    monkeypatch.setattr(cordless.deploy, "_ensure_packages", boom)
+
+    assert cordless.upload._layer_extras_dir("3.12") is None
+    assert cordless.upload.pynacl_bundle_failed is True
 
 
 def test_layer_zip_without_runtime_skips_extras(monkeypatch):

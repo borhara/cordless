@@ -69,7 +69,11 @@ _KNOWN_DEPLOY_KEYS = {
     "policies",
     "architecture",
     "ratelimit",
+    "endpoint",
+    "keep-warm",
 }
+
+_DEFAULT_KEEPWARM_SCHEDULE = "rate(5 minutes)"
 
 
 def load_config(source_dir):
@@ -87,6 +91,17 @@ def load_config(source_dir):
 def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_version="3.12", architecture="x86_64"):
     tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
     tmp.close()
+    # pynacl (bundle_cordless extras) and a user's own `packages = ["pynacl"]`
+    # can resolve to the same cache dir, so this dedupes to avoid writing the
+    # same file into the zip twice
+    written = set()
+
+    def _write(zf, abs_path, arcname):
+        if arcname in written:
+            return
+        written.add(arcname)
+        zf.write(abs_path, arcname)
+
     with zipfile.ZipFile(tmp.name, "w", zipfile.ZIP_DEFLATED) as zf:
         for root, dirs, files in os.walk(source_dir):
             dirs[:] = [d for d in dirs if not _exclude_dir(d)]
@@ -94,10 +109,10 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                 if _exclude_file(fname):
                     continue
                 abs_path = os.path.join(root, fname)
-                zf.write(abs_path, os.path.relpath(abs_path, source_dir))
+                _write(zf, abs_path, os.path.relpath(abs_path, source_dir))
 
         if bundle_cordless:
-            from .upload import _cordless_package_dir
+            from .upload import _cordless_package_dir, _layer_extras_dir
 
             pkg_dir = _cordless_package_dir()
             pkg_parent = os.path.dirname(pkg_dir)
@@ -107,7 +122,7 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                     if fname.endswith(".pyc"):
                         continue
                     abs_path = os.path.join(root, fname)
-                    zf.write(abs_path, os.path.relpath(abs_path, pkg_parent))
+                    _write(zf, abs_path, os.path.relpath(abs_path, pkg_parent))
             # include dist-info/egg-info so importlib.metadata works inside Lambda
             import glob
 
@@ -116,7 +131,19 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                     for root, dirs, files in os.walk(dist_info):
                         for fname in files:
                             abs_path = os.path.join(root, fname)
-                            zf.write(abs_path, os.path.relpath(abs_path, pkg_parent))
+                            _write(zf, abs_path, os.path.relpath(abs_path, pkg_parent))
+
+            # same pynacl bundling the layer path gets, so bundle_cordless doesn't
+            # silently fall back to slow signature verification
+            extras_dir = _layer_extras_dir(python_version, architecture)
+            if extras_dir:
+                for root, dirs, files in os.walk(extras_dir):
+                    dirs[:] = [d for d in dirs if d != "__pycache__"]
+                    for fname in files:
+                        if fname.endswith(".pyc"):
+                            continue
+                        abs_path = os.path.join(root, fname)
+                        _write(zf, abs_path, os.path.relpath(abs_path, extras_dir))
         if packages:
             pkg_dir = _ensure_packages(packages, python_version, architecture)
             for root, dirs, files in os.walk(pkg_dir):
@@ -125,7 +152,7 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                     if fname.endswith(".pyc"):
                         continue
                     abs_path = os.path.join(root, fname)
-                    zf.write(abs_path, os.path.relpath(abs_path, pkg_dir))
+                    _write(zf, abs_path, os.path.relpath(abs_path, pkg_dir))
 
     return tmp.name
 
@@ -388,6 +415,69 @@ def _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account
     return endpoint
 
 
+def _has_api_gateway(apigw, function_name):
+    api_name = f"{function_name}-api"
+    return any(a["Name"] == api_name for a in _list_all_apis(apigw))
+
+
+def _has_function_url(lam, function_name):
+    try:
+        lam.get_function_url_config(FunctionName=function_name)
+        return True
+    except lam.exceptions.ResourceNotFoundException:
+        return False
+
+
+def _ensure_function_url(lam, function_name):
+    """Like _ensure_api_gateway, but a direct Lambda Function URL - no API
+    Gateway hop, no separate service to provision or tear down (deleting the
+    function removes its Function URL along with it).
+
+    A public (AuthType=NONE) function URL needs two resource-policy
+    statements, not one: lambda:InvokeFunctionUrl, and - required by AWS
+    since October 2025 - a second lambda:InvokeFunction statement gated on
+    InvokedViaFunctionUrl. Without the second one every request 403s before
+    it ever reaches the handler, which is exactly what silently breaks
+    Discord's endpoint verification (it never gets any response to sign
+    against, just a flat rejection).
+
+    Both add_permission calls run every time, even when the URL config
+    already exists - not just on first creation. A function whose URL was
+    created by an older cordless version (or a partially failed earlier
+    attempt) may already have the config but be missing one or both
+    permission statements; returning early here would leave it stuck
+    broken instead of healing it on the next deploy.
+    """
+    try:
+        config = lam.get_function_url_config(FunctionName=function_name)
+    except lam.exceptions.ResourceNotFoundException:
+        config = lam.create_function_url_config(FunctionName=function_name, AuthType="NONE")
+
+    try:
+        lam.add_permission(
+            FunctionName=function_name,
+            StatementId="FunctionURLAllowPublicAccess",
+            Action="lambda:InvokeFunctionUrl",
+            Principal="*",
+            FunctionUrlAuthType="NONE",
+        )
+    except lam.exceptions.ResourceConflictException:
+        pass
+
+    try:
+        lam.add_permission(
+            FunctionName=function_name,
+            StatementId="FunctionURLInvokeAllowPublicAccess",
+            Action="lambda:InvokeFunction",
+            Principal="*",
+            InvokedViaFunctionUrl=True,
+        )
+    except lam.exceptions.ResourceConflictException:
+        pass
+
+    return config["FunctionUrl"]
+
+
 def _allow_worker_invoke(iam, role_name, worker_arn):
     iam.put_role_policy(
         RoleName=role_name,
@@ -470,8 +560,10 @@ def deploy(
     defer_memory=256,
     policies=None,
     crons=None,
-    architecture="x86_64",
+    architecture=None,
     ratelimit=False,
+    endpoint=None,
+    keep_warm=None,
 ):
     if not function_name:
         raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
@@ -486,6 +578,26 @@ def deploy(
     apigw = session.client("apigatewayv2")
     account_id = session.client("sts").get_caller_identity()["Account"]
 
+    if architecture is None:
+        # AWS won't let an existing function's architecture change in place, so
+        # an unset architecture keeps whatever's already deployed. arm64 is only
+        # the default for a function that doesn't exist yet.
+        try:
+            existing_config = lam.get_function_configuration(FunctionName=function_name)
+            architecture = existing_config.get("Architectures", ["x86_64"])[0]
+        except lam.exceptions.ResourceNotFoundException:
+            architecture = "arm64"
+
+    if endpoint is None:
+        # keep whichever endpoint an existing function already has; only a
+        # brand new function gets the simpler, lower-latency default
+        if _has_function_url(lam, function_name):
+            endpoint = "function_url"
+        elif _has_api_gateway(apigw, function_name):
+            endpoint = "api_gateway"
+        else:
+            endpoint = "function_url"
+
     print()
 
     with Spinner("IAM role"):
@@ -498,6 +610,10 @@ def deploy(
             table_arn = f"arn:aws:dynamodb:{region}:{account_id}:table/{table_name}"
             _allow_ratelimit_table(iam, role_name, table_arn)
         env = {**env, "CORDLESS_RATELIMIT_TABLE": table_name}
+
+    from . import upload as _upload
+
+    _upload.pynacl_bundle_failed = False
 
     if bundle_cordless:
         with Spinner(f"cordless  {_cordless_version()} (local)"):
@@ -514,6 +630,11 @@ def deploy(
             python_version=python_version,
             architecture=architecture,
         )
+
+    # printed after both spinners above have stopped animating, so it can't
+    # get overwritten by their mid-spin redraws
+    if _upload.pynacl_bundle_failed:
+        print("  cordless: could not bundle pynacl, using the slower pure-Python signature verification")
 
     try:
         exists, function_arn = _function_exists(lam, function_name)
@@ -547,8 +668,12 @@ def deploy(
                     architecture=architecture,
                 )
 
-        with Spinner("API Gateway"):
-            url = _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id)
+        if endpoint == "function_url":
+            with Spinner("function URL"):
+                url = _ensure_function_url(lam, function_name)
+        else:
+            with Spinner("API Gateway"):
+                url = _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id)
 
         if defer_worker:
             w_exists, worker_arn = _function_exists(lam, defer_worker)
@@ -602,6 +727,9 @@ def deploy(
         events = session.client("events")
         with Spinner(f"cron schedules ({len(crons)})"):
             _wire_crons(events, lam, function_name, cron_target, cron_arn, crons)
+
+    with Spinner("keep-warm"):
+        _wire_keepwarm(session.client("events"), lam, function_name, function_arn, keep_warm)
 
     success(url)
     return url
@@ -659,6 +787,60 @@ def _wire_crons(events, lam, function_name, target_fn, target_arn, crons):
         )
 
 
+def _keepwarm_schedule(keep_warm):
+    if keep_warm is True:
+        return _DEFAULT_KEEPWARM_SCHEDULE
+    if isinstance(keep_warm, str):
+        return keep_warm
+    return None
+
+
+def _wire_keepwarm(events, lam, function_name, function_arn, keep_warm):
+    """Ping the main function directly on a schedule so it doesn't go cold
+    between real invocations. Always targets the main function, never the
+    worker - regular crons can't do this, since they all share one target
+    (defer_worker if it's set, otherwise the main function)."""
+    schedule = _keepwarm_schedule(keep_warm)
+    if not schedule:
+        _remove_keepwarm(events, lam, function_name)
+        return
+
+    rule_name = f"{function_name}-keepwarm"
+    statement_id = "cordless-keepwarm"
+    rule_arn = events.put_rule(Name=rule_name, ScheduleExpression=schedule)["RuleArn"]
+    events.put_targets(
+        Rule=rule_name,
+        Targets=[{"Id": "cordless", "Arn": function_arn, "Input": json.dumps({"_cordless_keepwarm": True})}],
+    )
+    try:
+        lam.remove_permission(FunctionName=function_name, StatementId=statement_id)
+    except lam.exceptions.ResourceNotFoundException:
+        pass
+    lam.add_permission(
+        FunctionName=function_name,
+        StatementId=statement_id,
+        Action="lambda:InvokeFunction",
+        Principal="events.amazonaws.com",
+        SourceArn=rule_arn,
+    )
+
+
+def _remove_keepwarm(events, lam, function_name):
+    rule_name = f"{function_name}-keepwarm"
+    try:
+        targets = events.list_targets_by_rule(Rule=rule_name).get("Targets", [])
+    except events.exceptions.ResourceNotFoundException:
+        return
+    target_ids = [t["Id"] for t in targets]
+    if target_ids:
+        events.remove_targets(Rule=rule_name, Ids=target_ids)
+    events.delete_rule(Name=rule_name)
+    try:
+        lam.remove_permission(FunctionName=function_name, StatementId="cordless-keepwarm")
+    except lam.exceptions.ResourceNotFoundException:
+        pass
+
+
 def destroy(function_name, role_name, region, defer_worker=None, layer_name=None, ratelimit=False):
     if not function_name:
         raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
@@ -689,6 +871,9 @@ def destroy(function_name, role_name, region, defer_worker=None, layer_name=None
             if target_ids:
                 events.remove_targets(Rule=rule["Name"], Ids=target_ids)
             events.delete_rule(Name=rule["Name"])
+
+    with Spinner("keep-warm"):
+        _remove_keepwarm(events, lam, function_name)
 
     for fn in [function_name] + ([defer_worker] if defer_worker else []):
         with Spinner(f"Lambda  {fn}"):

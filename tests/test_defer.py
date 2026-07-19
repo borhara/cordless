@@ -130,6 +130,7 @@ def fake_conn(monkeypatch):
     FakeHTTPSConnection.requests = []
     FakeHTTPSConnection.responses = []
     monkeypatch.setattr(cordless.defer, "HTTPSConnection", FakeHTTPSConnection)
+    monkeypatch.setattr(cordless.defer, "_conn", None)
     return FakeHTTPSConnection
 
 
@@ -265,6 +266,20 @@ def test_cron_runs_via_worker_handler():
     handler = make_worker_handler(bot)
     handler({"_cordless_cron": "tick"})
     assert ran == ["tick"]
+
+
+def test_keepwarm_returns_without_dispatching_anything():
+    bot = Cordless()
+    ran = []
+
+    @bot.cron("rate(1 day)")
+    async def daily():
+        ran.append("daily")
+
+    handler = bot.handler()
+    result = handler({"_cordless_keepwarm": True})
+    assert result is None
+    assert ran == []
 
 
 def test_unknown_cron_raises():

@@ -215,8 +215,10 @@ def _deploy(args):
         defer_memory=int(cfg.get("defer_memory", 256)),
         policies=cfg.get("policies"),
         crons=crons,
-        architecture=args.architecture or cfg.get("architecture", "x86_64"),
+        architecture=args.architecture or cfg.get("architecture"),
         ratelimit=bool(cfg.get("ratelimit", False)),
+        endpoint=args.endpoint or cfg.get("endpoint"),
+        keep_warm=cfg.get("keep-warm"),
     )
 
     if args.register:
@@ -262,7 +264,7 @@ def _destroy(args):
         targets = f"function '{function_name}'" + (f", worker '{defer_worker}'" if defer_worker else "")
         if layer_name:
             targets += f", layer '{layer_name}'"
-        answer = input(f"Delete {targets}, its API Gateway, logs, and role '{role_name}'? [y/N] ")
+        answer = input(f"Delete {targets}, its API Gateway/Function URL, logs, and role '{role_name}'? [y/N] ")
         if answer.strip().lower() not in ("y", "yes"):
             raise SystemExit("Aborted.")
 
@@ -299,7 +301,10 @@ handler = bot.handler()
 _INIT_TOML = """\
 [deploy]
 function = "{name}"
-# region = "eu-west-2"
+endpoint = "{endpoint}"
+# us-east-1 is closest to Discord's own API infrastructure - EU-hosted bots
+# typically see ~140-160ms to Discord's API, US-hosted ~20-30ms
+region = "us-east-1"
 """
 
 _INIT_ENV = """\
@@ -312,12 +317,48 @@ DISCORD_CLIENT_ID=
 DISCORD_CLIENT_SECRET=
 """
 
+_ENDPOINT_EXPLANATION = """
+How should Discord reach your bot? Pick one:
+
+  1. function_url  (recommended) - A direct Lambda Function URL. Fewer
+     moving parts and lower latency: no separate service sits between
+     Discord and your function. The trade-off is you can't attach a
+     custom domain directly - you'd get a raw *.lambda-url.<region>.on.aws
+     address, or you'd need to put something like CloudFront in front of
+     it yourself if you want your own domain.
+
+  2. api_gateway - Routes through an API Gateway HTTP API in front of your
+     function. Slightly more moving parts and a small extra network hop,
+     but it's the option that supports attaching a custom domain directly.
+"""
+
+
+def _prompt_endpoint():
+    print(_ENDPOINT_EXPLANATION)
+    while True:
+        answer = input("Choose [1=function_url / 2=api_gateway]: ").strip().lower()
+        if answer in ("1", "function_url"):
+            return "function_url"
+        if answer in ("2", "api_gateway"):
+            return "api_gateway"
+        print("  Please enter 1 or 2.")
+
 
 def _init(args):
     name = args.name or os.path.basename(os.getcwd())
+
+    endpoint = args.endpoint
+    if endpoint is None:
+        if not sys.stdin.isatty():
+            raise SystemExit(
+                "cordless init needs an endpoint choice and isn't running interactively: "
+                "pass --endpoint api_gateway|function_url."
+            )
+        endpoint = _prompt_endpoint()
+
     files = {
         "lambda_function.py": _INIT_LAMBDA,
-        "cordless.toml": _INIT_TOML.format(name=name),
+        "cordless.toml": _INIT_TOML.format(name=name, endpoint=endpoint),
         ".env.example": _INIT_ENV,
     }
     for fname, content in files.items():
@@ -571,7 +612,20 @@ def main(argv=None):
         "--defer-timeout", metavar="SECONDS", default=None, help="Worker Lambda timeout in seconds (default: 30)"
     )
     deploy_cmd.add_argument(
-        "--architecture", default=None, choices=["x86_64", "arm64"], help="Lambda architecture (default: x86_64)"
+        "--architecture",
+        default=None,
+        choices=["x86_64", "arm64"],
+        help="Lambda architecture (default: arm64 for a new function, unchanged for an existing one)",
+    )
+    deploy_cmd.add_argument(
+        "--endpoint",
+        default=None,
+        choices=["api_gateway", "function_url"],
+        help=(
+            "How Discord reaches the function: a direct Lambda Function URL, or an "
+            "API Gateway HTTP API in front of it (needed for a custom domain). "
+            "Default: function_url for a new function, unchanged for an existing one"
+        ),
     )
     deploy_cmd.add_argument(
         "--verbose",
@@ -594,7 +648,7 @@ def main(argv=None):
     # destroy
     destroy_cmd = subparsers.add_parser(
         "destroy",
-        help="Delete the Lambda function(s), API Gateway, cron rules, logs, and IAM role for a deployed bot",
+        help="Delete the Lambda function(s), endpoint, cron rules, logs, and IAM role for a deployed bot",
         allow_abbrev=False,
     )
     destroy_cmd.add_argument(
@@ -625,6 +679,12 @@ def main(argv=None):
         "init", help="Scaffold a new cordless bot in the current directory", allow_abbrev=False
     )
     init_cmd.add_argument("name", nargs="?", default=None, help="Function name (default: current directory name)")
+    init_cmd.add_argument(
+        "--endpoint",
+        default=None,
+        choices=["api_gateway", "function_url"],
+        help="Skip the interactive prompt and use this endpoint type",
+    )
     init_cmd.set_defaults(func=_init)
 
     # dev

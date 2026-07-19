@@ -1,10 +1,35 @@
 """Deferred interaction support: async Lambda invoke and Discord followup webhook."""
 
 import json
+import threading
 import time
-from http.client import HTTPSConnection
+from http.client import HTTPException, HTTPSConnection
 
 _TIMEOUT = 10
+
+# Kept open across invocations in a warm Lambda container, so most requests
+# skip the TLS handshake instead of paying for it every time.
+_conn = None
+_conn_lock = threading.Lock()
+
+
+def _send(method, path, body, headers):
+    global _conn
+    with _conn_lock:
+        if _conn is None:
+            _conn = HTTPSConnection("discord.com", timeout=_TIMEOUT)
+        try:
+            _conn.request(method, path, body, headers)
+            resp = _conn.getresponse()
+            return resp.status, resp.read()
+        except (HTTPException, OSError):
+            # the other end closed the kept-alive connection, reconnect once
+            _conn.close()
+            _conn = HTTPSConnection("discord.com", timeout=_TIMEOUT)
+            _conn.request(method, path, body, headers)
+            resp = _conn.getresponse()
+            return resp.status, resp.read()
+
 
 # Pre-create the Lambda client at import time so cold-start invocations don't
 # pay the boto3 initialisation cost inside Discord's 3-second response window.
@@ -60,14 +85,7 @@ def _request(method, path, body=None, content_type=None, retry_404=False):
 
     status, body_out = 0, b""
     for attempt in range(3):
-        conn = HTTPSConnection("discord.com", timeout=_TIMEOUT)
-        try:
-            conn.request(method, path, body, headers)
-            resp = conn.getresponse()
-            status = resp.status
-            body_out = resp.read()
-        finally:
-            conn.close()
+        status, body_out = _send(method, path, body, headers)
 
         if status == 404 and retry_404 and attempt < 2:
             time.sleep(0.5)

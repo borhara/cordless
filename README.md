@@ -17,7 +17,7 @@ handler = bot.handler()
 
 ```bash
 cordless deploy --register
-# → https://abc123.execute-api.eu-west-2.amazonaws.com/
+# → https://abc123.lambda-url.us-east-1.on.aws/
 ```
 
 ---
@@ -26,7 +26,7 @@ cordless deploy --register
 
 Most Discord bots run as long-lived processes, a VPS or container that sits idle 99% of the time, waiting for someone to type a command. You pay for uptime whether your bot is busy or not.
 
-cordless flips this. Your bot is a Lambda function: it only runs when Discord sends an interaction, takes milliseconds to respond, and costs essentially nothing to host. One command provisions everything on AWS: IAM role, Lambda function, API Gateway endpoint and registers your commands with Discord.
+cordless flips this. Your bot is a Lambda function: it only runs when Discord sends an interaction, takes milliseconds to respond, and costs essentially nothing to host. One command provisions everything on AWS: IAM role, Lambda function, public endpoint (a direct Function URL by default, or API Gateway if you want a custom domain) and registers your commands with Discord.
 
 - **No server:** no EC2, no containers, no uptime monitoring, no SSH
 - **No idle cost:** Lambda charges per invocation, not per hour
@@ -72,7 +72,7 @@ cordless dev
 
 ```bash
 cordless deploy --register
-# → https://abc123.execute-api.eu-west-2.amazonaws.com/
+# → https://abc123.lambda-url.us-east-1.on.aws/
 ```
 
 Paste the URL into your Discord app's **Interactions Endpoint URL** and your bot is live.

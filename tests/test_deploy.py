@@ -10,9 +10,12 @@ import cordless.deploy
 from cordless.deploy import (
     _allow_worker_invoke,
     _ensure_api_gateway,
+    _ensure_function_url,
     _function_exists,
     _publish_cordless_layer,
+    _remove_keepwarm,
     _wire_crons,
+    _wire_keepwarm,
     deploy,
     destroy,
     ensure_iam_role,
@@ -206,6 +209,77 @@ def test_ensure_api_gateway_is_idempotent(aws_clients, tmp_path):
     assert len(apigw.get_apis()["Items"]) == 1
 
 
+def test_ensure_function_url_creates_url(aws_clients, tmp_path):
+    iam, lam = aws_clients["iam"], aws_clients["lam"]
+    role_arn = _make_role(iam)
+    _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    url = _ensure_function_url(lam, "my-fn")
+    assert url
+    assert lam.get_function_url_config(FunctionName="my-fn")["FunctionUrl"] == url
+
+
+def test_ensure_function_url_is_idempotent(aws_clients, tmp_path):
+    iam, lam = aws_clients["iam"], aws_clients["lam"]
+    role_arn = _make_role(iam)
+    _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    url1 = _ensure_function_url(lam, "my-fn")
+    url2 = _ensure_function_url(lam, "my-fn")
+    assert url1 == url2
+
+
+def test_ensure_function_url_grants_both_required_permission_statements(aws_clients, tmp_path):
+    """AWS requires two resource-policy statements for a public (AuthType=NONE)
+    function URL, not one - lambda:InvokeFunctionUrl, and (since October 2025)
+    a second lambda:InvokeFunction statement gated on InvokedViaFunctionUrl.
+    Without the second one every request 403s before it reaches the handler,
+    which is what silently broke Discord's endpoint verification."""
+    iam, lam = aws_clients["iam"], aws_clients["lam"]
+    role_arn = _make_role(iam)
+    _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    _ensure_function_url(lam, "my-fn")
+
+    policy = json.loads(lam.get_policy(FunctionName="my-fn")["Policy"])
+    actions = {stmt["Action"] for stmt in policy["Statement"]}
+    assert "lambda:InvokeFunctionUrl" in actions
+    assert "lambda:InvokeFunction" in actions
+
+    # moto represents InvokedViaFunctionUrl as a flat statement key rather than
+    # the real Condition:{Bool:{lambda:InvokedViaFunctionUrl}} shape AWS uses,
+    # so this checks moto's shape - the real shape was verified by hand against
+    # live AWS, which is what actually confirmed the fix
+    invoke_function_stmt = next(s for s in policy["Statement"] if s["Action"] == "lambda:InvokeFunction")
+    assert invoke_function_stmt.get("InvokedViaFunctionUrl") is True
+
+
+def test_ensure_function_url_heals_missing_permission_on_existing_url(aws_clients, tmp_path):
+    """A function whose URL config was created by an older cordless version (or
+    a partially failed earlier deploy) may already have the URL but be missing
+    the lambda:InvokeFunction statement. Calling _ensure_function_url again -
+    e.g. on a routine redeploy - must add the missing statement, not skip
+    straight past it because the URL config already exists."""
+    iam, lam = aws_clients["iam"], aws_clients["lam"]
+    role_arn = _make_role(iam)
+    _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+
+    # simulate the old, incomplete setup: URL config + only the first statement
+    lam.create_function_url_config(FunctionName="my-fn", AuthType="NONE")
+    lam.add_permission(
+        FunctionName="my-fn",
+        StatementId="FunctionURLAllowPublicAccess",
+        Action="lambda:InvokeFunctionUrl",
+        Principal="*",
+        FunctionUrlAuthType="NONE",
+    )
+    policy = json.loads(lam.get_policy(FunctionName="my-fn")["Policy"])
+    assert {s["Action"] for s in policy["Statement"]} == {"lambda:InvokeFunctionUrl"}
+
+    _ensure_function_url(lam, "my-fn")
+
+    policy = json.loads(lam.get_policy(FunctionName="my-fn")["Policy"])
+    actions = {stmt["Action"] for stmt in policy["Statement"]}
+    assert actions == {"lambda:InvokeFunctionUrl", "lambda:InvokeFunction"}
+
+
 # ---------------------------------------------------------------------------
 # _list_all_apis / _list_all_layer_versions (pagination)
 # ---------------------------------------------------------------------------
@@ -317,6 +391,63 @@ def test_wire_crons_is_idempotent(aws_clients, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# _wire_keepwarm / _remove_keepwarm
+# ---------------------------------------------------------------------------
+
+
+def test_wire_keepwarm_creates_rule_targeting_main(aws_clients, tmp_path):
+    """The whole point: this must always target the main function directly,
+    never a defer_worker - regular crons can't do that, since they all share
+    one target."""
+    iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    fn_arn = _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    _wire_keepwarm(events, lam, "my-fn", fn_arn, True)
+
+    rules = events.list_rules(NamePrefix="my-fn-keepwarm")["Rules"]
+    assert len(rules) == 1
+    assert rules[0]["ScheduleExpression"] == "rate(5 minutes)"
+    targets = events.list_targets_by_rule(Rule="my-fn-keepwarm")["Targets"]
+    assert targets[0]["Arn"] == fn_arn
+    assert json.loads(targets[0]["Input"]) == {"_cordless_keepwarm": True}
+
+
+def test_wire_keepwarm_accepts_custom_schedule(aws_clients, tmp_path):
+    iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    fn_arn = _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    _wire_keepwarm(events, lam, "my-fn", fn_arn, "rate(10 minutes)")
+
+    rules = events.list_rules(NamePrefix="my-fn-keepwarm")["Rules"]
+    assert rules[0]["ScheduleExpression"] == "rate(10 minutes)"
+
+
+def test_wire_keepwarm_is_idempotent(aws_clients, tmp_path):
+    iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    fn_arn = _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    _wire_keepwarm(events, lam, "my-fn", fn_arn, True)
+    _wire_keepwarm(events, lam, "my-fn", fn_arn, True)
+    assert len(events.list_rules(NamePrefix="my-fn-keepwarm")["Rules"]) == 1
+
+
+def test_wire_keepwarm_false_removes_existing_rule(aws_clients, tmp_path):
+    iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    fn_arn = _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    _wire_keepwarm(events, lam, "my-fn", fn_arn, True)
+    _wire_keepwarm(events, lam, "my-fn", fn_arn, None)
+    assert events.list_rules(NamePrefix="my-fn-keepwarm")["Rules"] == []
+
+
+def test_remove_keepwarm_is_safe_when_nothing_exists(aws_clients, tmp_path):
+    iam, lam, events = aws_clients["iam"], aws_clients["lam"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    _remove_keepwarm(events, lam, "my-fn")  # must not raise
+
+
+# ---------------------------------------------------------------------------
 # deploy / destroy integration
 # ---------------------------------------------------------------------------
 
@@ -340,6 +471,109 @@ def test_deploy_is_idempotent(deploy_patches, monkeypatch):
     url1 = deploy(**kwargs)
     url2 = deploy(**kwargs)
     assert url1 == url2
+
+
+@mock_aws
+def test_deploy_warns_when_pynacl_bundle_failed(deploy_patches, monkeypatch, capsys):
+    import cordless.upload
+
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    cordless.upload.pynacl_bundle_failed = False
+
+    def _fresh_zip_with_pynacl_failure(*a, **kw):
+        cordless.upload.pynacl_bundle_failed = True
+        return _minimal_zip(deploy_patches)
+
+    monkeypatch.setattr(cordless.deploy, "build_function_zip", _fresh_zip_with_pynacl_failure)
+
+    url = deploy(**_base_deploy_kwargs(deploy_patches))
+
+    assert url  # deploy must still succeed, not raise
+    assert "could not bundle pynacl" in capsys.readouterr().out
+
+
+@mock_aws
+def test_deploy_defaults_new_function_to_arm64(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches))
+    lam = boto3.client("lambda", region_name=REGION)
+    config = lam.get_function_configuration(FunctionName="my-bot")
+    assert config["Architectures"] == ["arm64"]
+
+
+@mock_aws
+def test_deploy_keeps_existing_architecture_when_unspecified(deploy_patches, monkeypatch):
+    """AWS won't let an existing function's architecture change in place, so a
+    redeploy that doesn't ask for a specific architecture must not try to flip it."""
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    kwargs = _base_deploy_kwargs(deploy_patches)
+    deploy(**kwargs, architecture="x86_64")
+    deploy(**kwargs)  # no architecture given this time
+    lam = boto3.client("lambda", region_name=REGION)
+    config = lam.get_function_configuration(FunctionName="my-bot")
+    assert config["Architectures"] == ["x86_64"]
+
+
+@mock_aws
+def test_deploy_explicit_architecture_always_wins(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches, architecture="x86_64"))
+    lam = boto3.client("lambda", region_name=REGION)
+    config = lam.get_function_configuration(FunctionName="my-bot")
+    assert config["Architectures"] == ["x86_64"]
+
+
+@mock_aws
+def test_deploy_defaults_new_function_to_function_url(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches))
+    lam = boto3.client("lambda", region_name=REGION)
+    config = lam.get_function_url_config(FunctionName="my-bot")
+    assert config["FunctionUrl"]
+
+
+@mock_aws
+def test_deploy_keeps_existing_api_gateway_when_unspecified(deploy_patches, monkeypatch):
+    """A redeploy that doesn't ask for a specific endpoint must not silently
+    switch an existing API Gateway deployment over to a Function URL."""
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    kwargs = _base_deploy_kwargs(deploy_patches)
+    deploy(**kwargs, endpoint="api_gateway")
+    deploy(**kwargs)  # no endpoint given this time
+    lam = boto3.client("lambda", region_name=REGION)
+    with pytest.raises(lam.exceptions.ResourceNotFoundException):
+        lam.get_function_url_config(FunctionName="my-bot")
+    apigw = boto3.client("apigatewayv2", region_name=REGION)
+    apis = apigw.get_apis()["Items"]
+    assert any(a["Name"] == "my-bot-api" for a in apis)
+
+
+@mock_aws
+def test_deploy_keeps_existing_function_url_when_unspecified(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    kwargs = _base_deploy_kwargs(deploy_patches)
+    deploy(**kwargs, endpoint="function_url")
+    deploy(**kwargs)  # no endpoint given this time
+    lam = boto3.client("lambda", region_name=REGION)
+    config = lam.get_function_url_config(FunctionName="my-bot")
+    assert config["FunctionUrl"]
+
+
+@mock_aws
+def test_deploy_explicit_endpoint_always_wins(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches, endpoint="api_gateway"))
+    lam = boto3.client("lambda", region_name=REGION)
+    with pytest.raises(lam.exceptions.ResourceNotFoundException):
+        lam.get_function_url_config(FunctionName="my-bot")
 
 
 @mock_aws
@@ -380,6 +614,53 @@ def test_deploy_wires_crons(deploy_patches, monkeypatch):
     events = boto3.client("events", region_name=REGION)
     rules = events.list_rules(NamePrefix="my-bot-cron-")["Rules"]
     assert any(r["Name"] == "my-bot-cron-daily" for r in rules)
+
+
+@mock_aws
+def test_deploy_keepwarm_targets_main_even_with_defer_worker(deploy_patches, monkeypatch):
+    """The whole reason this feature exists: regular crons all go to
+    defer_worker when it's set, leaving the main function - the one every
+    Discord interaction hits first - with nothing keeping it warm."""
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(
+        **_base_deploy_kwargs(
+            deploy_patches,
+            defer_worker="my-bot-worker",
+            crons={"daily": "rate(1 day)"},
+            keep_warm=True,
+        )
+    )
+    lam = boto3.client("lambda", region_name=REGION)
+    events = boto3.client("events", region_name=REGION)
+
+    main_arn = lam.get_function_configuration(FunctionName="my-bot")["FunctionArn"]
+    targets = events.list_targets_by_rule(Rule="my-bot-keepwarm")["Targets"]
+    assert targets[0]["Arn"] == main_arn
+
+    # the regular cron, meanwhile, still goes to the worker as usual
+    worker_arn = lam.get_function_configuration(FunctionName="my-bot-worker")["FunctionArn"]
+    cron_targets = events.list_targets_by_rule(Rule="my-bot-cron-daily")["Targets"]
+    assert cron_targets[0]["Arn"] == worker_arn
+
+
+@mock_aws
+def test_deploy_without_keepwarm_does_not_create_a_rule(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches))
+    events = boto3.client("events", region_name=REGION)
+    assert events.list_rules(NamePrefix="my-bot-keepwarm")["Rules"] == []
+
+
+@mock_aws
+def test_destroy_removes_keepwarm_rule(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches, keep_warm=True))
+    destroy(function_name="my-bot", role_name="my-bot-role", region=REGION)
+    events = boto3.client("events", region_name=REGION)
+    assert events.list_rules(NamePrefix="my-bot-keepwarm")["Rules"] == []
 
 
 @mock_aws
