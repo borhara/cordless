@@ -284,8 +284,8 @@ def _ensure_packages(packages, python_version, architecture="x86_64"):
     import subprocess
     import sys
 
-    # prefer the uv installed alongside this interpreter (e.g. via cordless[deploy])
-    # before falling back to PATH (e.g. brew, the astral install script)
+    # prefer the uv installed alongside this interpreter (cordless depends on it
+    # directly) before falling back to PATH (e.g. brew, the astral install script)
     venv_uv = os.path.join(os.path.dirname(sys.executable), "uv")
     uv = venv_uv if os.path.isfile(venv_uv) else shutil.which("uv")
     if uv is None:

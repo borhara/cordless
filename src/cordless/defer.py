@@ -45,7 +45,10 @@ except ImportError:
     _lambda_client = None
 
 
-_NO_DEPLOY_MSG = "boto3 is required for deferred interactions.\nInstall it: pip install 'cordless[deploy]'"
+_NO_DEPLOY_MSG = (
+    "boto3 is required for deferred interactions but isn't installed. It ships with "
+    "cordless itself; try: pip install --force-reinstall cordless"
+)
 
 
 def invoke_worker(function_name, interaction):

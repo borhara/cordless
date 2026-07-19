@@ -469,7 +469,10 @@ def _logs(args):
     try:
         from botocore.exceptions import NoCredentialsError
     except ImportError:
-        raise SystemExit("boto3 is required for logs.\nInstall it: pip install 'cordless[deploy]'")
+        raise SystemExit(
+            "boto3 is required for logs but isn't installed. It ships with cordless "
+            "itself; try: pip install --force-reinstall cordless"
+        )
     try:
         latest_ms = fetch_and_print(start_ms)
     except NoCredentialsError:

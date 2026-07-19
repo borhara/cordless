@@ -268,9 +268,7 @@ wheels = [
 name = "cordless"
 version = "1.4.3"
 source = { editable = "." }
-
-[package.optional-dependencies]
-deploy = [
+dependencies = [
     { name = "boto3" },
     { name = "botocore", extra = ["crt"] },
     { name = "uv" },
@@ -289,11 +287,10 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "boto3", marker = "extra == 'deploy'", specifier = ">=1.20" },
-    { name = "botocore", extras = ["crt"], marker = "extra == 'deploy'" },
-    { name = "uv", marker = "extra == 'deploy'", specifier = ">=0.11" },
+    { name = "boto3", specifier = ">=1.20" },
+    { name = "botocore", extras = ["crt"] },
+    { name = "uv", specifier = ">=0.11" },
 ]
-provides-extras = ["deploy"]
 
 [package.metadata.requires-dev]
 dev = [

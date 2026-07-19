@@ -44,7 +44,7 @@ cordless flips this. Your bot is a Lambda function: it only runs when Discord se
 ## Install
 
 ```bash
-uv add "cordless[deploy]"   # (we should ALL be using uv)
+uv add cordless   # (we should ALL be using uv)
 ```
 
 ---
