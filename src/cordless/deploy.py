@@ -724,7 +724,7 @@ def deploy(
         with Spinner(f"cron schedules ({len(crons)})"):
             _wire_crons(events, lam, function_name, cron_target, cron_arn, crons)
 
-    with Spinner("keep-warm"):
+    with Spinner("keep-warm" if keep_warm else "keep-warm (off)"):
         _wire_keepwarm(session.client("events"), lam, function_name, function_arn, keep_warm)
 
     health = _health_check(
