@@ -269,18 +269,19 @@ def test_target_user_from_user_command():
                 "type": 2,
                 "target_id": "999",
                 "resolved": {
-                    "users": {"999": {"id": "999", "username": "alice"}},
-                    "members": {"999": {"nick": "Alice"}},
+                    "users": {"999": {"id": "999", "username": "shiv"}},
+                    "members": {"999": {"nick": "shiv"}},
                 },
             },
             "id": "4",
             "token": "tok",
         }
     )
-    assert ctx.target_user == {"id": "999", "username": "alice"}
-    assert ctx.target_user.username == "alice"
-    assert ctx.target_member == {"nick": "Alice"}
+    assert ctx.target_user == {"id": "999", "username": "shiv"}
+    assert ctx.target_user.username == "shiv"
     assert ctx.target_member.nick == "Alice"
+    # resolved.members omits the nested user object; Context stitches it back in
+    assert ctx.target_member.user.username == "shiv"
     assert ctx.target_message is None
 
 
@@ -311,3 +312,73 @@ def test_target_attributes_absent_on_slash_command():
     assert ctx.target_user is None
     assert ctx.target_member is None
     assert ctx.target_message is None
+
+
+# --- entity-select components: resolved objects ---
+
+
+def test_user_select_exposes_resolved_users_and_members():
+    ctx = Context(
+        {
+            "type": 3,
+            "data": {
+                "custom_id": "pick_user",
+                "component_type": 5,
+                "values": ["1"],
+                "resolved": {
+                    "users": {"1": {"id": "1", "username": "shiv"}},
+                    "members": {"1": {"nick": "Ali"}},
+                },
+            },
+            "id": "6",
+            "token": "tok",
+        }
+    )
+    assert ctx.values == ["1"]
+    assert ctx.resolved_users["1"].username == "shiv"
+    assert ctx.resolved_members["1"].nick == "Ali"
+    # resolved.members omits the nested user object; Context stitches it back in
+    assert ctx.resolved_members["1"].user.username == "shiv"
+
+
+def test_role_select_exposes_resolved_roles():
+    ctx = Context(
+        {
+            "type": 3,
+            "data": {
+                "custom_id": "pick_role",
+                "component_type": 6,
+                "values": ["2"],
+                "resolved": {"roles": {"2": {"id": "2", "name": "Admins", "color": 0}}},
+            },
+            "id": "7",
+            "token": "tok",
+        }
+    )
+    assert ctx.resolved_roles["2"].name == "Admins"
+    assert ctx.resolved_roles["2"].mention == "<@&2>"
+
+
+def test_channel_select_exposes_resolved_channels():
+    ctx = Context(
+        {
+            "type": 3,
+            "data": {
+                "custom_id": "pick_channel",
+                "component_type": 8,
+                "values": ["3"],
+                "resolved": {"channels": {"3": {"id": "3", "name": "general", "type": 0}}},
+            },
+            "id": "8",
+            "token": "tok",
+        }
+    )
+    assert ctx.resolved_channels["3"].name == "general"
+
+
+def test_resolved_entity_dicts_empty_when_not_applicable():
+    ctx = _make_ctx()
+    assert ctx.resolved_users == {}
+    assert ctx.resolved_members == {}
+    assert ctx.resolved_roles == {}
+    assert ctx.resolved_channels == {}

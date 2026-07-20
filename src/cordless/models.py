@@ -84,5 +84,16 @@ class Attachment(DiscordObject):
     attributes."""
 
 
+class Role(DiscordObject):
+    """A Discord role, e.g. `ctx.resolved_roles[role_id]` from a `RoleSelect`
+    or `MentionableSelect` pick. `.id`, `.name`, `.color`, `.permissions`,
+    and any other field Discord sends are available as attributes."""
+
+    @property
+    def mention(self):
+        """`<@&id>`, Discord's mention syntax for this role."""
+        return f"<@&{self._data['id']}>"
+
+
 def _wrap(cls, data):
     return cls(data) if data is not None else None

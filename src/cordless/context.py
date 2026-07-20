@@ -2,7 +2,7 @@ import base64
 import json
 
 from ._multipart import build_multipart_body
-from .models import Attachment, Channel, Member, Message, User, _wrap
+from .models import Attachment, Channel, Member, Message, Role, User, _wrap
 
 _CHANNEL_MESSAGE_WITH_SOURCE = 4
 _UPDATE_MESSAGE = 7
@@ -72,6 +72,20 @@ def _attach_files(data, files):
     data["attachments"] = [{"id": i, "filename": name} for i, (name, _) in enumerate(files)]
 
 
+def _wrap_members(members, users):
+    """Discord's resolved.members entries omit the nested `user` object
+    that's normally embedded on a member payload - it lives separately in
+    resolved.users instead. Stitch it back in so `.user` works on a
+    resolved `Member` the same way it does everywhere else."""
+    result = {}
+    for member_id, member_data in members.items():
+        user_data = users.get(member_id)
+        if user_data is not None and "user" not in member_data:
+            member_data = {**member_data, "user": user_data}
+        result[member_id] = Member(member_data)
+    return result
+
+
 class Context:
     """Every handler receives one of these as `ctx`. Fields not applicable
     to the current interaction are `None` (or empty). Constructed by
@@ -87,6 +101,9 @@ class Context:
     | `ctx.locale` | The invoking user's locale, e.g. `"en-US"` |
     | `ctx.options` | Dict of option name to value for the invoked (sub)command |
     | `ctx.attachments` | Dict of attachment id to `Attachment` for `attachment` options |
+    | `ctx.resolved_users` / `ctx.resolved_members` | Dict of id to resolved `User`/`Member`, for `UserSelect`/`MentionableSelect` picks |
+    | `ctx.resolved_roles` | Dict of id to resolved `Role`, for `RoleSelect`/`MentionableSelect` picks |
+    | `ctx.resolved_channels` | Dict of id to resolved `Channel`, for `ChannelSelect` picks |
     | `ctx.custom_id` | The component/modal's full custom_id |
     | `ctx.custom_id_args` | Suffix segments when a handler matched by prefix (`"shop:item1"` becomes `["item1"]`) |
     | `ctx.values` | Selected values/ids for select menus (always a list) |
@@ -140,15 +157,26 @@ class Context:
                 if "custom_id" in comp:
                     self.modal_values[comp["custom_id"]] = comp.get("value", "")
 
-        # Context menu commands (type 2/3): resolved target
+        # Context menu commands (type 2/3) and entity-select components (UserSelect,
+        # RoleSelect, ChannelSelect, MentionableSelect) both hand back a "resolved"
+        # block: full objects for whatever ids are involved, alongside the bare ids
+        # (data.target_id, or ctx.values for selects).
         resolved = data.get("resolved", {})
+        resolved_users = resolved.get("users", {})
+        resolved_members = _wrap_members(resolved.get("members", {}), resolved_users)
+
         # Attachment options (type 11): ctx.options holds the id,
         # ctx.attachments[id] holds the filename/url/size metadata
         self.attachments = {att_id: Attachment(att) for att_id, att in resolved.get("attachments", {}).items()}
         target_id = data.get("target_id")
-        self.target_user = _wrap(User, resolved.get("users", {}).get(target_id)) if target_id else None
-        self.target_member = _wrap(Member, resolved.get("members", {}).get(target_id)) if target_id else None
+        self.target_user = _wrap(User, resolved_users.get(target_id)) if target_id else None
+        self.target_member = resolved_members.get(target_id) if target_id else None
         self.target_message = _wrap(Message, resolved.get("messages", {}).get(target_id)) if target_id else None
+
+        self.resolved_users = {uid: User(u) for uid, u in resolved_users.items()}
+        self.resolved_members = resolved_members
+        self.resolved_roles = {rid: Role(r) for rid, r in resolved.get("roles", {}).items()}
+        self.resolved_channels = {cid: Channel(c) for cid, c in resolved.get("channels", {}).items()}
 
     async def send(
         self,
