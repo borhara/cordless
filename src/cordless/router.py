@@ -211,9 +211,7 @@ class Router:
                 "type": 1,
                 "options": options,
             }
-            installable = self._apply_installability(
-                cmd, any(m.get("user_installable") for m in entries.values())
-            )
+            installable = self._apply_installability(cmd, any(m.get("user_installable") for m in entries.values()))
             if not installable and any(not m.get("dm_permission", True) for m in entries.values()):
                 cmd["dm_permission"] = False
             # Discord only accepts these at the top level, so combine across
