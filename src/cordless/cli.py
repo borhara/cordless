@@ -395,6 +395,7 @@ def _dev(args):
         tunnel=not args.no_tunnel,
         source_dir=source_dir,
         environment=resolve_environment(args.environment),
+        verbose=args.verbose,
     )
 
 
@@ -709,6 +710,9 @@ def main(argv=None):
     )
     dev_cmd.add_argument("--no-tunnel", action="store_true", help="Serve on localhost only, skip cloudflared")
     dev_cmd.add_argument("--environment", "-E", "--env", default=None, metavar="NAME", help=_ENV_HELP)
+    dev_cmd.add_argument(
+        "--verbose", "-v", action="store_true", help="Show the full interaction payload in request logs"
+    )
     dev_cmd.set_defaults(func=_dev)
 
     # logs

@@ -18,7 +18,82 @@ import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from ._progress import _DIM, _GREEN, _RED, _RESET, _YELLOW, _tty
+from .router import (
+    APPLICATION_COMMAND,
+    APPLICATION_COMMAND_AUTOCOMPLETE,
+    MESSAGE_COMPONENT,
+    MODAL_SUBMIT,
+    PING,
+    _resolve_command_key,
+)
+
 _WATCH_EXCLUDE = {".git", ".venv", "venv", "__pycache__", "node_modules", ".pytest_cache", "dist", "build"}
+_MAX_LOGGED_BODY = 2000  # characters; longer bodies (big modals, autocomplete choice lists) get truncated
+
+
+def _describe_interaction(body):
+    """A short label for the log line: `/command sub`, `button custom_id`,
+    `select custom_id`, `modal custom_id`, `ping`, or the raw type number
+    for anything unrecognized."""
+    try:
+        payload = json.loads(body)
+    except (json.JSONDecodeError, TypeError):
+        return "?"
+    itype = payload.get("type")
+    data = payload.get("data") or {}
+
+    if itype == PING:
+        return "ping"
+    if itype == APPLICATION_COMMAND:
+        key, _ = _resolve_command_key(data)
+        return f"/{key}"
+    if itype == APPLICATION_COMMAND_AUTOCOMPLETE:
+        key, _ = _resolve_command_key(data)
+        return f"/{key} (autocomplete)"
+    if itype == MESSAGE_COMPONENT:
+        kind = "button" if data.get("component_type", 2) == 2 else "select"
+        return f"{kind} {data.get('custom_id')}"
+    if itype == MODAL_SUBMIT:
+        return f"modal {data.get('custom_id')}"
+    return f"type {itype}"
+
+
+def _timestamp():
+    return time.strftime("%H:%M:%S")
+
+
+def _status_color(status):
+    if status < 300:
+        return _GREEN
+    if status < 500:
+        return _YELLOW
+    return _RED
+
+
+def _pretty_body(body):
+    if not body:
+        return ""
+    try:
+        text = json.dumps(json.loads(body), indent=2)
+    except (json.JSONDecodeError, TypeError):
+        text = body
+    if len(text) > _MAX_LOGGED_BODY:
+        text = text[:_MAX_LOGGED_BODY] + f"\n… ({len(text) - _MAX_LOGGED_BODY} more chars)"
+    return text
+
+
+def _log_request(label, status, elapsed_ms, body, verbose=False):
+    color = _status_color(status) if _tty else ""
+    dim = _DIM if _tty else ""
+    reset = _RESET if _tty else ""
+    print(f"  {dim}{_timestamp()}{reset} → {label}  {color}{status}{reset}  {elapsed_ms:.0f}ms")
+    if not verbose:
+        return
+    pretty = _pretty_body(body)
+    if pretty:
+        indented = "\n".join(f"      {line}" for line in pretty.splitlines())
+        print(f"{dim}{indented}{reset}")
 
 
 class Reloader:
@@ -55,7 +130,9 @@ class Reloader:
             snapshot = self._scan()
             if self.bot is None or snapshot != self._mtimes:
                 if self.bot is not None:
-                    print("  ↻ reloading")
+                    dim = _DIM if _tty else ""
+                    reset = _RESET if _tty else ""
+                    print(f"  {dim}{_timestamp()}{reset} ↻ reloading")
                     self._purge()
                 self._mtimes = snapshot
                 module_name, _, attr = self.target.partition(":")
@@ -87,7 +164,7 @@ def _load_env(source_dir, environment=None):
     load_dotenv(source_dir, environment)
 
 
-def _make_handler(reloader):
+def _make_handler(reloader, verbose=False):
     class DevHandler(BaseHTTPRequestHandler):
         def do_GET(self):
             body = b"cordless dev is running \xe2\x9c\x93"
@@ -102,6 +179,7 @@ def _make_handler(reloader):
             body = self.rfile.read(length).decode()
             event = {"body": body, "headers": dict(self.headers)}
 
+            start = time.perf_counter()
             try:
                 result = reloader.get().handle(event)
             except Exception as exc:
@@ -113,6 +191,7 @@ def _make_handler(reloader):
                     "headers": {"Content-Type": "application/json"},
                     "body": json.dumps({"error": f"{type(exc).__name__}: {exc}"}),
                 }
+            elapsed_ms = (time.perf_counter() - start) * 1000
 
             body_out = result.get("body", "")
             # mirrors API Gateway's Lambda proxy integration: a base64Encoded
@@ -125,9 +204,15 @@ def _make_handler(reloader):
             self.end_headers()
             self.wfile.write(payload)
 
+            _log_request(_describe_interaction(body), result["statusCode"], elapsed_ms, body, verbose=verbose)
+
         def log_message(self, fmt, *args):
+            if self.command == "POST":
+                return  # do_POST already logged a richer line above
             status = args[1] if len(args) > 1 else ""
-            print(f"  → {self.command} {status}")
+            dim = _DIM if _tty else ""
+            reset = _RESET if _tty else ""
+            print(f"  {dim}{_timestamp()}{reset} → {self.command} {status}")
 
     return DevHandler
 
@@ -172,7 +257,7 @@ def _wait_for_tunnel(url, timeout=10.0, interval=0.5):
     return False
 
 
-def run_dev(target, port=8787, tunnel=True, source_dir=".", environment=None):
+def run_dev(target, port=8787, tunnel=True, source_dir=".", environment=None, verbose=False):
     source_dir = os.path.abspath(source_dir)
     sys.path.insert(0, source_dir)
     _load_env(source_dir, environment)
@@ -186,7 +271,7 @@ def run_dev(target, port=8787, tunnel=True, source_dir=".", environment=None):
 
     bot = reloader.get()  # fail fast on import errors before binding the port
 
-    server = ThreadingHTTPServer(("127.0.0.1", port), _make_handler(reloader))
+    server = ThreadingHTTPServer(("127.0.0.1", port), _make_handler(reloader, verbose))
     # start serving now, on a thread, so _wait_for_tunnel's own request
     # below has something to actually round-trip against - the socket is
     # already bound at this point, but nothing accepts from it until
