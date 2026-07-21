@@ -163,7 +163,7 @@ class Router:
             ):
                 cmd["dm_permission"] = False
             if meta.get("default_member_permissions") is not None:
-                cmd["default_member_permissions"] = str(meta["default_member_permissions"])
+                cmd["default_member_permissions"] = str(int(meta["default_member_permissions"]))
             if meta.get("nsfw"):
                 cmd["nsfw"] = True
             result.append(cmd)

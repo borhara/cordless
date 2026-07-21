@@ -49,3 +49,31 @@ def test_role_permissions_wrapped():
     role = Role({"id": "1", "name": "Moderator", "permissions": "8589934592"})  # manage_events
     assert role.permissions.manage_events
     assert not role.permissions.administrator
+
+
+def test_permissions_built_from_kwargs():
+    perms = Permissions(manage_guild=True, kick_members=True)
+    assert perms.manage_guild
+    assert perms.kick_members
+    assert not perms.administrator
+    assert int(perms) == 0x20 | 0x2
+
+
+def test_permissions_kwargs_on_top_of_raw_value():
+    perms = Permissions("8", manage_guild=True)  # administrator, plus manage_guild
+    assert perms.administrator
+    assert perms.manage_guild
+
+
+def test_permissions_kwarg_false_clears_bit():
+    perms = Permissions("8", administrator=False)  # started as administrator, turned off
+    assert not perms.administrator
+    assert int(perms) == 0
+
+
+def test_permissions_unknown_kwarg_raises():
+    try:
+        Permissions(not_a_real_permission=True)
+        assert False, "expected TypeError"
+    except TypeError:
+        pass

@@ -54,13 +54,22 @@ _PERMISSION_BITS = {
 
 
 class Permissions:
-    """A Discord permission bitfield, e.g. `ctx.member.permissions`. Discord
-    sends this as a plain string of a big int. Wraps it so callers can read
-    named bits like `.administrator` or `.manage_guild` directly, instead of
-    masking the raw value by hand."""
+    """A Discord permission bitfield. Read one off an incoming member or
+    role, e.g. `ctx.member.permissions.manage_guild`, or build one to send,
+    e.g. `default_member_permissions=Permissions(manage_guild=True)`.
 
-    def __init__(self, raw):
+    `raw` is the starting value (Discord sends this as a string of a big
+    int, e.g. off `ctx.member.permissions` or `ctx.role.permissions`).
+    Keyword args set or clear individual named bits on top of that, e.g.
+    `Permissions(manage_guild=True, kick_members=True)`."""
+
+    def __init__(self, raw=0, **flags):
         self.value = int(raw or 0)
+        for name, on in flags.items():
+            if name not in _PERMISSION_BITS:
+                raise TypeError(f"unknown permission: {name!r}")
+            bit = _PERMISSION_BITS[name]
+            self.value = (self.value | bit) if on else (self.value & ~bit)
 
     def __getattr__(self, name):
         try:
