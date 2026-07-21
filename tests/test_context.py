@@ -209,6 +209,18 @@ def test_user_exposes_attributes_in_guild():
     assert ctx.member.user.username == "testuser"
 
 
+def test_member_permissions_exposed():
+    ctx = _make_ctx(
+        member={
+            "nick": "shiv",
+            "permissions": "8",  # administrator
+            "user": {"id": "1", "username": "shiv"},
+        }
+    )
+    assert ctx.member.permissions.administrator
+    assert not ctx.member.permissions.manage_guild
+
+
 def test_user_exposes_attributes_in_dm():
     ctx = _make_ctx(user={"id": "2", "username": "testuser"})
     assert ctx.user.username == "testuser"
