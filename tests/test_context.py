@@ -270,7 +270,7 @@ def test_target_user_from_user_command():
                 "target_id": "999",
                 "resolved": {
                     "users": {"999": {"id": "999", "username": "shiv"}},
-                    "members": {"999": {"nick": "shiv"}},
+                    "members": {"999": {"nick": "Alice"}},
                 },
             },
             "id": "4",
