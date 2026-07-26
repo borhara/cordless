@@ -4,6 +4,7 @@ import pytest
 
 from cordless.app import Cordless
 from cordless.errors import PermissionDeniedError
+from cordless.models import Permissions
 
 
 def _handle(bot, payload):
@@ -407,6 +408,21 @@ def test_subcommand_permissions_propagate_to_parent():
     parent = next(d for d in bot.router.command_definitions() if d["name"] == "admin")
     assert parent["default_member_permissions"] == str(4 | 8192)
     assert parent["nsfw"] is True
+
+
+def test_command_accepts_permissions_object():
+    bot = Cordless()
+
+    @bot.command(
+        "setup",
+        description="Setup",
+        default_member_permissions=Permissions(manage_guild=True),
+    )
+    async def setup(ctx):
+        pass
+
+    cmd = next(d for d in bot.router.command_definitions() if d["name"] == "setup")
+    assert cmd["default_member_permissions"] == "32"
 
 
 def test_subcommand_parent_without_permissions_stays_open():
