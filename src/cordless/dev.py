@@ -15,10 +15,9 @@ import subprocess
 import sys
 import threading
 import time
-import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from ._progress import _DIM, _GREEN, _RED, _RESET, _YELLOW, _tty
+from ._progress import _DIM, _GREEN, _RED, _RESET, _YELLOW, Spinner, _tty
 from .router import (
     APPLICATION_COMMAND,
     APPLICATION_COMMAND_AUTOCOMPLETE,
@@ -229,32 +228,15 @@ def _start_tunnel(port):
         text=True,
     )
     url = None
-    for line in proc.stderr:
-        match = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", line)
-        if match:
-            url = match.group(0)
-            break
+    with Spinner("starting tunnel"):
+        for line in proc.stderr:
+            match = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", line)
+            if match:
+                url = match.group(0)
+                break
     # keep draining stderr so cloudflared doesn't block on a full pipe
     threading.Thread(target=lambda: [None for _ in proc.stderr], daemon=True).start()
     return proc, url
-
-
-def _wait_for_tunnel(url, timeout=10.0, interval=0.5):
-    """cloudflared prints the quick-tunnel URL to stderr a beat before
-    Cloudflare's edge actually starts routing it - hitting it (or handing
-    it to Discord) right away can 502. Poll the real round trip (edge ->
-    cloudflared -> our own do_GET) until it answers, so 'paste this into
-    Discord' isn't printed a moment before the URL is actually live.
-    Best-effort: gives up after `timeout` and lets the caller print the
-    URL anyway rather than blocking dev startup indefinitely."""
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        try:
-            urllib.request.urlopen(url, timeout=2)
-            return True
-        except Exception:
-            time.sleep(interval)
-    return False
 
 
 def run_dev(target, port=8787, tunnel=True, source_dir=".", environment=None, verbose=False):
@@ -272,25 +254,25 @@ def run_dev(target, port=8787, tunnel=True, source_dir=".", environment=None, ve
     bot = reloader.get()  # fail fast on import errors before binding the port
 
     server = ThreadingHTTPServer(("127.0.0.1", port), _make_handler(reloader, verbose))
-    # start serving now, on a thread, so _wait_for_tunnel's own request
-    # below has something to actually round-trip against - the socket is
-    # already bound at this point, but nothing accepts from it until
-    # serve_forever's loop is running
+    # start serving now, on a thread, so the local server is already accepting
+    # connections by the time the tunnel comes up and starts forwarding to it
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
 
     print()
     print("  cordless dev")
     print(f"  local   http://127.0.0.1:{port}")
+    print()
 
     tunnel_proc = None
     if tunnel:
         tunnel_proc, url = _start_tunnel(port)
         if url:
-            if not _wait_for_tunnel(url):
-                print()
-                print("  (tunnel isn't answering yet - if Discord rejects this URL, wait a few seconds and re-save it)")
-            print(f"  public  {url}")
+            green = _GREEN if _tty else ""
+            dim = _DIM if _tty else ""
+            reset = _RESET if _tty else ""
+            print(f"  public  {green}{url}{reset}")
+            print(f"  {dim}(it may take up to 15s for the url to work correctly){reset}")
             print()
             print("  paste the public url into your app's Interactions Endpoint URL")
         elif tunnel_proc is not None:
