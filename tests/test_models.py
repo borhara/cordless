@@ -1,4 +1,4 @@
-from cordless.models import Member, Permissions, Role, User
+from cordless.models import Channel, Member, Permissions, Role, User
 
 
 def test_permissions_reads_named_bits():
@@ -122,3 +122,21 @@ def test_role_icon_url_from_hash():
 def test_role_icon_url_none_when_unset():
     role = Role({"id": "1"})
     assert role.icon_url is None
+
+
+# --- mention strings ---
+
+
+def test_user_mention():
+    user = User({"id": "737983831000350731"})
+    assert user.mention == "<@737983831000350731>"
+
+
+def test_role_mention():
+    role = Role({"id": "1525899333114003547"})
+    assert role.mention == "<@&1525899333114003547>"
+
+
+def test_channel_mention():
+    channel = Channel({"id": "1360544003434745908"})
+    assert channel.mention == "<#1360544003434745908>"

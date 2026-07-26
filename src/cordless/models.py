@@ -208,6 +208,11 @@ class Channel(DiscordObject):
     `.type`, and any other field Discord sends are available as
     attributes."""
 
+    @property
+    def mention(self):
+        """`<#id>`, Discord's mention syntax for this channel."""
+        return f"<#{self._data['id']}>"
+
 
 class Attachment(DiscordObject):
     """A file attached to a command's `attachment` option, e.g.
