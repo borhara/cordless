@@ -1,4 +1,4 @@
-from cordless.models import Member, Permissions, Role
+from cordless.models import Member, Permissions, Role, User
 
 
 def test_permissions_reads_named_bits():
@@ -77,3 +77,48 @@ def test_permissions_unknown_kwarg_raises():
         assert False, "expected TypeError"
     except TypeError:
         pass
+
+
+# --- CDN asset URLs ---
+
+
+def test_user_avatar_url_from_hash():
+    user = User({"id": "80351110224678912", "avatar": "8342729096ea3675442027381ff50dfe"})
+    assert (
+        user.avatar_url == "https://cdn.discordapp.com/avatars/80351110224678912/8342729096ea3675442027381ff50dfe.png"
+    )
+
+
+def test_user_avatar_url_animated_hash_uses_gif():
+    user = User({"id": "1", "avatar": "a_1234567890abcdef1234567890abcdef"})
+    assert user.avatar_url == "https://cdn.discordapp.com/avatars/1/a_1234567890abcdef1234567890abcdef.gif"
+
+
+def test_user_avatar_url_falls_back_to_default_avatar_pomelo():
+    user = User({"id": "80351110224678912", "discriminator": "0"})
+    assert user.avatar_url == "https://cdn.discordapp.com/embed/avatars/5.png"
+
+
+def test_user_avatar_url_falls_back_to_default_avatar_legacy_discriminator():
+    user = User({"id": "1", "discriminator": "1234"})
+    assert user.avatar_url == "https://cdn.discordapp.com/embed/avatars/4.png"
+
+
+def test_user_banner_url_from_hash():
+    user = User({"id": "1", "banner": "abcd1234"})
+    assert user.banner_url == "https://cdn.discordapp.com/banners/1/abcd1234.png"
+
+
+def test_user_banner_url_none_when_unset():
+    user = User({"id": "1"})
+    assert user.banner_url is None
+
+
+def test_role_icon_url_from_hash():
+    role = Role({"id": "1", "icon": "abcd1234"})
+    assert role.icon_url == "https://cdn.discordapp.com/role-icons/1/abcd1234.png"
+
+
+def test_role_icon_url_none_when_unset():
+    role = Role({"id": "1"})
+    assert role.icon_url is None

@@ -85,6 +85,19 @@ class Permissions:
         return f"Permissions({self.value})"
 
 
+_CDN_BASE = "https://cdn.discordapp.com"
+
+
+def _cdn_asset_url(path, image_hash):
+    """Discord CDN URL for an asset hash. `path` already has the owning
+    id baked in (e.g. "avatars/123/{hash}"); hashes prefixed "a_" are
+    animated and served as .gif, everything else as .png."""
+    if not image_hash:
+        return None
+    ext = "gif" if image_hash.startswith("a_") else "png"
+    return f"{_CDN_BASE}/{path.format(hash=image_hash)}.{ext}"
+
+
 class DiscordObject:
     """Thin attribute wrapper around a raw Discord API object."""
 
@@ -123,6 +136,30 @@ class User(DiscordObject):
     def mention(self):
         """`<@id>`, Discord's mention syntax for this user."""
         return f"<@{self._data['id']}>"
+
+    @property
+    def avatar_url(self):
+        """Full CDN URL for this user's avatar. Falls back to one of
+        Discord's default avatars (indexed off the user id, or the
+        discriminator for pre-migration accounts) when no custom avatar
+        is set."""
+        user_id = self._data.get("id")
+        avatar = self._data.get("avatar")
+        if avatar and user_id:
+            return _cdn_asset_url(f"avatars/{user_id}/{{hash}}", avatar)
+        if not user_id:
+            return None
+        discriminator = self._data.get("discriminator")
+        index = int(discriminator) % 5 if discriminator and discriminator != "0" else (int(user_id) >> 22) % 6
+        return f"{_CDN_BASE}/embed/avatars/{index}.png"
+
+    @property
+    def banner_url(self):
+        """Full CDN URL for this user's profile banner, or `None` if
+        they don't have one set."""
+        user_id = self._data.get("id")
+        banner = self._data.get("banner")
+        return _cdn_asset_url(f"banners/{user_id}/{{hash}}", banner) if user_id else None
 
 
 class Member(DiscordObject):
@@ -188,6 +225,15 @@ class Role(DiscordObject):
     def mention(self):
         """`<@&id>`, Discord's mention syntax for this role."""
         return f"<@&{self._data['id']}>"
+
+    @property
+    def icon_url(self):
+        """Full CDN URL for this role's custom icon, or `None` if it
+        doesn't have one (roles that use an emoji instead of an
+        uploaded icon don't have one)."""
+        role_id = self._data.get("id")
+        icon = self._data.get("icon")
+        return _cdn_asset_url(f"role-icons/{role_id}/{{hash}}", icon) if role_id else None
 
     @property
     def permissions(self):
