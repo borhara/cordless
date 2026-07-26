@@ -9,6 +9,7 @@ import pytest
 
 from cordless import Cog
 from cordless.app import Cordless, options_from_signature
+from cordless.errors import MessageTooLongError
 
 
 def _handle(bot, payload):
@@ -647,6 +648,22 @@ def test_edit_message_passes_files_through_to_discord_request():
     files = [("board.png", b"\x89PNG...")]
     captured = _captured_request(bot, bot.edit_message("123", "456", files=files))
     assert captured["files"] == files
+
+
+def test_send_message_over_content_limit_raises_without_request():
+    bot = Cordless()
+    with patch.object(bot, "_discord_request") as fake_request:
+        with pytest.raises(MessageTooLongError):
+            asyncio.run(bot.send_message("123", "#" * 2001))
+    fake_request.assert_not_called()
+
+
+def test_edit_message_over_content_limit_raises_without_request():
+    bot = Cordless()
+    with patch.object(bot, "_discord_request") as fake_request:
+        with pytest.raises(MessageTooLongError):
+            asyncio.run(bot.edit_message("123", "456", "#" * 2001))
+    fake_request.assert_not_called()
 
 
 def test_discord_request_attaches_files_metadata_and_builds_multipart(fake_app_conn):

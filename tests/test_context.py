@@ -2,9 +2,12 @@ import base64
 import json
 from asyncio import run
 
+import pytest
+
 from cordless import ActionRow, Button, Container, Embed, Modal, TextDisplay, TextInput
 from cordless.app import Cordless
 from cordless.context import Context
+from cordless.errors import MessageTooLongError
 
 
 def _make_ctx(data=None, **extra):
@@ -95,6 +98,27 @@ def test_send_with_components():
     ctx = _make_ctx()
     run(ctx.send(components=[ActionRow([Button("Click", custom_id="c")])]))
     assert json.loads(ctx.response["body"])["data"]["components"][0]["type"] == 1
+
+
+# --- content length validation ---
+
+
+def test_send_over_content_limit_raises():
+    ctx = _make_ctx()
+    with pytest.raises(MessageTooLongError):
+        run(ctx.send("#" * 2001))
+
+
+def test_send_at_content_limit_succeeds():
+    ctx = _make_ctx()
+    run(ctx.send("#" * 2000))
+    assert json.loads(ctx.response["body"])["data"]["content"] == "#" * 2000
+
+
+def test_edit_over_content_limit_raises():
+    ctx = _make_ctx()
+    with pytest.raises(MessageTooLongError):
+        run(ctx.edit("#" * 2001))
 
 
 # --- send/edit with files (initial response, non-worker) ---

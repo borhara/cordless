@@ -25,6 +25,7 @@ from .embeds import Embed, EmbedField
 from .errors import (
     CordlessError,
     InvalidSignatureError,
+    MessageTooLongError,
     NoResponseError,
     PermissionDeniedError,
     UnknownButtonError,
@@ -75,6 +76,7 @@ __all__ = [
     # Errors
     "CordlessError",
     "InvalidSignatureError",
+    "MessageTooLongError",
     "NoResponseError",
     "PermissionDeniedError",
     "UnknownButtonError",

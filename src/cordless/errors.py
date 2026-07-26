@@ -32,3 +32,7 @@ class UnknownModalError(CordlessError):
 
 class PermissionDeniedError(CordlessError):
     """Raised by a guard function when the interaction is not permitted."""
+
+
+class MessageTooLongError(CordlessError):
+    """Raised when outgoing message content exceeds Discord's character limit."""

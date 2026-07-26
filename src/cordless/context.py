@@ -2,6 +2,7 @@ import base64
 import json
 
 from ._multipart import build_multipart_body
+from .errors import MessageTooLongError
 from .models import Attachment, Channel, Member, Message, Role, User, _wrap
 
 _CHANNEL_MESSAGE_WITH_SOURCE = 4
@@ -13,6 +14,8 @@ _MODAL = 9
 
 _FLAG_EPHEMERAL = 64
 _FLAG_UI_KIT = 32768
+
+_MAX_CONTENT_LENGTH = 2000
 
 
 # Components v2 types: Section, TextDisplay, Thumbnail, MediaGallery, File, Separator, Container
@@ -45,8 +48,20 @@ def _leaf_options(data):
     return options
 
 
+def _validate_content_length(content):
+    """Discord rejects the interaction response/followup outright when
+    content is too long, but that rejection happens on Discord's end after
+    we've already returned 200 to API Gateway, so we check upfront instead
+    of failing invisibly."""
+    if content is not None and len(content) > _MAX_CONTENT_LENGTH:
+        raise MessageTooLongError(
+            f"Message content is {len(content)} characters, which exceeds Discord's {_MAX_CONTENT_LENGTH}-character limit"
+        )
+
+
 def _build_message_data(msg, content, embeds, components, ephemeral=False, allowed_mentions=None):
     _content = content if content is not None else msg
+    _validate_content_length(_content)
     data = {}
     if _content is not None:
         data["content"] = _content

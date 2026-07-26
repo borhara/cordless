@@ -652,6 +652,23 @@ def test_guard_blocks_handler():
     assert "Admins only" in _body(result)["error"]
 
 
+def test_guard_rejection_is_logged_for_cloudwatch(capsys):
+    bot = Cordless()
+
+    def admin_only(ctx):
+        raise PermissionDeniedError("Admins only")
+
+    @bot.guard(admin_only)
+    @bot.command("admin")
+    async def admin_cmd(ctx):
+        await ctx.send("Secret")
+
+    _handle(bot, {"type": 2, "data": {"name": "admin"}, "id": "1", "token": "tok"})
+    out = capsys.readouterr().out
+    assert "PermissionDeniedError" in out
+    assert "Admins only" in out
+
+
 def test_guard_allows_handler():
     bot = Cordless()
 

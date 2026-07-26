@@ -8,7 +8,7 @@ import threading
 from http.client import HTTPException, HTTPSConnection
 from typing import Literal, Union, get_args, get_origin
 
-from .context import _FLAG_UI_KIT, Context, _attach_files, _contains_uikit
+from .context import _FLAG_UI_KIT, Context, _attach_files, _contains_uikit, _validate_content_length
 from .errors import CordlessError
 from .register import sync_commands
 from .router import Router
@@ -312,6 +312,7 @@ class Cordless:
         from anywhere with no interaction to respond to, typically cron
         handlers. `files` is a list of `(filename, bytes)` tuples, same as
         `ctx.send`/`ctx.edit`."""
+        _validate_content_length(content)
         payload = {}
         if content is not None:
             payload["content"] = content
@@ -331,6 +332,7 @@ class Cordless:
         """Edit a message the bot previously sent. Requires
         `DISCORD_BOT_TOKEN`. `files` is a list of `(filename, bytes)`
         tuples, same as `ctx.send`/`ctx.edit`."""
+        _validate_content_length(content)
         payload = {}
         if content is not None:
             payload["content"] = content
@@ -667,6 +669,7 @@ class Cordless:
         try:
             return asyncio.run(self.router.dispatch(interaction, ctx))
         except CordlessError as exc:
+            print(f"[cordless] {exc.__class__.__name__}: {exc}")
             return _json_response(400, {"error": str(exc)})
 
     def load_extension(self, name: str) -> None:
