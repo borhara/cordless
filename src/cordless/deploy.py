@@ -676,7 +676,7 @@ def deploy(
         raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
 
     from ._aws import get_session
-    from ._progress import Spinner, success, summary
+    from ._progress import _DIM, _RESET, Spinner, _tty, success, summary
 
     session = get_session(region)
     region = region or session.region_name
@@ -873,6 +873,10 @@ def deploy(
             *health,
         ]
     )
+    dim = _DIM if _tty else ""
+    reset = _RESET if _tty else ""
+    print()
+    print(f"  {dim}(paste this url into your app's Interactions Endpoint URL){reset}")
     success(url)
     return url
 

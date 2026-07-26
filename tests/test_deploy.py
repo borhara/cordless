@@ -664,6 +664,18 @@ def test_deploy_summary_omits_package_check_when_declared(deploy_patches, monkey
 
 
 @mock_aws
+def test_deploy_prints_interactions_endpoint_hint(deploy_patches, monkeypatch, capsys):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+
+    url = deploy(**_base_deploy_kwargs(deploy_patches))
+
+    out = capsys.readouterr().out
+    assert "paste this url into your app's Interactions Endpoint URL" in out
+    assert url in out
+
+
+@mock_aws
 def test_deploy_defaults_new_function_to_arm64(deploy_patches, monkeypatch):
     iam = boto3.client("iam", region_name=REGION)
     monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
