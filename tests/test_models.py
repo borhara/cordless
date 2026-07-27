@@ -1,4 +1,4 @@
-from cordless.models import Channel, Member, Permissions, Role, User
+from cordless.models import Channel, Guild, Member, Permissions, Role, User
 
 
 def test_permissions_reads_named_bits():
@@ -122,6 +122,31 @@ def test_role_icon_url_from_hash():
 def test_role_icon_url_none_when_unset():
     role = Role({"id": "1"})
     assert role.icon_url is None
+
+
+def test_guild_icon_url_from_hash():
+    guild = Guild({"id": "1", "icon": "abcd1234"})
+    assert guild.icon_url == "https://cdn.discordapp.com/icons/1/abcd1234.png"
+
+
+def test_guild_icon_url_none_when_unset():
+    guild = Guild({"id": "1"})
+    assert guild.icon_url is None
+
+
+def test_guild_banner_url_from_hash():
+    guild = Guild({"id": "1", "banner": "abcd1234"})
+    assert guild.banner_url == "https://cdn.discordapp.com/banners/1/abcd1234.png"
+
+
+def test_guild_splash_url_from_hash():
+    guild = Guild({"id": "1", "splash": "abcd1234"})
+    assert guild.splash_url == "https://cdn.discordapp.com/splashes/1/abcd1234.png"
+
+
+def test_guild_discovery_splash_url_from_hash():
+    guild = Guild({"id": "1", "discovery_splash": "abcd1234"})
+    assert guild.discovery_splash_url == "https://cdn.discordapp.com/discovery-splashes/1/abcd1234.png"
 
 
 # --- mention strings ---
