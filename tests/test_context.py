@@ -281,6 +281,18 @@ def test_message_and_channel_absent_are_none():
     assert ctx.channel is None
 
 
+def test_guild_exposes_attributes():
+    ctx = _make_ctx(guild={"id": "30", "locale": "en-US", "features": ["COMMUNITY"]})
+    assert ctx.guild.id == "30"
+    assert ctx.guild.locale == "en-US"
+    assert ctx.guild.features == ["COMMUNITY"]
+
+
+def test_guild_absent_is_none():
+    ctx = _make_ctx()
+    assert ctx.guild is None
+
+
 def test_attachment_exposes_attributes():
     ctx = _make_ctx(
         data={
