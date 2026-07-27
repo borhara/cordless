@@ -3,7 +3,7 @@ import json
 
 from ._multipart import build_multipart_body
 from .errors import MessageTooLongError
-from .models import Attachment, Channel, Member, Message, Role, User, _wrap
+from .models import Attachment, Channel, Guild, Member, Message, Role, User, _wrap
 
 _CHANNEL_MESSAGE_WITH_SOURCE = 4
 _UPDATE_MESSAGE = 7
@@ -112,6 +112,7 @@ class Context:
     | `ctx.member` | Guild `Member` (roles, nick, permissions); `None` in DMs |
     | `ctx.guild_id` / `ctx.channel_id` | Where the interaction happened |
     | `ctx.channel` | Partial `Channel` |
+    | `ctx.guild` | Partial `Guild` (`None` in DMs); only `.id`, `.locale`, `.features` are populated |
     | `ctx.message` | The `Message` the component sits on (component interactions) |
     | `ctx.locale` | The invoking user's locale, e.g. `"en-US"` |
     | `ctx.options` | Dict of option name to value for the invoked (sub)command |
@@ -150,6 +151,7 @@ class Context:
         self.member = _wrap(Member, interaction.get("member"))
         self.message = _wrap(Message, interaction.get("message"))
         self.channel = _wrap(Channel, interaction.get("channel"))
+        self.guild = _wrap(Guild, interaction.get("guild"))
         self.locale = interaction.get("locale")
         self.guild_id = interaction.get("guild_id")
         self.channel_id = interaction.get("channel_id")
