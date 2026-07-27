@@ -249,5 +249,40 @@ class Role(DiscordObject):
         return Permissions(raw) if raw is not None else None
 
 
+class Guild(DiscordObject):
+    """A Discord guild, e.g. `ctx.guild`. Built from the partial guild object
+    Discord includes on the interaction, so most fields beyond `.id`,
+    `.locale`, and `.features` are not present here."""
+
+    @property
+    def icon_url(self):
+        """Full CDN URL for this guild's icon, or `None` if unset."""
+        guild_id = self._data.get("id")
+        icon = self._data.get("icon")
+        return _cdn_asset_url(f"icons/{guild_id}/{{hash}}", icon) if guild_id else None
+
+    @property
+    def banner_url(self):
+        """Full CDN URL for this guild's banner, or `None` if unset."""
+        guild_id = self._data.get("id")
+        banner = self._data.get("banner")
+        return _cdn_asset_url(f"banners/{guild_id}/{{hash}}", banner) if guild_id else None
+
+    @property
+    def splash_url(self):
+        """Full CDN URL for this guild's invite splash, or `None` if unset."""
+        guild_id = self._data.get("id")
+        splash = self._data.get("splash")
+        return _cdn_asset_url(f"splashes/{guild_id}/{{hash}}", splash) if guild_id else None
+
+    @property
+    def discovery_splash_url(self):
+        """Full CDN URL for this guild's discovery splash, or `None` if
+        unset."""
+        guild_id = self._data.get("id")
+        splash = self._data.get("discovery_splash")
+        return _cdn_asset_url(f"discovery-splashes/{guild_id}/{{hash}}", splash) if guild_id else None
+
+
 def _wrap(cls, data):
     return cls(data) if data is not None else None
