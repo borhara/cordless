@@ -3,8 +3,8 @@ from asyncio import run
 import pytest
 
 from cordless.app import Cordless
-from cordless.errors import NoResponseError, UnknownCommandError
-from cordless.testing import invoke, make_command_interaction
+from cordless.errors import NoResponseError, UnknownButtonError, UnknownCommandError, UnknownComponentError
+from cordless.testing import invoke, make_command_interaction, make_component_interaction
 
 # ---------------------------------------------------------------------------
 # make_command_interaction
@@ -184,3 +184,81 @@ def test_invoke_raises_when_handler_never_responds():
 
     with pytest.raises(NoResponseError):
         run(invoke(bot, "broken"))
+
+
+# ---------------------------------------------------------------------------
+# make_component_interaction
+# ---------------------------------------------------------------------------
+
+
+def test_make_component_interaction_defaults_to_a_button():
+    interaction = make_component_interaction("confirm")
+    assert interaction["type"] == 3
+    assert interaction["data"] == {"custom_id": "confirm", "component_type": 2}
+
+
+def test_make_component_interaction_carries_select_values():
+    interaction = make_component_interaction("pick", values=["a", "b"], component_type=3)
+    assert interaction["data"] == {"custom_id": "pick", "component_type": 3, "values": ["a", "b"]}
+
+
+def test_make_component_interaction_attaches_message():
+    interaction = make_component_interaction("confirm", message={"id": "99", "content": "are you sure?"})
+    assert interaction["message"] == {"id": "99", "content": "are you sure?"}
+
+
+def test_make_component_interaction_omits_message_by_default():
+    interaction = make_component_interaction("confirm")
+    assert "message" not in interaction
+
+
+# ---------------------------------------------------------------------------
+# invoke - components
+# ---------------------------------------------------------------------------
+
+
+def test_invoke_dispatches_a_button():
+    bot = _bot()
+
+    @bot.button("confirm")
+    async def confirm(ctx):
+        await ctx.send("confirmed")
+
+    response = run(invoke(bot, make_component_interaction("confirm")))
+    assert response["data"]["content"] == "confirmed"
+
+
+def test_invoke_dispatches_a_prefix_matched_button():
+    bot = _bot()
+
+    @bot.button("shop")
+    async def shop(ctx):
+        await ctx.send(f"picked {ctx.custom_id_args[0]}")
+
+    response = run(invoke(bot, make_component_interaction("shop:item1")))
+    assert response["data"]["content"] == "picked item1"
+
+
+def test_invoke_dispatches_a_select_with_values():
+    bot = _bot()
+
+    @bot.select("pick")
+    async def pick(ctx):
+        await ctx.send(f"picked {', '.join(ctx.values)}")
+
+    response = run(invoke(bot, make_component_interaction("pick", values=["a", "b"], component_type=3)))
+    assert response["data"]["content"] == "picked a, b"
+
+
+def test_invoke_raises_for_unknown_button():
+    bot = _bot()
+
+    with pytest.raises(UnknownButtonError):
+        run(invoke(bot, make_component_interaction("nope")))
+
+
+def test_invoke_raises_for_unknown_select():
+    bot = _bot()
+
+    with pytest.raises(UnknownComponentError):
+        run(invoke(bot, make_component_interaction("nope", component_type=3)))

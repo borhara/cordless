@@ -6,6 +6,9 @@ import json
 
 from .context import Context
 
+_APPLICATION_COMMAND = 2
+_MESSAGE_COMPONENT = 3
+
 _SUB_COMMAND = 1
 _SUB_COMMAND_GROUP = 2
 
@@ -40,6 +43,39 @@ def _nest_command_path(parts, leaf_options):
             }
         ]
     raise ValueError(f"Command path {'/'.join(parts)!r} is too deep: expected name, name/sub, or name/group/sub")
+
+
+def _shell(
+    itype,
+    data,
+    *,
+    user_id,
+    username,
+    guild_id,
+    guild,
+    channel_id,
+    locale,
+    interaction_id,
+    token,
+    message=None,
+):
+    """The fields common to every interaction type, regardless of what's in `data`."""
+    user = {"id": user_id, "username": username}
+    shell = {
+        "id": interaction_id,
+        "type": itype,
+        "token": token,
+        "data": data,
+        "member": {"user": user} if guild_id else None,
+        "user": None if guild_id else user,
+        "guild_id": guild_id,
+        "guild": (guild or {"id": guild_id}) if guild_id else None,
+        "channel_id": channel_id,
+        "locale": locale,
+    }
+    if message is not None:
+        shell["message"] = message
+    return shell
 
 
 def make_command_interaction(
@@ -89,34 +125,79 @@ def make_command_interaction(
     else:
         data["type"] = 1
 
-    user = {"id": user_id, "username": username}
+    return _shell(
+        _APPLICATION_COMMAND,
+        data,
+        user_id=user_id,
+        username=username,
+        guild_id=guild_id,
+        guild=guild,
+        channel_id=channel_id,
+        locale=locale,
+        interaction_id=interaction_id,
+        token=token,
+    )
 
-    return {
-        "id": interaction_id,
-        "type": 2,  # APPLICATION_COMMAND
-        "token": token,
-        "data": data,
-        "member": {"user": user} if guild_id else None,
-        "user": None if guild_id else user,
-        "guild_id": guild_id,
-        "guild": (guild or {"id": guild_id}) if guild_id else None,
-        "channel_id": channel_id,
-        "locale": locale,
-    }
+
+def make_component_interaction(
+    custom_id,
+    values=None,
+    component_type=2,
+    *,
+    message=None,
+    user_id="1",
+    username="shiv",
+    guild_id=None,
+    guild=None,
+    channel_id="1",
+    locale="en-US",
+    interaction_id="1",
+    token="test-token",
+):
+    """Build a raw MESSAGE_COMPONENT interaction payload, as if a user
+    clicked a button or picked from a select with this `custom_id`.
+
+    `component_type` follows Discord's numbering: 2 is a button (the
+    default), 3 a string select, 5/6/7/8 user/role/mentionable/channel
+    selects. Pass `values` for a select (the picked ids or strings) - it
+    lands on `ctx.values`. Prefix-matched custom ids ("shop:item1") work the
+    same as in production: the handler is looked up by the part before the
+    first ":".
+
+    Pass `message` (Discord's message object the component sits on) to make
+    it available as `ctx.message`.
+    """
+    data = {"custom_id": custom_id, "component_type": component_type}
+    if values is not None:
+        data["values"] = values
+
+    return _shell(
+        _MESSAGE_COMPONENT,
+        data,
+        user_id=user_id,
+        username=username,
+        guild_id=guild_id,
+        guild=guild,
+        channel_id=channel_id,
+        locale=locale,
+        interaction_id=interaction_id,
+        token=token,
+        message=message,
+    )
 
 
 async def invoke(bot, interaction_or_name, options=None, **kwargs):
-    """Dispatch a command through `bot`'s real router - the same dispatch
-    call a deployed Lambda makes - and return the decoded interaction
-    response Discord would receive (e.g. `{"type": 4, "data": {"content":
-    "pong"}}`), so assertions run against your actual handler code, not a
-    mock of it.
+    """Dispatch an interaction through `bot`'s real router - the same
+    dispatch call a deployed Lambda makes - and return the decoded response
+    Discord would receive (e.g. `{"type": 4, "data": {"content": "pong"}}`),
+    so assertions run against your actual handler code, not a mock of it.
 
     `interaction_or_name` is either a command name, built into an
     interaction via `make_command_interaction` (forwarding `options` and any
-    other keyword args), or a fully custom interaction dict from calling
-    `make_command_interaction` yourself for anything the shorthand doesn't
-    cover (context menu commands, a specific guild/user, ...).
+    other keyword args), or a fully custom interaction dict from
+    `make_command_interaction` or `make_component_interaction`, for anything
+    the shorthand doesn't cover (buttons, selects, context menu commands, a
+    specific guild/user, ...).
 
     There's no HTTP request here, so signature verification never runs -
     this works the same whether or not the bot was constructed with a real
