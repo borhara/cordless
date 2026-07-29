@@ -4,8 +4,14 @@ import pytest
 
 from cordless import Permissions
 from cordless.app import Cordless
-from cordless.errors import NoResponseError, UnknownButtonError, UnknownCommandError, UnknownComponentError
-from cordless.testing import button, command, invoke, member, modal, select
+from cordless.errors import (
+    NoResponseError,
+    UnknownButtonError,
+    UnknownCommandError,
+    UnknownComponentError,
+    UnsupportedInteractionError,
+)
+from cordless.testing import autocomplete, button, command, invoke, member, modal, select
 
 # ---------------------------------------------------------------------------
 # command
@@ -364,3 +370,71 @@ def test_invoke_dispatches_a_modal_submission():
     response, ctx = run(invoke(bot, modal("form", values={"name_field": "shiv"})))
     assert response["data"]["content"] == "hello shiv"
     assert ctx.modal_values == {"name_field": "shiv"}
+
+
+# ---------------------------------------------------------------------------
+# autocomplete
+# ---------------------------------------------------------------------------
+
+
+def test_autocomplete_bare_name():
+    interaction = autocomplete("shop")
+    assert interaction["type"] == 4
+    assert interaction["data"] == {"name": "shop", "type": 1}
+
+
+def test_autocomplete_marks_the_focused_option():
+    interaction = autocomplete("shop", {"item": "sw", "qty": 3}, focused="item")
+    options = {o["name"]: o for o in interaction["data"]["options"]}
+    assert options["item"]["focused"] is True
+    assert "focused" not in options["qty"]
+
+
+def test_autocomplete_nests_subcommand_path():
+    interaction = autocomplete("shop/buy", {"item": "sw"}, focused="item")
+    sub = interaction["data"]["options"][0]
+    assert sub["name"] == "buy"
+    assert sub["options"][0]["focused"] is True
+
+
+def test_invoke_dispatches_autocomplete_and_filters_string_choices():
+    bot = _bot()
+
+    @bot.command("shop", description="shop", options=[{"name": "item", "type": 3, "autocomplete": True}])
+    async def shop(ctx, item: str):
+        await ctx.send("bought")
+
+    @bot.autocomplete("shop", "item")
+    async def shop_item(ctx):
+        return ["sword", "shield", "bow"]
+
+    interaction = autocomplete("shop", {"item": "sw"}, focused="item")
+    response, ctx = run(invoke(bot, interaction))
+    assert response["data"]["choices"] == [{"name": "sword", "value": "sword"}]
+    assert ctx.focused_value == "sw"
+
+
+def test_invoke_dispatches_autocomplete_with_dict_choices_unfiltered():
+    bot = _bot()
+
+    @bot.command("shop", description="shop", options=[{"name": "item", "type": 3, "autocomplete": True}])
+    async def shop(ctx, item: str):
+        await ctx.send("bought")
+
+    @bot.autocomplete("shop", "item")
+    async def shop_item(ctx):
+        return [{"name": "Sword of Doom", "value": "sword"}]
+
+    response, _ = run(invoke(bot, autocomplete("shop", {"item": "any"}, focused="item")))
+    assert response["data"]["choices"] == [{"name": "Sword of Doom", "value": "sword"}]
+
+
+def test_invoke_raises_for_unregistered_autocomplete_handler():
+    bot = _bot()
+
+    @bot.command("shop", description="shop", options=[{"name": "item", "type": 3, "autocomplete": True}])
+    async def shop(ctx, item: str):
+        await ctx.send("bought")
+
+    with pytest.raises(UnsupportedInteractionError):
+        run(invoke(bot, autocomplete("shop", {"item": "sw"}, focused="item")))

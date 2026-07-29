@@ -15,6 +15,7 @@ from .context import Context
 
 _APPLICATION_COMMAND = 2
 _MESSAGE_COMPONENT = 3
+_APPLICATION_COMMAND_AUTOCOMPLETE = 4
 _MODAL_SUBMIT = 5
 
 _SUB_COMMAND = 1
@@ -298,6 +299,55 @@ def modal(
     )
 
 
+def autocomplete(
+    name,
+    options=None,
+    focused=None,
+    *,
+    member=None,
+    user_id="1",
+    username="shiv",
+    guild_id=None,
+    guild=None,
+    channel_id="1",
+    locale="en-US",
+    interaction_id="1",
+    token="test-token",
+):
+    """Build a raw APPLICATION_COMMAND_AUTOCOMPLETE interaction payload, as
+    if a user is typing into an option's autocomplete field.
+
+    `name` accepts the same "name", "parent/sub", and "parent/group/sub"
+    paths as `command()`. `options` is a plain {name: value} dict, with the
+    same type inference. `focused` names which option is currently being
+    typed into - its value lands on `ctx.focused_value`.
+    """
+    parts = name.split("/")
+    leaf_options = _options_list(options)
+    if focused is not None:
+        for opt in leaf_options:
+            if opt["name"] == focused:
+                opt["focused"] = True
+
+    data = {"name": parts[0], "type": 1}
+    if leaf_options or len(parts) > 1:
+        data["options"] = _nest_command_path(parts, leaf_options)
+
+    return _shell(
+        _APPLICATION_COMMAND_AUTOCOMPLETE,
+        data,
+        member=member,
+        user_id=user_id,
+        username=username,
+        guild_id=guild_id,
+        guild=guild,
+        channel_id=channel_id,
+        locale=locale,
+        interaction_id=interaction_id,
+        token=token,
+    )
+
+
 async def invoke(bot, interaction_or_name, options=None, **kwargs):
     """Dispatch an interaction through `bot`'s real router - the same
     dispatch call a deployed Lambda makes - and return `(response, ctx)`:
@@ -309,7 +359,8 @@ async def invoke(bot, interaction_or_name, options=None, **kwargs):
     `interaction_or_name` is either a command name, built into an
     interaction via `command()` (forwarding `options` and any other keyword
     args), or a fully custom interaction dict from `command()`, `button()`,
-    `select()`, or `modal()`, for anything the shorthand doesn't cover.
+    `select()`, `modal()`, or `autocomplete()`, for anything the shorthand
+    doesn't cover.
 
     There's no HTTP request here, so signature verification never runs -
     this works the same whether or not the bot was constructed with a real
