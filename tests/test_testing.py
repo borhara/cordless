@@ -2,9 +2,11 @@ from asyncio import run
 
 import pytest
 
+import cordless.defer
 from cordless import Permissions
 from cordless.app import Cordless
 from cordless.errors import (
+    CordlessError,
     NoResponseError,
     UnknownButtonError,
     UnknownCommandError,
@@ -438,3 +440,50 @@ def test_invoke_raises_for_unregistered_autocomplete_handler():
 
     with pytest.raises(UnsupportedInteractionError):
         run(invoke(bot, autocomplete("shop", {"item": "sw"}, focused="item")))
+
+
+# ---------------------------------------------------------------------------
+# invoke - worker mode (defer=True handlers)
+# ---------------------------------------------------------------------------
+
+
+def test_invoke_without_worker_mode_requires_a_configured_worker(monkeypatch):
+    """A defer=True handler dispatched normally hits the real defer-to-worker
+    path, which needs CORDLESS_WORKER_FUNCTION - it should fail loudly
+    rather than silently invoke anything."""
+    monkeypatch.delenv("CORDLESS_WORKER_FUNCTION", raising=False)
+    bot = _bot()
+
+    @bot.command("slow", description="slow", defer=True)
+    async def slow(ctx):
+        await ctx.send("done")
+
+    with pytest.raises(CordlessError):
+        run(invoke(bot, "slow"))
+
+
+def test_invoke_worker_mode_runs_the_handler_directly(monkeypatch):
+    bot = _bot()
+    followups = []
+    monkeypatch.setattr(cordless.defer, "patch_followup", lambda app_id, token, payload: followups.append(payload))
+
+    @bot.command("slow", description="slow", defer=True)
+    async def slow(ctx):
+        await ctx.send("done")
+
+    response, ctx = run(invoke(bot, "slow", worker_mode=True))
+    assert response == {"_cordless_followup": True}
+    assert followups == [{"content": "done"}]
+    assert ctx._worker_mode is True
+
+
+def test_invoke_worker_mode_handler_doing_nothing_returns_none(monkeypatch):
+    bot = _bot()
+    monkeypatch.setattr(cordless.defer, "patch_followup", lambda app_id, token, payload: None)
+
+    @bot.command("slow", description="slow", defer=True)
+    async def slow(ctx):
+        pass
+
+    response, _ = run(invoke(bot, "slow", worker_mode=True))
+    assert response is None

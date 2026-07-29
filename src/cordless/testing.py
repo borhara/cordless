@@ -348,7 +348,7 @@ def autocomplete(
     )
 
 
-async def invoke(bot, interaction_or_name, options=None, **kwargs):
+async def invoke(bot, interaction_or_name, options=None, *, worker_mode=False, **kwargs):
     """Dispatch an interaction through `bot`'s real router - the same
     dispatch call a deployed Lambda makes - and return `(response, ctx)`:
     the decoded response Discord would receive (e.g. `{"type": 4, "data":
@@ -362,16 +362,29 @@ async def invoke(bot, interaction_or_name, options=None, **kwargs):
     `select()`, `modal()`, or `autocomplete()`, for anything the shorthand
     doesn't cover.
 
-    There's no HTTP request here, so signature verification never runs -
-    this works the same whether or not the bot was constructed with a real
-    DISCORD_PUBLIC_KEY.
+    Pass `worker_mode=True` to dispatch the way the worker Lambda does for a
+    `defer=True` handler: the defer-to-worker step is skipped and the
+    handler's real body runs directly, same as `cordless.worker.make_worker_
+    handler` does in production. In this mode, a handler that calls
+    `ctx.send`/`ctx.edit` makes a genuine followup PATCH request to Discord
+    (`cordless.defer.patch_followup`) - patch that (or `post_followup`,
+    `delete_original`) with `monkeypatch` if you want to assert on it
+    without a live network call, the same way cordless's own test suite
+    does for `defer.py`.
+
+    There's no HTTP request for the initial dispatch itself, so signature
+    verification never runs - this works the same whether or not the bot
+    was constructed with a real DISCORD_PUBLIC_KEY.
+
+    `@bot.cron` handlers aren't interaction-driven, so there's nothing to
+    build here for them - call `bot.run_cron("name")` directly instead.
     """
     if isinstance(interaction_or_name, str):
         interaction = command(interaction_or_name, options, **kwargs)
     else:
         interaction = interaction_or_name
 
-    ctx = Context(interaction)
+    ctx = Context(interaction, _worker_mode=worker_mode)
     raw = await bot.router.dispatch(interaction, ctx)
     if raw is None or "body" not in raw:
         return raw, ctx
