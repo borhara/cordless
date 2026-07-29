@@ -15,6 +15,11 @@ The current feature surface, for orientation:
 - Cogs/extensions (`load_extension` / `load_extensions`) for splitting a bot
   across files
 - Cron-scheduled handlers (`@bot.cron`, `cordless cron`)
+- User-installable apps (`user_installable=True`): commands that run in any
+  DM or server via user install, not just guild-installed bots
+- `cordless.testing`: `invoke(bot, "command")` and `make_command_interaction`
+  dispatch fake interactions through a bot's real router, so handlers are
+  unit-testable without a live Discord round-trip
 - Deferred interactions handed off to a worker Lambda, so slow commands never
   hit Discord's 3-second limit
 - File uploads / multipart attachments
@@ -36,8 +41,6 @@ The current feature surface, for orientation:
   command management, the interaction-response endpoints, OAuth2, and more.
   Threads are the first resource shipped end-to-end; the rest are landing
   resource by resource.
-- **User-installable apps.** Commands that run as a user-installed app in any
-  DM or server, not just bots installed to a specific guild.
 
 ## Planned next
 
@@ -46,9 +49,6 @@ The current feature surface, for orientation:
 - Command name/description localization (Discord's per-locale i18n).
 - `cordless doctor`: one command to validate AWS credentials, the IAM role,
   Discord app config, and deployed function state, and point at what's wrong.
-- Testing helpers for bot authors: fixtures/mocks for interaction payloads
-  so people can unit-test their own `@bot.command` handlers without a live
-  Discord round-trip.
 - Rough cost visibility in `cordless deploy`/`cordless logs` output (Lambda
   invocations, plus DynamoDB if rate limiting is enabled), so "serverless"
   doesn't mean "opaque."
