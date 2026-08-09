@@ -24,6 +24,8 @@ The current feature surface, for orientation:
 - Command name/description localization (Discord's per-locale i18n) via
   `name_localizations`/`description_localizations` on `@bot.command`,
   `user_command`, and `message_command`
+- `cordless doctor`: diagnose AWS credentials, IAM role, Discord app config,
+  and deployed function state, and point at what's wrong
 - Deferred interactions handed off to a worker Lambda, so slow commands never
   hit Discord's 3-second limit
 - File uploads / multipart attachments
@@ -50,8 +52,6 @@ The current feature surface, for orientation:
 
 - Guild-level command permission overwrites (Discord's `/permissions` API),
   as a complement to the existing `default_member_permissions` bitfield.
-- `cordless doctor`: one command to validate AWS credentials, the IAM role,
-  Discord app config, and deployed function state, and point at what's wrong.
 - Rough cost visibility in `cordless deploy`/`cordless logs` output (Lambda
   invocations, plus DynamoDB if rate limiting is enabled), so "serverless"
   doesn't mean "opaque."

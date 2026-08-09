@@ -554,3 +554,114 @@ def test_logs_follow_polls_again_until_interrupted(tmp_path, monkeypatch, capsys
     out = capsys.readouterr().out
     assert "first line" in out
     assert "following" in out
+
+
+# ---------------------------------------------------------------------------
+# doctor
+# ---------------------------------------------------------------------------
+
+_DOCTOR_ENV_KEYS = (
+    "DISCORD_PUBLIC_KEY",
+    "DISCORD_BOT_TOKEN",
+    "DISCORD_CLIENT_ID",
+    "DISCORD_CLIENT_SECRET",
+    "DISCORD_GUILD_ID",
+)
+
+
+def _clear_discord_env(monkeypatch):
+    for key in _DOCTOR_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+
+
+def test_doctor_gracefully_skips_iam_and_lambda_when_no_function_configured(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _clear_discord_env(monkeypatch)
+
+    with mock_aws():
+        with pytest.raises(SystemExit):
+            main(["doctor", "--region", _LOGS_REGION])
+
+    out = capsys.readouterr().out
+    assert "no function configured - nothing to check" in out
+
+
+def test_doctor_exits_nonzero_when_a_check_fails(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _clear_discord_env(monkeypatch)
+
+    with mock_aws():
+        with pytest.raises(SystemExit) as exc_info:
+            main(["doctor", "--region", _LOGS_REGION])
+
+    assert exc_info.value.code == 1
+
+
+def test_doctor_reports_undeployed_function_as_a_warning(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _clear_discord_env(monkeypatch)
+    (tmp_path / ".env").write_text("DISCORD_PUBLIC_KEY=" + "a" * 64 + "\nDISCORD_BOT_TOKEN=tok\n")
+
+    with mock_aws():
+        with patch("cordless.register.urllib.request.urlopen", return_value=FakeDiscordResponse({"id": "app-1"})):
+            with pytest.raises(SystemExit):
+                main(["doctor", "--function", "my-fn", "--region", _LOGS_REGION])
+
+    out = capsys.readouterr().out
+    assert "not deployed yet" in out
+
+
+def test_doctor_all_checks_pass(tmp_path, monkeypatch, capsys):
+    import json
+    import zipfile
+
+    monkeypatch.chdir(tmp_path)
+    _clear_discord_env(monkeypatch)
+
+    public_key = "a" * 64
+    (tmp_path / "cordless.toml").write_text('[deploy]\nfunction = "my-fn"\nrole_name = "my-fn-role"\n')
+    (tmp_path / ".env").write_text(f"DISCORD_PUBLIC_KEY={public_key}\nDISCORD_BOT_TOKEN=tok\n")
+
+    trust_policy = json.dumps(
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {"Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}, "Action": "sts:AssumeRole"}
+            ],
+        }
+    )
+    basic_policy_doc = json.dumps(
+        {"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": "logs:*", "Resource": "*"}]}
+    )
+
+    with mock_aws():
+        iam = boto3.client("iam", region_name=_LOGS_REGION)
+        lam = boto3.client("lambda", region_name=_LOGS_REGION)
+        apigw = boto3.client("apigatewayv2", region_name=_LOGS_REGION)
+
+        role_arn = iam.create_role(RoleName="my-fn-role", AssumeRolePolicyDocument=trust_policy)["Role"]["Arn"]
+        policy_arn = iam.create_policy(PolicyName="AWSLambdaBasicExecutionRole", PolicyDocument=basic_policy_doc)[
+            "Policy"
+        ]["Arn"]
+        iam.attach_role_policy(RoleName="my-fn-role", PolicyArn=policy_arn)
+
+        zip_path = tmp_path / "fn.zip"
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("lambda_function.py", "def handler(event, context): pass\n")
+        with open(zip_path, "rb") as f:
+            lam.create_function(
+                FunctionName="my-fn",
+                Runtime="python3.12",
+                Role=role_arn,
+                Handler="lambda_function.handler",
+                Code={"ZipFile": f.read()},
+                Environment={"Variables": {"DISCORD_PUBLIC_KEY": public_key, "DISCORD_BOT_TOKEN": "tok"}},
+            )
+
+        apigw.create_api(Name="my-fn-api", ProtocolType="HTTP")
+
+        with patch("cordless.register.urllib.request.urlopen", return_value=FakeDiscordResponse({"id": "app-1"})):
+            main(["doctor", "--region", _LOGS_REGION])
+
+    out = capsys.readouterr().out
+    assert "✗" not in out

@@ -490,6 +490,52 @@ def _logs(args):
             print()
 
 
+def _doctor(args):
+    from . import doctor
+    from .deploy import load_config
+
+    source_dir = os.getcwd()
+    cfg = load_config(source_dir)
+
+    function_name = args.function or cfg.get("function")
+    role_name = args.role_name or cfg.get("role_name") or (f"{function_name}-role" if function_name else None)
+    region = args.region or cfg.get("region") or os.environ.get("AWS_DEFAULT_REGION")
+    defer_worker = cfg.get("defer_worker")
+    ratelimit = bool(cfg.get("ratelimit", False))
+    keep_warm = cfg.get("keep-warm")
+
+    environment = resolve_environment(args.environment)
+    local_env = {**read_dotenv(source_dir, environment), **cfg.get("env", {})}
+    doctor_env_keys = (
+        "DISCORD_PUBLIC_KEY",
+        "DISCORD_BOT_TOKEN",
+        "DISCORD_CLIENT_ID",
+        "DISCORD_CLIENT_SECRET",
+        "DISCORD_GUILD_ID",
+    )
+    for key in doctor_env_keys:
+        if not local_env.get(key) and os.environ.get(key):
+            local_env[key] = os.environ[key]
+
+    bot_target = _resolve_bot(args.bot, source_dir, cfg)
+    bot = _load_bot(bot_target, path=source_dir) if bot_target else None
+    crons = {name: entry["schedule"] for name, entry in bot.crons.items()} if bot else None
+
+    sections, ok = doctor.run(
+        function_name=function_name,
+        role_name=role_name,
+        region=region,
+        defer_worker=defer_worker,
+        crons=crons,
+        keep_warm=keep_warm,
+        ratelimit=ratelimit,
+        local_env=local_env,
+    )
+    doctor.print_report(sections)
+    if not ok:
+        raise SystemExit(1)
+
+
 def _environment_from_argv(argv):
     """Scan for --environment/-E/--env ahead of argparse, so it can seed .env loading before subcommand
     args exist. On `deploy`, --env doubles as a literal KEY=VALUE Lambda env var, so a value containing
@@ -742,6 +788,32 @@ def main(argv=None):
         "--since", type=int, default=10, metavar="MINUTES", help="How many minutes back to start (default: 10)"
     )
     logs_cmd.set_defaults(func=_logs)
+
+    # doctor
+    doctor_cmd = subparsers.add_parser(
+        "doctor",
+        help="Diagnose AWS credentials, IAM role, Discord app config, and deployed function state",
+        allow_abbrev=False,
+    )
+    doctor_cmd.add_argument(
+        "bot",
+        nargs="?",
+        default=None,
+        help="Location of your Cordless instance, as MODULE:ATTRIBUTE (auto-detected if omitted)",
+    )
+    doctor_cmd.add_argument(
+        "--function",
+        "-f",
+        default=None,
+        metavar="FUNCTION",
+        help="Lambda function name (defaults to `function` in cordless.toml)",
+    )
+    doctor_cmd.add_argument(
+        "--role-name", metavar="NAME", default=None, help="IAM role name (default: <function>-role)"
+    )
+    doctor_cmd.add_argument("--region", "-r", default=None, metavar="REGION", help="AWS region")
+    doctor_cmd.add_argument("--environment", "-E", "--env", default=None, metavar="NAME", help=_ENV_HELP)
+    doctor_cmd.set_defaults(func=_doctor)
 
     args = parser.parse_args(argv)
     args.func(args)
