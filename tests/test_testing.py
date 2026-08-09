@@ -114,7 +114,7 @@ def test_command_member_implies_a_guild_context():
 
 def test_member_defaults():
     data = member()
-    assert data == {"user": {"id": "1", "username": "shiv"}, "roles": []}
+    assert data == {"user": {"id": "1", "username": "test-user"}, "roles": []}
 
 
 def test_member_carries_roles():

@@ -57,7 +57,7 @@ def _nest_command_path(parts, leaf_options):
     raise ValueError(f"Command path {'/'.join(parts)!r} is too deep: expected name, name/sub, or name/group/sub")
 
 
-def member(user_id="1", username="shiv", roles=None, permissions=None, nick=None):
+def member(user_id="1", username="test-user", roles=None, permissions=None, nick=None):
     """Build a partial guild member object for the `member` kwarg on the
     other builders below, so `ctx.member.roles`/`ctx.member.permissions`
     are populated instead of just `ctx.user`.
@@ -117,7 +117,7 @@ def command(
     target_type=None,
     member=None,
     user_id="1",
-    username="shiv",
+    username="test-user",
     guild_id=None,
     guild=None,
     channel_id="1",
@@ -187,7 +187,7 @@ def _component(
     message=None,
     member=None,
     user_id="1",
-    username="shiv",
+    username="test-user",
     guild_id=None,
     guild=None,
     channel_id="1",
@@ -264,7 +264,7 @@ def modal(
     *,
     member=None,
     user_id="1",
-    username="shiv",
+    username="test-user",
     guild_id=None,
     guild=None,
     channel_id="1",
@@ -306,7 +306,7 @@ def autocomplete(
     *,
     member=None,
     user_id="1",
-    username="shiv",
+    username="test-user",
     guild_id=None,
     guild=None,
     channel_id="1",
