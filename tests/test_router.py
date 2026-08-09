@@ -391,7 +391,14 @@ def test_subcommand_carries_its_own_localizations():
     assert "description_localizations" not in kick
 
 
-def test_parent_of_subcommands_inherits_localizations_from_first_registered():
+def test_parent_of_subcommands_inherits_description_localizations_but_not_name():
+    """The parent's plain description is already borrowed from whichever
+    subcommand registers first (first_desc); description_localizations
+    mirrors that. But the parent's *name* is always the literal path
+    segment ("shop"), never borrowed from a subcommand - so unlike
+    description, name_localizations must not leak from "buy" onto the
+    parent, or a Spanish user would see the top-level command mislabeled
+    "comprar" while the "buy" subcommand underneath it reads "comprar" too."""
     bot = Cordless()
 
     @bot.command(
@@ -408,7 +415,7 @@ def test_parent_of_subcommands_inherits_localizations_from_first_registered():
         pass
 
     parent = next(d for d in bot.router.command_definitions() if d["name"] == "shop")
-    assert parent["name_localizations"] == {"es-ES": "comprar"}
+    assert "name_localizations" not in parent
     assert parent["description_localizations"] == {"es-ES": "Comprar un objeto"}
 
 

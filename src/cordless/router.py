@@ -227,8 +227,6 @@ class Router:
                 "type": 1,
                 "options": options,
             }
-            if first_meta.get("name_localizations"):
-                cmd["name_localizations"] = first_meta["name_localizations"]
             if first_meta.get("description_localizations"):
                 cmd["description_localizations"] = first_meta["description_localizations"]
             installable = self._apply_installability(cmd, any(m.get("user_installable") for m in entries.values()))
