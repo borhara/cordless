@@ -158,6 +158,17 @@ def test_invoke_by_name_dispatches_through_real_router():
     assert ctx.user.id == "1"
 
 
+def test_invoke_decodes_a_file_attachment_response():
+    bot = _bot()
+
+    @bot.command("upload", description="upload")
+    async def upload(ctx):
+        await ctx.send(files=[("report.pdf", b"fake-file-bytes")])
+
+    response, ctx = run(invoke(bot, "upload"))
+    assert response["data"]["attachments"] == [{"id": 0, "filename": "report.pdf"}]
+
+
 def test_invoke_forwards_options_to_the_handler():
     bot = _bot()
 

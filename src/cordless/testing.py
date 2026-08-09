@@ -9,8 +9,10 @@ Import the module and use it as a namespace, e.g.:
     response, ctx = await testing.invoke(bot, testing.command("ping"))
 """
 
+import base64
 import json
 
+from ._multipart import parse_multipart_payload
 from .context import Context
 
 _APPLICATION_COMMAND = 2
@@ -354,7 +356,9 @@ async def invoke(bot, interaction_or_name, options=None, *, worker_mode=False, *
     the decoded response Discord would receive (e.g. `{"type": 4, "data":
     {"content": "pong"}}`), and the `Context` the handler ran with, so
     assertions can check `ctx.member.permissions`, `ctx.custom_id_args`, and
-    so on, not just the response.
+    so on, not just the response. A handler that calls `ctx.send`/`ctx.edit`
+    with `files=` gets its multipart response decoded back to the same
+    plain dict shape, so `response["data"]` looks the same either way.
 
     `interaction_or_name` is either a command name, built into an
     interaction via `command()` (forwarding `options` and any other keyword
@@ -388,4 +392,6 @@ async def invoke(bot, interaction_or_name, options=None, *, worker_mode=False, *
     raw = await bot.router.dispatch(interaction, ctx)
     if raw is None or "body" not in raw:
         return raw, ctx
+    if raw.get("isBase64Encoded"):
+        return parse_multipart_payload(base64.b64decode(raw["body"])), ctx
     return json.loads(raw["body"]), ctx

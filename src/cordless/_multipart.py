@@ -33,3 +33,14 @@ def build_multipart_body(payload, files):
         )
     parts.append(f"--{boundary}--\r\n".encode())
     return b"".join(parts), f"multipart/form-data; boundary={boundary}"
+
+
+def parse_multipart_payload(body):
+    """Extract the JSON payload_json part back out of a multipart body built
+    by build_multipart_body() - the inverse operation, used by
+    cordless.testing to decode a file-attachment response."""
+    marker = b'name="payload_json"'
+    start = body.index(marker)
+    json_start = body.index(b"\r\n\r\n", start) + 4
+    json_end = body.index(b"\r\n--", json_start)
+    return json.loads(body[json_start:json_end])
