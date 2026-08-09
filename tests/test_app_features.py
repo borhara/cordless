@@ -338,6 +338,40 @@ def test_cog_command_user_installable_threads_through_to_router():
     assert cmd["contexts"] == [0, 1, 2]
 
 
+def test_cog_command_localizations_thread_through_to_router():
+    shop = Cog()
+
+    @shop.command(
+        "buy",
+        name_localizations={"es-ES": "comprar"},
+        description_localizations={"es-ES": "Comprar un objeto"},
+    )
+    async def buy(ctx):
+        await ctx.send("done")
+
+    bot = Cordless()
+    bot.add_cog(shop)
+
+    cmd = next(d for d in bot.router.command_definitions() if d["name"] == "buy")
+    assert cmd["name_localizations"] == {"es-ES": "comprar"}
+    assert cmd["description_localizations"] == {"es-ES": "Comprar un objeto"}
+
+
+def test_cog_user_command_name_localizations_threads_through_to_router():
+    admin = Cog()
+
+    @admin.user_command("Inspect User", name_localizations={"es-ES": "Inspeccionar usuario"})
+    async def inspect(ctx):
+        await ctx.send("done", ephemeral=True)
+
+    bot = Cordless()
+    bot.add_cog(admin)
+
+    cmd = next(d for d in bot.router.command_definitions() if d["name"] == "Inspect User")
+    assert cmd["name_localizations"] == {"es-ES": "Inspeccionar usuario"}
+    assert "description_localizations" not in cmd
+
+
 def test_cog_command_options_from_signature():
     shop = Cog()
 

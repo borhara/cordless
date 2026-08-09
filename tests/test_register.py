@@ -45,6 +45,50 @@ def test_context_menu_definitions_have_no_description_or_options():
     assert defs["Bookmark"] == {"name": "Bookmark", "type": 3}
 
 
+# --- localization ---
+
+
+def test_command_definitions_include_localizations_when_set():
+    bot = Cordless()
+
+    @bot.command(
+        "buy",
+        description="Buy an item",
+        name_localizations={"es-ES": "comprar"},
+        description_localizations={"es-ES": "Comprar un objeto"},
+    )
+    async def buy(ctx):
+        pass
+
+    defs = {d["name"]: d for d in bot.router.command_definitions()}
+    assert defs["buy"]["name_localizations"] == {"es-ES": "comprar"}
+    assert defs["buy"]["description_localizations"] == {"es-ES": "Comprar un objeto"}
+
+
+def test_command_definitions_omit_localization_keys_when_unset():
+    bot = Cordless()
+
+    @bot.command("ping", description="Replies with pong")
+    async def ping(ctx):
+        pass
+
+    defs = {d["name"]: d for d in bot.router.command_definitions()}
+    assert "name_localizations" not in defs["ping"]
+    assert "description_localizations" not in defs["ping"]
+
+
+def test_context_menu_definitions_include_name_localizations_only():
+    bot = Cordless()
+
+    @bot.user_command("Inspect User", name_localizations={"es-ES": "Inspeccionar usuario"})
+    async def inspect(ctx):
+        pass
+
+    defs = {d["name"]: d for d in bot.router.command_definitions()}
+    assert defs["Inspect User"]["name_localizations"] == {"es-ES": "Inspeccionar usuario"}
+    assert "description_localizations" not in defs["Inspect User"]
+
+
 # --- guild-scoped commands ---
 
 

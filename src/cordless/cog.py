@@ -36,6 +36,8 @@ class Cog:
         ephemeral=False,
         guild_ids=None,
         user_installable=False,
+        name_localizations=None,
+        description_localizations=None,
     ):
         """Same parameters as `Cordless.command`. Handlers registered here
         take effect once the cog is passed to `bot.add_cog(cog)`."""
@@ -56,6 +58,8 @@ class Cog:
                         "ephemeral": ephemeral,
                         "guild_ids": guild_ids,
                         "user_installable": user_installable,
+                        "name_localizations": name_localizations,
+                        "description_localizations": description_localizations,
                     },
                 )
             )
@@ -108,7 +112,7 @@ class Cog:
 
         return decorator
 
-    def user_command(self, name, dm_permission=True, guild_ids=None, user_installable=False):
+    def user_command(self, name, dm_permission=True, guild_ids=None, user_installable=False, name_localizations=None):
         """Same as `Cordless.user_command`."""
 
         def decorator(func):
@@ -121,6 +125,7 @@ class Cog:
                         "dm_permission": dm_permission,
                         "guild_ids": guild_ids,
                         "user_installable": user_installable,
+                        "name_localizations": name_localizations,
                     },
                 )
             )
@@ -128,7 +133,9 @@ class Cog:
 
         return decorator
 
-    def message_command(self, name, dm_permission=True, guild_ids=None, user_installable=False):
+    def message_command(
+        self, name, dm_permission=True, guild_ids=None, user_installable=False, name_localizations=None
+    ):
         """Same as `Cordless.message_command`."""
 
         def decorator(func):
@@ -141,6 +148,7 @@ class Cog:
                         "dm_permission": dm_permission,
                         "guild_ids": guild_ids,
                         "user_installable": user_installable,
+                        "name_localizations": name_localizations,
                     },
                 )
             )

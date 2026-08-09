@@ -366,6 +366,52 @@ def test_subcommand_definitions_structure():
     assert all(o["type"] == 1 for o in parent["options"])
 
 
+def test_subcommand_carries_its_own_localizations():
+    bot = Cordless()
+
+    @bot.command(
+        "mod/ban",
+        description="Ban a user",
+        name_localizations={"es-ES": "expulsar"},
+        description_localizations={"es-ES": "Expulsar a un usuario"},
+    )
+    async def mod_ban(ctx):
+        pass
+
+    @bot.command("mod/kick", description="Kick a user")
+    async def mod_kick(ctx):
+        pass
+
+    parent = next(d for d in bot.router.command_definitions() if d["name"] == "mod")
+    ban = next(o for o in parent["options"] if o["name"] == "ban")
+    kick = next(o for o in parent["options"] if o["name"] == "kick")
+    assert ban["name_localizations"] == {"es-ES": "expulsar"}
+    assert ban["description_localizations"] == {"es-ES": "Expulsar a un usuario"}
+    assert "name_localizations" not in kick
+    assert "description_localizations" not in kick
+
+
+def test_parent_of_subcommands_inherits_localizations_from_first_registered():
+    bot = Cordless()
+
+    @bot.command(
+        "shop/buy",
+        description="Buy an item",
+        name_localizations={"es-ES": "comprar"},
+        description_localizations={"es-ES": "Comprar un objeto"},
+    )
+    async def shop_buy(ctx):
+        pass
+
+    @bot.command("shop/sell", description="Sell an item")
+    async def shop_sell(ctx):
+        pass
+
+    parent = next(d for d in bot.router.command_definitions() if d["name"] == "shop")
+    assert parent["name_localizations"] == {"es-ES": "comprar"}
+    assert parent["description_localizations"] == {"es-ES": "Comprar un objeto"}
+
+
 def test_registering_parent_of_subcommand_raises():
     bot = Cordless()
 
@@ -514,6 +560,27 @@ def test_subcommand_group_definitions_structure():
     group = next(o for o in parent["options"] if o["name"] == "users")
     assert group["type"] == 2  # SUB_COMMAND_GROUP
     assert group["options"][0] == {"name": "ban", "description": "Ban a user", "type": 1, "options": []}
+
+
+def test_subcommand_group_leaf_carries_its_own_localizations_but_group_does_not():
+    bot = Cordless()
+
+    @bot.command(
+        "admin/users/ban",
+        description="Ban a user",
+        name_localizations={"es-ES": "expulsar"},
+        description_localizations={"es-ES": "Expulsar a un usuario"},
+    )
+    async def ban(ctx):
+        pass
+
+    parent = next(d for d in bot.router.command_definitions() if d["name"] == "admin")
+    group = next(o for o in parent["options"] if o["name"] == "users")
+    leaf = group["options"][0]
+    assert leaf["name_localizations"] == {"es-ES": "expulsar"}
+    assert leaf["description_localizations"] == {"es-ES": "Expulsar a un usuario"}
+    assert "name_localizations" not in group
+    assert "description_localizations" not in group
 
 
 # --- Context menu commands ---

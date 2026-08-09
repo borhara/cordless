@@ -53,6 +53,8 @@ class Router:
         nsfw=False,
         guild_ids=None,
         user_installable=False,
+        name_localizations=None,
+        description_localizations=None,
     ):
         if cmd_type == 1:
             for existing, meta in self.commands.items():
@@ -76,6 +78,8 @@ class Router:
             "nsfw": nsfw,
             "guild_ids": list(guild_ids) if guild_ids else None,
             "user_installable": user_installable,
+            "name_localizations": name_localizations,
+            "description_localizations": description_localizations,
         }
 
     def register_button(self, custom_id, handler):
@@ -150,6 +154,8 @@ class Router:
                     "dm_permission", True
                 ):
                     cmd["dm_permission"] = False
+                if meta.get("name_localizations"):
+                    cmd["name_localizations"] = meta["name_localizations"]
                 result.append(cmd)
                 continue
             cmd = {
@@ -166,6 +172,10 @@ class Router:
                 cmd["default_member_permissions"] = str(int(meta["default_member_permissions"]))
             if meta.get("nsfw"):
                 cmd["nsfw"] = True
+            if meta.get("name_localizations"):
+                cmd["name_localizations"] = meta["name_localizations"]
+            if meta.get("description_localizations"):
+                cmd["description_localizations"] = meta["description_localizations"]
             result.append(cmd)
 
         for top, entries in subs.items():
@@ -174,14 +184,17 @@ class Router:
                 parts = path.split("/")
                 if len(parts) == 2:
                     # parent/sub
-                    options.append(
-                        {
-                            "name": parts[1],
-                            "description": meta["description"],
-                            "type": _SUB_COMMAND,
-                            "options": meta["options"],
-                        }
-                    )
+                    sub = {
+                        "name": parts[1],
+                        "description": meta["description"],
+                        "type": _SUB_COMMAND,
+                        "options": meta["options"],
+                    }
+                    if meta.get("name_localizations"):
+                        sub["name_localizations"] = meta["name_localizations"]
+                    if meta.get("description_localizations"):
+                        sub["description_localizations"] = meta["description_localizations"]
+                    options.append(sub)
                 elif len(parts) == 3:
                     # parent/group/sub, grouped by group name
                     group_name = parts[1]
@@ -195,22 +208,29 @@ class Router:
                             "options": [],
                         }
                         options.append(group)
-                    group["options"].append(
-                        {
-                            "name": sub_name,
-                            "description": meta["description"],
-                            "type": _SUB_COMMAND,
-                            "options": meta["options"],
-                        }
-                    )
+                    sub = {
+                        "name": sub_name,
+                        "description": meta["description"],
+                        "type": _SUB_COMMAND,
+                        "options": meta["options"],
+                    }
+                    if meta.get("name_localizations"):
+                        sub["name_localizations"] = meta["name_localizations"]
+                    if meta.get("description_localizations"):
+                        sub["description_localizations"] = meta["description_localizations"]
+                    group["options"].append(sub)
 
-            first_desc = next(iter(entries.values()))["description"]
+            first_meta = next(iter(entries.values()))
             cmd = {
                 "name": top,
-                "description": first_desc,
+                "description": first_meta["description"],
                 "type": 1,
                 "options": options,
             }
+            if first_meta.get("name_localizations"):
+                cmd["name_localizations"] = first_meta["name_localizations"]
+            if first_meta.get("description_localizations"):
+                cmd["description_localizations"] = first_meta["description_localizations"]
             installable = self._apply_installability(cmd, any(m.get("user_installable") for m in entries.values()))
             if not installable and any(not m.get("dm_permission", True) for m in entries.values()):
                 cmd["dm_permission"] = False

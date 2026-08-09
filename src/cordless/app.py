@@ -227,6 +227,8 @@ class Cordless:
         ephemeral=False,
         guild_ids=None,
         user_installable=False,
+        name_localizations=None,
+        description_localizations=None,
     ):
         """Register a slash command.
 
@@ -241,6 +243,8 @@ class Cordless:
         | `nsfw` | Restrict to age-verified channels |
         | `ephemeral` | Only meaningful with `defer=True`: makes the loading state and final reply private. For non-deferred commands, use `ctx.send(ephemeral=True)` instead |
         | `guild_ids` | Scope this command to specific guilds instead of registering it globally |
+        | `name_localizations` | `{locale: name}` dict for Discord's per-locale command picker, e.g. `{"es-ES": "comprar"}` |
+        | `description_localizations` | `{locale: description}` dict, same shape as `name_localizations` |
         """
         _validate_command_name(name)
 
@@ -261,6 +265,8 @@ class Cordless:
                 nsfw=nsfw,
                 guild_ids=guild_ids,
                 user_installable=user_installable,
+                name_localizations=name_localizations,
+                description_localizations=description_localizations,
             )
             return func
 
@@ -572,8 +578,12 @@ class Cordless:
 
         return decorator
 
-    def user_command(self, name, dm_permission=True, guild_ids=None, user_installable=False):
-        """Register a User context menu command (right-click → Apps → name)."""
+    def user_command(self, name, dm_permission=True, guild_ids=None, user_installable=False, name_localizations=None):
+        """Register a User context menu command (right-click → Apps → name).
+
+        `name_localizations` is a `{locale: name}` dict, e.g. `{"es-ES": "inspeccionar"}`
+        - context menu commands have no description, so there is no `description_localizations`.
+        """
 
         def decorator(func):
             self.router.register_command(
@@ -585,13 +595,20 @@ class Cordless:
                 cmd_type=2,
                 guild_ids=guild_ids,
                 user_installable=user_installable,
+                name_localizations=name_localizations,
             )
             return func
 
         return decorator
 
-    def message_command(self, name, dm_permission=True, guild_ids=None, user_installable=False):
-        """Register a Message context menu command (right-click message → Apps → name)."""
+    def message_command(
+        self, name, dm_permission=True, guild_ids=None, user_installable=False, name_localizations=None
+    ):
+        """Register a Message context menu command (right-click message → Apps → name).
+
+        `name_localizations` is a `{locale: name}` dict, e.g. `{"es-ES": "inspeccionar"}`
+        - context menu commands have no description, so there is no `description_localizations`.
+        """
 
         def decorator(func):
             self.router.register_command(
@@ -603,6 +620,7 @@ class Cordless:
                 cmd_type=3,
                 guild_ids=guild_ids,
                 user_installable=user_installable,
+                name_localizations=name_localizations,
             )
             return func
 
@@ -734,6 +752,8 @@ class Cordless:
                     nsfw=kwargs.get("nsfw", False),
                     guild_ids=kwargs.get("guild_ids"),
                     user_installable=kwargs.get("user_installable", False),
+                    name_localizations=kwargs.get("name_localizations"),
+                    description_localizations=kwargs.get("description_localizations"),
                 )
             elif ctype == "button":
                 if kwargs.get("defer"):
@@ -762,6 +782,7 @@ class Cordless:
                     cmd_type=2,
                     guild_ids=kwargs.get("guild_ids"),
                     user_installable=kwargs.get("user_installable", False),
+                    name_localizations=kwargs.get("name_localizations"),
                 )
             elif ctype == "message_command":
                 self.router.register_command(
@@ -773,6 +794,7 @@ class Cordless:
                     cmd_type=3,
                     guild_ids=kwargs.get("guild_ids"),
                     user_installable=kwargs.get("user_installable", False),
+                    name_localizations=kwargs.get("name_localizations"),
                 )
 
     def sync_commands(self, bot_token=None, client_id=None, client_secret=None, guild_id=None):
