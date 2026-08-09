@@ -4,7 +4,7 @@ deployed Lambda function state. Nothing here creates or modifies anything -
 
 import re
 
-from ._progress import _BOLD, _DIM, _GREEN, _RED, _RESET, _YELLOW
+from ._progress import _BOLD, _DIM, _GREEN, _RED, _RESET, _YELLOW, wait
 
 _PUBLIC_KEY_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
@@ -167,26 +167,39 @@ def check_deployed_function(lam, apigw, events, dynamodb, function_name, defer_w
 
 
 def run(function_name, role_name, region, defer_worker=None, crons=None, keep_warm=None, ratelimit=False,
-        local_env=None):
-    """Run every diagnostic check. Returns (sections, ok):
+        local_env=None, on_section=None):
+    """Run every diagnostic check, one section at a time. Returns (sections, ok):
     `sections` is [(title, [(severity, label, detail), ...]), ...] for
     printing; `ok` is False if any check came back "fail" (warnings alone
-    don't fail it)."""
+    don't fail it).
+
+    Pass `on_section(title, checks)` to be called as soon as each section
+    finishes, so a caller can print progressively instead of waiting for
+    every section (AWS, Discord, IAM, Lambda each make several blocking
+    network calls) to complete before anything shows up."""
     local_env = local_env or {}
     sections = []
 
-    aws_ok, session, aws_detail = check_aws_credentials(region)
-    sections.append(("AWS", [("ok" if aws_ok else "fail", "Credentials", aws_detail)]))
+    def _emit(title, checks):
+        sections.append((title, checks))
+        if on_section is not None:
+            on_section(title, checks)
 
-    sections.append(("Discord", check_discord_config(local_env)))
+    aws_ok, session, aws_detail = wait("AWS", lambda: check_aws_credentials(region))
+    _emit("AWS", [("ok" if aws_ok else "fail", "Credentials", aws_detail)])
+
+    _emit("Discord", wait("Discord", lambda: check_discord_config(local_env)))
 
     if not role_name:
         iam_checks = [("warn", "IAM role", "no function configured - nothing to check")]
     elif not aws_ok:
         iam_checks = [("warn", "IAM role", "skipped - AWS credentials not available")]
     else:
-        iam_checks = check_iam_role(session.client("iam"), role_name, defer_worker=defer_worker, ratelimit=ratelimit)
-    sections.append(("IAM", iam_checks))
+        iam_checks = wait(
+            "IAM",
+            lambda: check_iam_role(session.client("iam"), role_name, defer_worker=defer_worker, ratelimit=ratelimit),
+        )
+    _emit("IAM", iam_checks)
 
     if not function_name:
         lambda_checks = [("warn", "Deployed function", "no function configured - nothing to check")]
@@ -196,20 +209,23 @@ def run(function_name, role_name, region, defer_worker=None, crons=None, keep_wa
         from .deploy import ratelimit_table_name
 
         table_name = ratelimit_table_name(function_name) if ratelimit else None
-        lambda_checks = check_deployed_function(
-            session.client("lambda"),
-            session.client("apigatewayv2"),
-            session.client("events"),
-            session.client("dynamodb"),
-            function_name,
-            defer_worker,
-            crons or {},
-            keep_warm,
-            ratelimit,
-            table_name,
-            local_env,
+        lambda_checks = wait(
+            "Lambda",
+            lambda: check_deployed_function(
+                session.client("lambda"),
+                session.client("apigatewayv2"),
+                session.client("events"),
+                session.client("dynamodb"),
+                function_name,
+                defer_worker,
+                crons or {},
+                keep_warm,
+                ratelimit,
+                table_name,
+                local_env,
+            ),
         )
-    sections.append(("Lambda", lambda_checks))
+    _emit("Lambda", lambda_checks)
 
     ok = not any(severity == "fail" for _, checks in sections for severity, _, _ in checks)
     return sections, ok
@@ -223,9 +239,13 @@ def _mark(severity):
     return f"{_RED}✗{_RESET}"
 
 
+def print_section(title, checks):
+    print(f"\n  {_BOLD}{title}{_RESET}")
+    for severity, label, detail in checks:
+        print(f"    {_mark(severity)} {label}: {detail}")
+
+
 def print_report(sections):
     for title, checks in sections:
-        print(f"\n  {_BOLD}{title}{_RESET}")
-        for severity, label, detail in checks:
-            print(f"    {_mark(severity)} {label}: {detail}")
+        print_section(title, checks)
     print(f"\n  {_DIM}── done ──{_RESET}\n")

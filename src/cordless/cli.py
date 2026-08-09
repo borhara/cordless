@@ -521,7 +521,13 @@ def _doctor(args):
     bot = _load_bot(bot_target, path=source_dir) if bot_target else None
     crons = {name: entry["schedule"] for name, entry in bot.crons.items()} if bot else None
 
-    sections, ok = doctor.run(
+    from ._progress import _DIM, _RESET
+
+    def _print_as_it_goes(title, checks):
+        doctor.print_section(title, checks)
+        sys.stdout.flush()
+
+    _, ok = doctor.run(
         function_name=function_name,
         role_name=role_name,
         region=region,
@@ -530,8 +536,9 @@ def _doctor(args):
         keep_warm=keep_warm,
         ratelimit=ratelimit,
         local_env=local_env,
+        on_section=_print_as_it_goes,
     )
-    doctor.print_report(sections)
+    print(f"\n  {_DIM}── done ──{_RESET}\n")
     if not ok:
         raise SystemExit(1)
 

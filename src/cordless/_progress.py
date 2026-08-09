@@ -60,6 +60,37 @@ class Spinner:
             time.sleep(0.08)
 
 
+def wait(label, fn):
+    """Show an animated 'label...' spinner while fn() runs, then erase it -
+    no checkmark, since the outcome here isn't exception-shaped (a doctor
+    section can come back with failing checks without fn() itself raising),
+    so the caller prints its own per-check result lines right after."""
+    if not _tty or verbose:
+        print(f"  {label}...", flush=True)
+        return fn()
+
+    stop = threading.Event()
+
+    def _spin():
+        i = 0
+        while not stop.is_set():
+            frame = _FRAMES[i % len(_FRAMES)]
+            sys.stdout.write(f"\r  {_DIM}{frame}{_RESET} {label}...")
+            sys.stdout.flush()
+            i += 1
+            time.sleep(0.08)
+
+    thread = threading.Thread(target=_spin, daemon=True)
+    thread.start()
+    try:
+        return fn()
+    finally:
+        stop.set()
+        thread.join()
+        sys.stdout.write(f"\r{_ERASE_LINE}")
+        sys.stdout.flush()
+
+
 def success(message):
     if _tty:
         print(f"\n  {_BOLD}{_GREEN}✓{_RESET}  {message}\n")
