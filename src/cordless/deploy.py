@@ -74,9 +74,11 @@ _KNOWN_DEPLOY_KEYS = {
     "ratelimit",
     "endpoint",
     "keep-warm",
+    "log_retention",
 }
 
 _DEFAULT_KEEPWARM_SCHEDULE = "rate(5 minutes)"
+_DEFAULT_LOG_RETENTION_DAYS = 30
 
 
 def load_config(source_dir):
@@ -414,6 +416,19 @@ def _env_vars(env):
     return {"Variables": env or {}}
 
 
+def _ensure_log_retention(logs, function_name, days):
+    """Lambda's implicit log group otherwise defaults to never expire, so make
+    sure one exists and carries a retention policy. `days` of 0/None keeps that
+    never-expire default, for anyone who wants to opt back out."""
+    log_group = f"/aws/lambda/{function_name}"
+    try:
+        logs.create_log_group(logGroupName=log_group)
+    except logs.exceptions.ResourceAlreadyExistsException:
+        pass
+    if days:
+        logs.put_retention_policy(logGroupName=log_group, retentionInDays=days)
+
+
 def _create_function(
     lam,
     function_name,
@@ -671,6 +686,7 @@ def deploy(
     ratelimit=False,
     endpoint=None,
     keep_warm=None,
+    log_retention_days=_DEFAULT_LOG_RETENTION_DAYS,
 ):
     if not function_name:
         raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
@@ -683,6 +699,7 @@ def deploy(
     iam = session.client("iam")
     lam = session.client("lambda")
     apigw = session.client("apigatewayv2")
+    logs = session.client("logs")
     account_id = session.client("sts").get_caller_identity()["Account"]
 
     if architecture is None:
@@ -770,6 +787,7 @@ def deploy(
                     memory_size=memory,
                     architecture=architecture,
                 )
+            _ensure_log_retention(logs, function_name, log_retention_days)
 
         if endpoint == "function_url":
             with Spinner("function URL"):
@@ -811,6 +829,7 @@ def deploy(
                     )
                 # deferred handlers aren't idempotent, never let Lambda re-run them on error
                 lam.put_function_event_invoke_config(FunctionName=defer_worker, MaximumRetryAttempts=0)
+                _ensure_log_retention(logs, defer_worker, log_retention_days)
     finally:
         os.unlink(zip_path)
 

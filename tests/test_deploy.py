@@ -577,6 +577,28 @@ def test_deploy_is_idempotent(deploy_patches, monkeypatch):
 
 
 @mock_aws
+def test_deploy_sets_log_retention_by_default(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches))
+
+    logs = boto3.client("logs", region_name=REGION)
+    [group] = logs.describe_log_groups(logGroupNamePrefix="/aws/lambda/my-bot")["logGroups"]
+    assert group["retentionInDays"] == cordless.deploy._DEFAULT_LOG_RETENTION_DAYS
+
+
+@mock_aws
+def test_deploy_log_retention_zero_leaves_group_unset(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches, log_retention_days=0))
+
+    logs = boto3.client("logs", region_name=REGION)
+    [group] = logs.describe_log_groups(logGroupNamePrefix="/aws/lambda/my-bot")["logGroups"]
+    assert "retentionInDays" not in group
+
+
+@mock_aws
 def test_deploy_warns_when_pynacl_bundle_failed(deploy_patches, monkeypatch, capsys):
     import cordless.upload
 

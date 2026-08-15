@@ -155,7 +155,7 @@ def _upload(args):
 
 def _deploy(args):
     from . import _progress
-    from .deploy import deploy, load_config
+    from .deploy import _DEFAULT_LOG_RETENTION_DAYS, deploy, load_config
 
     _progress.verbose = args.verbose
 
@@ -225,6 +225,7 @@ def _deploy(args):
         ratelimit=bool(cfg.get("ratelimit", False)),
         endpoint=args.endpoint or cfg.get("endpoint"),
         keep_warm=cfg.get("keep-warm"),
+        log_retention_days=int(cfg.get("log_retention", _DEFAULT_LOG_RETENTION_DAYS)),
     )
 
     if args.register:
