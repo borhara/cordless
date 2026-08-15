@@ -41,9 +41,7 @@ def _make_role(iam, name="test-role"):
 
 
 def _attach_basic_policy(iam, role_name):
-    arn = iam.create_policy(PolicyName="AWSLambdaBasicExecutionRole", PolicyDocument=_BASIC_POLICY_DOC)["Policy"][
-        "Arn"
-    ]
+    arn = iam.create_policy(PolicyName="AWSLambdaBasicExecutionRole", PolicyDocument=_BASIC_POLICY_DOC)["Policy"]["Arn"]
     iam.attach_role_policy(RoleName=role_name, PolicyArn=arn)
 
 
@@ -66,9 +64,9 @@ def test_check_aws_credentials_ok():
 
 
 def test_check_aws_credentials_failure(monkeypatch):
-    monkeypatch.setattr("cordless._aws.get_session", lambda region, validate=True: (_ for _ in ()).throw(
-        SystemExit("no creds found")
-    ))
+    monkeypatch.setattr(
+        "cordless._aws.get_session", lambda region, validate=True: (_ for _ in ()).throw(SystemExit("no creds found"))
+    )
 
     ok, session, detail = check_aws_credentials(REGION)
 

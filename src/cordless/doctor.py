@@ -115,8 +115,8 @@ def check_env_drift(lam, function_name, local_env):
     and match/mismatch for secret-shaped keys - never the actual value."""
     checks = []
     try:
-        deployed_env = lam.get_function_configuration(FunctionName=function_name).get("Environment", {}).get(
-            "Variables", {}
+        deployed_env = (
+            lam.get_function_configuration(FunctionName=function_name).get("Environment", {}).get("Variables", {})
         )
     except Exception as exc:
         return [("fail", "Env var drift", f"could not verify ({exc})")]
@@ -143,8 +143,9 @@ def check_env_drift(lam, function_name, local_env):
     return checks
 
 
-def check_deployed_function(lam, apigw, events, dynamodb, function_name, defer_worker, crons, keep_warm, ratelimit,
-                             table_name, local_env):
+def check_deployed_function(
+    lam, apigw, events, dynamodb, function_name, defer_worker, crons, keep_warm, ratelimit, table_name, local_env
+):
     from .deploy import _function_exists, _has_api_gateway, _has_function_url, _health_check
 
     exists, _ = _function_exists(lam, function_name)
@@ -166,8 +167,17 @@ def check_deployed_function(lam, apigw, events, dynamodb, function_name, defer_w
     return checks
 
 
-def run(function_name, role_name, region, defer_worker=None, crons=None, keep_warm=None, ratelimit=False,
-        local_env=None, on_section=None):
+def run(
+    function_name,
+    role_name,
+    region,
+    defer_worker=None,
+    crons=None,
+    keep_warm=None,
+    ratelimit=False,
+    local_env=None,
+    on_section=None,
+):
     """Run every diagnostic check, one section at a time. Returns (sections, ok):
     `sections` is [(title, [(severity, label, detail), ...]), ...] for
     printing; `ok` is False if any check came back "fail" (warnings alone
