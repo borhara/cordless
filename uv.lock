@@ -266,7 +266,7 @@ wheels = [
 
 [[package]]
 name = "cordless"
-version = "1.4.6"
+version = "1.4.7"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
