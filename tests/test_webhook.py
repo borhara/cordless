@@ -1,11 +1,17 @@
 """Webhook support: URL parsing, payload building, and the execute/edit/delete/manage flows."""
 
 import json
+from unittest.mock import patch
 
 import pytest
+from conftest import FakeDiscordResponse
 
 import cordless.webhook
 from cordless.app import Cordless
+
+
+def _urlopen(responses):
+    return patch("cordless._rest._client.urllib.request.urlopen", side_effect=responses)
 
 # --- parse_webhook_url ---
 
@@ -330,44 +336,44 @@ def test_execute_webhook_returns_none_without_wait(monkeypatch):
 # --- Cordless.create_webhook / get_channel_webhooks / delete_webhook (bot-token) ---
 
 
-def test_create_webhook_posts_to_channel_webhooks_endpoint(monkeypatch, fake_app_conn):
+def test_create_webhook_posts_to_channel_webhooks_endpoint(monkeypatch):
     import asyncio
 
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "bot-tok")
-    fake_app_conn.responses = [(200, {}, json.dumps({"id": "wh-1", "token": "wh-tok"}).encode())]
 
-    bot = Cordless()
-    result = asyncio.run(bot.create_webhook("chan-1", "Alerts"))
+    with _urlopen([FakeDiscordResponse({"id": "wh-1", "token": "wh-tok"})]) as urlopen:
+        bot = Cordless()
+        result = asyncio.run(bot.create_webhook("chan-1", "Alerts"))
 
     assert result == {"id": "wh-1", "token": "wh-tok"}
-    sent = fake_app_conn.requests[0]
-    assert sent["path"] == "/api/v10/channels/chan-1/webhooks"
-    assert sent["headers"]["Authorization"] == "Bot bot-tok"
-    assert json.loads(sent["body"]) == {"name": "Alerts"}
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/channels/chan-1/webhooks"
+    assert req.get_header("Authorization") == "Bot bot-tok"
+    assert json.loads(req.data) == {"name": "Alerts"}
 
 
-def test_get_channel_webhooks_lists_channel_webhooks(monkeypatch, fake_app_conn):
+def test_get_channel_webhooks_lists_channel_webhooks(monkeypatch):
     import asyncio
 
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "bot-tok")
-    fake_app_conn.responses = [(200, {}, json.dumps([{"id": "wh-1"}, {"id": "wh-2"}]).encode())]
 
-    bot = Cordless()
-    result = asyncio.run(bot.get_channel_webhooks("chan-1"))
+    with _urlopen([FakeDiscordResponse([{"id": "wh-1"}, {"id": "wh-2"}])]) as urlopen:
+        bot = Cordless()
+        result = asyncio.run(bot.get_channel_webhooks("chan-1"))
 
     assert result == [{"id": "wh-1"}, {"id": "wh-2"}]
-    assert fake_app_conn.requests[0]["path"] == "/api/v10/channels/chan-1/webhooks"
+    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/chan-1/webhooks"
 
 
-def test_delete_webhook_without_token_uses_bot_auth(monkeypatch, fake_app_conn):
+def test_delete_webhook_without_token_uses_bot_auth(monkeypatch):
     import asyncio
 
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "bot-tok")
-    fake_app_conn.responses = [(200, {}, b"")]
 
-    bot = Cordless()
-    asyncio.run(bot.delete_webhook("wh-1"))
+    with _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        bot = Cordless()
+        asyncio.run(bot.delete_webhook("wh-1"))
 
-    sent = fake_app_conn.requests[0]
-    assert sent["path"] == "/api/v10/webhooks/wh-1"
-    assert sent["headers"]["Authorization"] == "Bot bot-tok"
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/webhooks/wh-1"
+    assert req.get_header("Authorization") == "Bot bot-tok"

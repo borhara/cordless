@@ -6,6 +6,7 @@ from typing import Literal
 from unittest.mock import patch
 
 import pytest
+from conftest import FakeDiscordResponse, make_http_error
 
 from cordless import Cog
 from cordless.app import Cordless, options_from_signature
@@ -700,77 +701,57 @@ def test_edit_message_over_content_limit_raises_without_request():
     fake_request.assert_not_called()
 
 
-def test_discord_request_attaches_files_metadata_and_builds_multipart(fake_app_conn):
+def _urlopen(responses):
+    return patch("cordless._rest._client.urllib.request.urlopen", side_effect=responses)
+
+
+def test_discord_request_attaches_files_metadata_and_builds_multipart():
     import os
 
-    fake_app_conn.responses = [(200, {}, b"{}")]
-
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen([FakeDiscordResponse({})]) as urlopen:
         bot = Cordless()
         bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}, [("board.png", b"\x89PNG...")])
 
-    sent = fake_app_conn.requests[0]
-    assert sent["headers"]["Content-Type"].startswith("multipart/form-data; boundary=")
-    assert b'name="files[0]"; filename="board.png"' in sent["body"]
-    assert b'name="payload_json"' in sent["body"]
-    assert b'"attachments": [{"id": 0, "filename": "board.png"}]' in sent["body"]
+    req = urlopen.call_args.args[0]
+    assert req.get_header("Content-type").startswith("multipart/form-data; boundary=")
+    assert b'name="files[0]"; filename="board.png"' in req.data
+    assert b'name="payload_json"' in req.data
+    assert b'"attachments": [{"id": 0, "filename": "board.png"}]' in req.data
 
 
-def test_discord_request_reconnects_when_kept_alive_connection_is_dropped(fake_app_conn, monkeypatch):
-    """A warm connection reused across invocations can get closed by Discord's
-    end between requests - _send_discord_request must close it, open a fresh
-    one, and retry the same request once rather than blowing up."""
-    import os
-
-    import cordless.app
-
-    monkeypatch.setattr(cordless.app, "_conn", fake_app_conn("discord.com"))
-    fake_app_conn.raise_once = OSError("connection reset by peer")
-    fake_app_conn.responses = [(200, {}, b"{}")]
-
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}):
-        bot = Cordless()
-        data = bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
-
-    assert data == b"{}"
-    assert fake_app_conn.close_calls == 1
-    assert len(fake_app_conn.requests) == 1  # only the retried request actually went through
-
-
-def test_discord_request_checks_ratelimit_before_sending(fake_app_conn, monkeypatch):
+def test_discord_request_checks_ratelimit_before_sending(monkeypatch):
     import os
 
     import cordless.ratelimit as ratelimit
 
     calls = []
     monkeypatch.setattr(ratelimit, "wait_if_needed", lambda method, path: calls.append((method, path)))
-    fake_app_conn.responses = [(200, {}, b"{}")]
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen([FakeDiscordResponse({})]):
         bot = Cordless()
         bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
 
     assert calls == [("POST", "/channels/123/messages")]
 
 
-def test_discord_request_records_response_headers_on_success(fake_app_conn, monkeypatch):
+def test_discord_request_records_response_headers_on_success(monkeypatch):
     import os
 
     import cordless.ratelimit as ratelimit
 
     recorded = []
     monkeypatch.setattr(ratelimit, "record_response", lambda method, path, headers: recorded.append(headers))
-    resp_headers = {"X-RateLimit-Remaining": "4", "X-RateLimit-Reset-After": "1"}
-    fake_app_conn.responses = [(200, resp_headers, b"{}")]
+    resp = FakeDiscordResponse({})
+    resp.headers = {"X-RateLimit-Remaining": "4", "X-RateLimit-Reset-After": "1"}
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen([resp]):
         bot = Cordless()
         bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
 
-    assert recorded == [resp_headers]
+    assert recorded == [resp.headers]
 
 
-def test_discord_request_retries_once_on_429_then_succeeds(fake_app_conn, monkeypatch):
+def test_discord_request_retries_once_on_429_then_succeeds(monkeypatch):
     import os
     import time
 
@@ -779,12 +760,12 @@ def test_discord_request_retries_once_on_429_then_succeeds(fake_app_conn, monkey
     blocked = []
     monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: blocked.append(retry_after))
     monkeypatch.setattr(time, "sleep", lambda s: None)
-    fake_app_conn.responses = [
-        (429, {}, json.dumps({"retry_after": 0.2}).encode()),
-        (200, {}, b"{}"),
+    responses = [
+        make_http_error(429, json.dumps({"retry_after": 0.2}).encode()),
+        FakeDiscordResponse({}),
     ]
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
         bot = Cordless()
         result = bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
 
@@ -792,7 +773,7 @@ def test_discord_request_retries_once_on_429_then_succeeds(fake_app_conn, monkey
     assert blocked == [0.2]
 
 
-def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(fake_app_conn, monkeypatch):
+def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(monkeypatch):
     """wait_if_needed must run before every attempt, not just the first - otherwise a
     sibling call's note_blocked() from a moment ago is never consulted before retrying."""
     import os
@@ -804,19 +785,19 @@ def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(fake_app_conn,
     monkeypatch.setattr(ratelimit, "wait_if_needed", lambda method, path: waits.append((method, path)))
     monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: None)
     monkeypatch.setattr(time, "sleep", lambda s: None)
-    fake_app_conn.responses = [
-        (429, {}, json.dumps({"retry_after": 0.1}).encode()),
-        (200, {}, b"{}"),
+    responses = [
+        make_http_error(429, json.dumps({"retry_after": 0.1}).encode()),
+        FakeDiscordResponse({}),
     ]
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
         bot = Cordless()
         bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
 
     assert waits == [("POST", "/channels/123/messages"), ("POST", "/channels/123/messages")]
 
 
-def test_discord_request_gives_up_after_retry_budget_exhausted(fake_app_conn, monkeypatch):
+def test_discord_request_gives_up_after_retry_budget_exhausted(monkeypatch):
     import os
     import time
 
@@ -830,10 +811,11 @@ def test_discord_request_gives_up_after_retry_budget_exhausted(fake_app_conn, mo
         return clock[0]
 
     monkeypatch.setattr(time, "monotonic", fake_monotonic)
-    fake_app_conn.responses = [(429, {}, b'{"retry_after": 0.1}')] * 5
+    responses = [make_http_error(429, b'{"retry_after": 0.1}')] * 5
 
     with (
         patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
+        _urlopen(responses),
         pytest.raises(RuntimeError, match="429"),
     ):
         bot = Cordless()
