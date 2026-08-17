@@ -117,12 +117,13 @@ class StringSelect:
 class _EntitySelect:
     _type = None
 
-    def __init__(self, custom_id, placeholder=None, min_values=1, max_values=1, disabled=False):
+    def __init__(self, custom_id, placeholder=None, min_values=1, max_values=1, disabled=False, default_values=None):
         self.custom_id = custom_id
         self.placeholder = placeholder
         self.min_values = min_values
         self.max_values = max_values
         self.disabled = disabled
+        self.default_values = default_values
 
     def to_dict(self):
         d = {
@@ -135,23 +136,31 @@ class _EntitySelect:
             d["placeholder"] = self.placeholder
         if self.disabled:
             d["disabled"] = True
+        if self.default_values is not None:
+            d["default_values"] = self.default_values
         return d
 
 
 class UserSelect(_EntitySelect):
-    """A select menu populated with the guild's members, resolved by Discord."""
+    """A select menu populated with the guild's members, resolved by
+    Discord. `default_values` pre-selects entries: a list of
+    `{"id": ..., "type": "user"}` dicts."""
 
     _type = 5
 
 
 class RoleSelect(_EntitySelect):
-    """A select menu populated with the guild's roles, resolved by Discord."""
+    """A select menu populated with the guild's roles, resolved by
+    Discord. `default_values` pre-selects entries: a list of
+    `{"id": ..., "type": "role"}` dicts."""
 
     _type = 6
 
 
 class MentionableSelect(_EntitySelect):
-    """A select menu populated with both members and roles, resolved by Discord."""
+    """A select menu populated with both members and roles, resolved by
+    Discord. `default_values` pre-selects entries: a list of
+    `{"id": ..., "type": "user"|"role"}` dicts."""
 
     _type = 7
 
@@ -159,12 +168,22 @@ class MentionableSelect(_EntitySelect):
 class ChannelSelect(_EntitySelect):
     """A select menu populated with the guild's channels, resolved by
     Discord. `channel_types` is a list of Discord channel type ints, e.g.
-    `[0, 2]` for text + voice."""
+    `[0, 2]` for text + voice. `default_values` pre-selects entries: a list
+    of `{"id": ..., "type": "channel"}` dicts."""
 
     _type = 8
 
-    def __init__(self, custom_id, channel_types=None, placeholder=None, min_values=1, max_values=1, disabled=False):
-        super().__init__(custom_id, placeholder, min_values, max_values, disabled)
+    def __init__(
+        self,
+        custom_id,
+        channel_types=None,
+        placeholder=None,
+        min_values=1,
+        max_values=1,
+        disabled=False,
+        default_values=None,
+    ):
+        super().__init__(custom_id, placeholder, min_values, max_values, disabled, default_values)
         self.channel_types = channel_types
 
     def to_dict(self):

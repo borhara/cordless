@@ -114,6 +114,16 @@ def test_channel_select():
     assert d["channel_types"] == [0, 2]
 
 
+def test_entity_select_default_values():
+    d = UserSelect("u", default_values=[{"id": "123", "type": "user"}]).to_dict()
+    assert d["default_values"] == [{"id": "123", "type": "user"}]
+
+
+def test_channel_select_default_values():
+    d = ChannelSelect("ch", channel_types=[0], default_values=[{"id": "456", "type": "channel"}]).to_dict()
+    assert d["default_values"] == [{"id": "456", "type": "channel"}]
+
+
 # --- TextInput / Modal ---
 
 
