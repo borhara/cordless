@@ -599,34 +599,23 @@ def test_deploy_log_retention_zero_leaves_group_unset(deploy_patches, monkeypatc
 
 
 @mock_aws
-def test_deploy_warns_when_pynacl_bundle_failed(deploy_patches, monkeypatch, capsys):
-    import cordless.upload
-
+def test_deploy_fails_when_pynacl_bundle_fails(deploy_patches, monkeypatch):
     iam = boto3.client("iam", region_name=REGION)
     monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
-    cordless.upload.pynacl_bundle_failed = False
 
-    def _fresh_zip_with_pynacl_failure(*a, **kw):
-        cordless.upload.pynacl_bundle_failed = True
-        return _minimal_zip(deploy_patches)
+    def _boom(*a, **kw):
+        raise RuntimeError("no matching wheel")
 
-    monkeypatch.setattr(cordless.deploy, "build_function_zip", _fresh_zip_with_pynacl_failure)
+    monkeypatch.setattr(cordless.deploy, "build_function_zip", _boom)
 
-    url = deploy(**_base_deploy_kwargs(deploy_patches))
-
-    assert url  # deploy must still succeed, not raise
-    out = capsys.readouterr().out
-    assert "Signature verification: pure-Python Ed25519 (slower than pynacl)" in out
-    assert "⚠" in out
+    with pytest.raises(RuntimeError):
+        deploy(**_base_deploy_kwargs(deploy_patches))
 
 
 @mock_aws
-def test_deploy_summary_shows_pynacl_when_bundled(deploy_patches, monkeypatch, capsys):
-    import cordless.upload
-
+def test_deploy_summary_shows_pynacl(deploy_patches, monkeypatch, capsys):
     iam = boto3.client("iam", region_name=REGION)
     monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
-    cordless.upload.pynacl_bundle_failed = False
 
     deploy(**_base_deploy_kwargs(deploy_patches))
 

@@ -5,15 +5,7 @@ import zipfile
 
 import pytest
 
-import cordless.upload
 from cordless.deploy import _packages_cache_dir, build_function_zip, load_config
-
-
-@pytest.fixture(autouse=True)
-def _reset_pynacl_bundle_failed():
-    cordless.upload.pynacl_bundle_failed = False
-    yield
-    cordless.upload.pynacl_bundle_failed = False
 
 
 def _zip_names(zip_path):
@@ -184,26 +176,25 @@ def test_bundle_cordless_does_not_double_write_when_packages_overlaps_extras(tmp
         os.unlink(zip_path)
 
 
-def test_bundle_cordless_survives_pynacl_fetch_failure(tmp_path, monkeypatch):
+def test_bundle_cordless_fails_when_pynacl_fetch_fails(tmp_path, monkeypatch):
     import cordless.deploy
     import cordless.upload
 
     pkg_dir = tmp_path / "site-packages" / "cordless"
     _make_tree(pkg_dir, ["app.py", "__init__.py"])
     monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
-    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": None)
+
+    def boom(v, arch="x86_64"):
+        raise RuntimeError("no matching wheel")
+
+    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", boom)
 
     src = tmp_path / "src"
     src.mkdir()
     (src / "lambda_function.py").write_text("x")
 
-    zip_path = cordless.deploy.build_function_zip(str(src), bundle_cordless=True)
-    try:
-        names = _zip_names(zip_path)
-        assert any(n.startswith("cordless/") for n in names)
-        assert not any("/nacl/" in n or n.startswith("nacl/") for n in names)
-    finally:
-        os.unlink(zip_path)
+    with pytest.raises(RuntimeError):
+        cordless.deploy.build_function_zip(str(src), bundle_cordless=True)
 
 
 def test_bundle_cordless_includes_egg_info(tmp_path, monkeypatch):
@@ -334,21 +325,19 @@ def test_layer_zip_does_not_double_write_overlapping_names(tmp_path, monkeypatch
         os.unlink(zip_path)
 
 
-def test_layer_zip_survives_pynacl_fetch_failure(monkeypatch):
+def test_layer_zip_fails_when_pynacl_fetch_fails(monkeypatch):
     import cordless.upload
 
-    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": None)
+    def boom(v, arch="x86_64"):
+        raise RuntimeError("no matching wheel")
 
-    zip_path = cordless.upload.build_layer_zip("3.12")
-    try:
-        names = _zip_names(zip_path)
-        assert any(n.startswith("python/cordless/") for n in names)
-        assert not any("/nacl/" in n for n in names)
-    finally:
-        os.unlink(zip_path)
+    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", boom)
+
+    with pytest.raises(RuntimeError):
+        cordless.upload.build_layer_zip("3.12")
 
 
-def test_layer_extras_dir_returns_none_when_fetch_fails(monkeypatch):
+def test_layer_extras_dir_raises_when_fetch_fails(monkeypatch):
     import cordless.deploy
     import cordless.upload
 
@@ -357,8 +346,8 @@ def test_layer_extras_dir_returns_none_when_fetch_fails(monkeypatch):
 
     monkeypatch.setattr(cordless.deploy, "_ensure_packages", boom)
 
-    assert cordless.upload._layer_extras_dir("3.12") is None
-    assert cordless.upload.pynacl_bundle_failed is True
+    with pytest.raises(RuntimeError):
+        cordless.upload._layer_extras_dir("3.12")
 
 
 def test_layer_zip_without_runtime_skips_extras(monkeypatch):
