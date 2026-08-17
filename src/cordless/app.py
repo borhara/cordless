@@ -165,6 +165,8 @@ def option(
     min_length=None,
     max_length=None,
     channel_types=None,
+    name_localizations=None,
+    description_localizations=None,
 ):
     """Build a Discord application command option dict, for `@bot.command(options=[...])`.
 
@@ -177,6 +179,8 @@ def option(
     | `min_value` / `max_value` | Bounds for `integer`/`number` options |
     | `min_length` / `max_length` | Length bounds for `string` options |
     | `channel_types` | Restrict a `channel` option to specific Discord channel type ints, e.g. `[0, 2]` for text + voice |
+    | `name_localizations` | `{locale: name}` dict for this option's per-locale name, e.g. `{"es-ES": "cantidad"}` |
+    | `description_localizations` | `{locale: description}` dict, same shape as `name_localizations` |
     """
     if isinstance(type, str) and type not in _OPTION_TYPES:
         raise ValueError(f"Unknown option type {type!r}: expected one of {', '.join(_OPTION_TYPES)}")
@@ -201,6 +205,10 @@ def option(
         opt["max_length"] = max_length
     if channel_types is not None:
         opt["channel_types"] = channel_types
+    if name_localizations is not None:
+        opt["name_localizations"] = name_localizations
+    if description_localizations is not None:
+        opt["description_localizations"] = description_localizations
     return opt
 
 

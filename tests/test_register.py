@@ -216,6 +216,16 @@ def test_option_channel_types():
     assert o["channel_types"] == [0, 2]
 
 
+def test_option_localizations():
+    o = option(
+        "amount",
+        name_localizations={"es-ES": "cantidad"},
+        description_localizations={"es-ES": "La cantidad"},
+    )
+    assert o["name_localizations"] == {"es-ES": "cantidad"}
+    assert o["description_localizations"] == {"es-ES": "La cantidad"}
+
+
 def test_option_raises_for_unknown_type_alias():
     with pytest.raises(ValueError, match="strnig"):
         option("x", type="strnig")
