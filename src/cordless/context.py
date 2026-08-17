@@ -16,6 +16,8 @@ _FLAG_EPHEMERAL = 64
 _FLAG_UI_KIT = 32768
 
 _MAX_CONTENT_LENGTH = 2000
+_MAX_UIKIT_COMPONENTS = 40
+_MAX_UIKIT_TEXT_LENGTH = 4000
 
 
 # Components v2 types: Section, TextDisplay, Thumbnail, MediaGallery, File, Separator, Container
@@ -40,6 +42,46 @@ def _contains_uikit(components):
     return False
 
 
+def _count_components(components):
+    """Discord counts every component in the tree toward the 40-component
+    cap, including ones nested inside a Container/Section/ActionRow and a
+    Section's accessory."""
+    if not components:
+        return 0
+    total = 0
+    for c in components:
+        total += 1
+        if isinstance(c, dict):
+            total += _count_components(c.get("components"))
+            if c.get("accessory") is not None:
+                total += 1
+        else:
+            if hasattr(c, "components"):
+                total += _count_components(c.components)
+            if getattr(c, "accessory", None) is not None:
+                total += 1
+    return total
+
+
+def _uikit_text_length(components):
+    """Sum of every TextDisplay's content, which Discord caps at 4000
+    characters total across the whole message."""
+    if not components:
+        return 0
+    total = 0
+    for c in components:
+        if isinstance(c, dict):
+            if c.get("type") == 10:
+                total += len(c.get("content") or "")
+            total += _uikit_text_length(c.get("components"))
+        else:
+            if hasattr(c, "content") and not hasattr(c, "components"):
+                total += len(c.content or "")
+            if hasattr(c, "components"):
+                total += _uikit_text_length(c.components)
+    return total
+
+
 def _leaf_options(data):
     """Descend through subcommand/group wrappers to the actual value options."""
     options = data.get("options", [])
@@ -61,7 +103,22 @@ def _validate_content_length(content):
 
 def _build_message_data(msg, content, embeds, components, ephemeral=False, allowed_mentions=None):
     _content = content if content is not None else msg
-    _validate_content_length(_content)
+    is_uikit = _contains_uikit(components)
+    if is_uikit:
+        if _content is not None or embeds is not None:
+            raise ValueError("Components v2 messages can't also set content or embeds, use TextDisplay/Container instead")
+        count = _count_components(components)
+        if count > _MAX_UIKIT_COMPONENTS:
+            raise ValueError(f"Message has {count} components, which exceeds Discord's {_MAX_UIKIT_COMPONENTS}-component limit")
+        text_length = _uikit_text_length(components)
+        if text_length > _MAX_UIKIT_TEXT_LENGTH:
+            raise MessageTooLongError(
+                f"Components v2 text totals {text_length} characters, which exceeds "
+                f"Discord's {_MAX_UIKIT_TEXT_LENGTH}-character limit"
+            )
+    else:
+        _validate_content_length(_content)
+
     data = {}
     if _content is not None:
         data["content"] = _content
@@ -75,7 +132,7 @@ def _build_message_data(msg, content, embeds, components, ephemeral=False, allow
     flags = 0
     if ephemeral:
         flags |= _FLAG_EPHEMERAL
-    if _contains_uikit(components):
+    if is_uikit:
         flags |= _FLAG_UI_KIT
     if flags:
         data["flags"] = flags

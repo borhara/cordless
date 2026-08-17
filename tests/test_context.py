@@ -85,6 +85,31 @@ def test_send_uikit_and_ephemeral_combines_flags():
     assert json.loads(ctx.response["body"])["data"]["flags"] == (32768 | 64)
 
 
+def test_send_uikit_rejects_content():
+    ctx = _make_ctx()
+    with pytest.raises(ValueError, match="content or embeds"):
+        run(ctx.send("hello", components=[Container([TextDisplay("Hi")])]))
+
+
+def test_send_uikit_rejects_embeds():
+    ctx = _make_ctx()
+    with pytest.raises(ValueError, match="content or embeds"):
+        run(ctx.send(components=[Container([TextDisplay("Hi")])], embeds=[Embed(title="Hi")]))
+
+
+def test_send_uikit_rejects_more_than_forty_components():
+    ctx = _make_ctx()
+    displays = [TextDisplay(str(i)) for i in range(41)]
+    with pytest.raises(ValueError, match="40-component limit"):
+        run(ctx.send(components=[Container(displays)]))
+
+
+def test_send_uikit_rejects_text_over_four_thousand_characters():
+    ctx = _make_ctx()
+    with pytest.raises(MessageTooLongError, match="4000-character limit"):
+        run(ctx.send(components=[Container([TextDisplay("x" * 4001)])]))
+
+
 # --- send with embeds / components ---
 
 
