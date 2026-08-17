@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/github/license/borhara/cordless)](https://github.com/borhara/cordless/blob/main/LICENSE)
 [![Python versions](https://img.shields.io/pypi/pyversions/cordless)](https://pypi.org/project/cordless/)
 
-Build Discord bots that run on AWS Lambda. Discord sends a request, Lambda wakes up, your handler runs, Lambda goes back to sleep. No server to keep alive, no idle cost.
+Build a production Discord bot without running a bot server. Discord sends a request, AWS Lambda wakes up, your handler runs, and it goes back to sleep. No process to keep alive, no idle cost.
 
 ```python
 import os
