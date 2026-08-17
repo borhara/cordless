@@ -258,6 +258,11 @@ class Router:
                     result = await result
                 response = result if result is not None else ctx.response
                 if response is not None:
+                    # a shared error handler that falls back to ctx.send() would
+                    # otherwise hand Discord a message-type response for an
+                    # autocomplete interaction, which it rejects outright
+                    if interaction["type"] == APPLICATION_COMMAND_AUTOCOMPLETE and ctx._response_kind != "autocomplete":
+                        return await ctx.respond_autocomplete([])
                     return response
             raise
 

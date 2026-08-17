@@ -140,6 +140,7 @@ class Context:
     def __init__(self, interaction, *, _worker_mode=False):
         self.interaction = interaction
         self.response = None
+        self._response_kind = None
         self._worker_mode = _worker_mode
 
         data = interaction.get("data", {})
@@ -321,6 +322,7 @@ class Context:
         """The manual piece underneath an `@bot.autocomplete` handler's
         returned list. You don't normally call this yourself."""
         self.response = _response({"type": _AUTOCOMPLETE_RESULT, "data": {"choices": choices}})
+        self._response_kind = "autocomplete"
         return self.response
 
 

@@ -719,6 +719,66 @@ def test_error_handler_catches_exception():
     assert "Error: test error" in _body(result)["data"]["content"]
 
 
+def test_error_handler_message_response_falls_back_to_empty_autocomplete():
+    """A shared @bot.error handler that calls ctx.send() would otherwise hand
+    Discord a message-type response for an autocomplete interaction, which
+    Discord rejects outright, so the router must not let that through."""
+    bot = Cordless()
+
+    @bot.command("search", description="Search")
+    async def search(ctx):
+        await ctx.send("results")
+
+    @bot.autocomplete("search", "query")
+    async def search_autocomplete(ctx):
+        raise ValueError("boom")
+
+    @bot.error
+    async def on_error(ctx, exc):
+        return await ctx.send(f"Error: {exc}")
+
+    result = _handle(
+        bot,
+        {
+            "type": 4,
+            "id": "1",
+            "token": "tok",
+            "data": {"name": "search", "options": [{"name": "query", "value": "fo", "focused": True}]},
+        },
+    )
+    body = _body(result)
+    assert body["type"] == 8
+    assert body["data"]["choices"] == []
+
+
+def test_error_handler_respond_autocomplete_is_respected():
+    bot = Cordless()
+
+    @bot.command("search", description="Search")
+    async def search(ctx):
+        await ctx.send("results")
+
+    @bot.autocomplete("search", "query")
+    async def search_autocomplete(ctx):
+        raise ValueError("boom")
+
+    @bot.error
+    async def on_error(ctx, exc):
+        return await ctx.respond_autocomplete([{"name": "fallback", "value": "fallback"}])
+
+    result = _handle(
+        bot,
+        {
+            "type": 4,
+            "id": "1",
+            "token": "tok",
+            "data": {"name": "search", "options": [{"name": "query", "value": "fo", "focused": True}]},
+        },
+    )
+    body = _body(result)
+    assert body["data"]["choices"] == [{"name": "fallback", "value": "fallback"}]
+
+
 # --- Permission guard ---
 
 
