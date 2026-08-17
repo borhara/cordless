@@ -50,8 +50,6 @@ The current feature surface, for orientation:
 
 ## Planned next
 
-- Guild-level command permission overwrites (Discord's `/permissions` API),
-  as a complement to the existing `default_member_permissions` bitfield.
 - Rough cost visibility in `cordless deploy`/`cordless logs` output (Lambda
   invocations, plus DynamoDB if rate limiting is enabled), so "serverless"
   doesn't mean "opaque."
@@ -88,6 +86,14 @@ The current feature surface, for orientation:
   explicitly separate always-on component, but not on the near-term roadmap.
 - **Sharding.** cordless bots don't hold a gateway connection, so the scaling
   problem sharding solves doesn't apply here.
+- **Guild-level command permission overwrites.** Discord only accepts these
+  from an OAuth2 authorization-code Bearer token tied to a real admin user,
+  a bot token or the client-credentials grant cordless uses everywhere else
+  is rejected outright. That makes it a one-off, per-guild, per-admin action
+  rather than something a `cordless deploy` step can automate. Discord's own
+  Server Settings UI already covers this per guild with no bot involvement,
+  which is the intended path. `default_member_permissions` (already
+  supported) remains the way to gate a command from code.
 
 ---
 
