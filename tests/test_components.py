@@ -1,5 +1,7 @@
 """Unit tests for component builders and embed helpers."""
 
+import pytest
+
 from cordless import (
     ActionRow,
     Button,
@@ -68,6 +70,16 @@ def test_action_row_wraps_buttons():
     d = ActionRow([Button("A", custom_id="a"), Button("B", custom_id="b")]).to_dict()
     assert d["type"] == 1
     assert len(d["components"]) == 2
+
+
+def test_action_row_rejects_more_than_five_buttons():
+    with pytest.raises(ValueError, match="at most 5 buttons"):
+        ActionRow([Button(str(i), custom_id=str(i)) for i in range(6)])
+
+
+def test_action_row_rejects_select_alongside_other_components():
+    with pytest.raises(ValueError, match="single select menu"):
+        ActionRow([StringSelect("s", [SelectOption("One", "1")]), Button("A", custom_id="a")])
 
 
 # --- StringSelect ---

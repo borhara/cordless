@@ -72,10 +72,17 @@ class Button:
 
 
 class ActionRow:
-    """Wraps up to 5 buttons or 1 select."""
+    """Wraps up to 5 buttons, or exactly 1 select (Discord doesn't allow a
+    select menu to share a row with anything else)."""
 
     def __init__(self, components):
-        self.components = list(components)
+        components = list(components)
+        if any(isinstance(c, (StringSelect, _EntitySelect)) for c in components):
+            if len(components) > 1:
+                raise ValueError("An ActionRow can only hold a single select menu, not alongside other components")
+        elif len(components) > 5:
+            raise ValueError(f"An ActionRow can hold at most 5 buttons, got {len(components)}")
+        self.components = components
 
     def to_dict(self):
         return {"type": 1, "components": [c.to_dict() for c in self.components]}
