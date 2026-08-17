@@ -11,6 +11,7 @@ from cordless import (
     Embed,
     EmbedField,
     File,
+    Label,
     MediaGallery,
     MentionableSelect,
     Modal,
@@ -143,6 +144,18 @@ def test_modal_wraps_text_inputs_in_action_rows():
 def test_modal_accepts_pre_wrapped_action_rows():
     d = Modal("m", "Title", ActionRow([TextInput("q", "Question")])).to_dict()
     assert d["components"][0]["type"] == 1
+
+
+def test_modal_wraps_select_menu_in_label():
+    d = Modal("m", "Title", Label("Pick one", StringSelect("s", [SelectOption("One", "1")]))).to_dict()
+    assert d["components"][0]["type"] == 18
+    assert d["components"][0]["label"] == "Pick one"
+    assert d["components"][0]["component"]["type"] == 3
+
+
+def test_label_includes_description():
+    d = Label("Pick one", StringSelect("s", [SelectOption("One", "1")]), description="Choose wisely").to_dict()
+    assert d["description"] == "Choose wisely"
 
 
 # --- Embed ---

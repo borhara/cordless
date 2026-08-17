@@ -233,8 +233,27 @@ class TextInput:
         return d
 
 
+class Label:
+    """Wraps a single select menu (or `TextInput`) in a `Modal` with a
+    label, Discord's required container for anything other than a plain
+    `TextInput` in an `ActionRow`."""
+
+    def __init__(self, label, component, description=None):
+        self.label = label
+        self.component = component
+        self.description = description
+
+    def to_dict(self):
+        d = {"type": 18, "label": self.label, "component": self.component.to_dict()}
+        if self.description is not None:
+            d["description"] = self.description
+        return d
+
+
 class Modal:
-    """Takes up to 5 `TextInput`s (each wrapped in its own row automatically)."""
+    """Takes up to 5 `TextInput`s (each wrapped in its own row automatically).
+    Select menus aren't valid inside an `ActionRow` in a modal, wrap them in
+    a `Label` first: `Modal("m", "Title", Label("Pick one", StringSelect(...)))`."""
 
     def __init__(self, custom_id, title, *components):
         self.custom_id = custom_id
@@ -244,7 +263,7 @@ class Modal:
     def to_dict(self):
         rows = []
         for c in self.components:
-            if isinstance(c, ActionRow):
+            if isinstance(c, (ActionRow, Label)):
                 rows.append(c.to_dict())
             else:
                 rows.append(ActionRow([c]).to_dict())
