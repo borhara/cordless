@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 from conftest import FakeDiscordResponse
 
-from cordless.app import Cordless, option
+from cordless.app import Cordless, choice, option
 from cordless.register import sync_commands
 
 # --- command_definitions ---
@@ -224,6 +224,20 @@ def test_option_localizations():
     )
     assert o["name_localizations"] == {"es-ES": "cantidad"}
     assert o["description_localizations"] == {"es-ES": "La cantidad"}
+
+
+def test_choice_minimal():
+    assert choice("Red", "red") == {"name": "Red", "value": "red"}
+
+
+def test_choice_with_localizations():
+    c = choice("Red", "red", name_localizations={"es-ES": "Rojo"})
+    assert c["name_localizations"] == {"es-ES": "Rojo"}
+
+
+def test_option_accepts_choices_built_with_choice():
+    o = option("color", choices=[choice("Red", "red", name_localizations={"es-ES": "Rojo"})])
+    assert o["choices"] == [{"name": "Red", "value": "red", "name_localizations": {"es-ES": "Rojo"}}]
 
 
 def test_option_raises_for_unknown_type_alias():

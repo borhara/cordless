@@ -610,6 +610,40 @@ def test_subcommand_group_description_can_be_set_explicitly():
     assert group["description"] == "Manage users"
 
 
+def test_subcommand_group_localizations_can_be_set_explicitly():
+    bot = Cordless()
+
+    @bot.command(
+        "admin/users/ban",
+        description="Ban a user",
+        group_name_localizations={"es-ES": "usuarios"},
+        group_description_localizations={"es-ES": "Gestionar usuarios"},
+    )
+    async def ban(ctx):
+        pass
+
+    parent = next(d for d in bot.router.command_definitions() if d["name"] == "admin")
+    group = next(o for o in parent["options"] if o["name"] == "users")
+    assert group["name_localizations"] == {"es-ES": "usuarios"}
+    assert group["description_localizations"] == {"es-ES": "Gestionar usuarios"}
+
+
+def test_parent_name_localizations_can_be_set_explicitly():
+    bot = Cordless()
+
+    @bot.command(
+        "shop/buy",
+        description="Buy an item",
+        name_localizations={"es-ES": "comprar"},
+        parent_name_localizations={"es-ES": "tienda"},
+    )
+    async def shop_buy(ctx):
+        pass
+
+    parent = next(d for d in bot.router.command_definitions() if d["name"] == "shop")
+    assert parent["name_localizations"] == {"es-ES": "tienda"}
+
+
 def test_subcommand_group_leaf_carries_its_own_localizations_but_group_does_not():
     bot = Cordless()
 

@@ -39,6 +39,9 @@ class Cog:
         name_localizations=None,
         description_localizations=None,
         group_description=None,
+        group_name_localizations=None,
+        group_description_localizations=None,
+        parent_name_localizations=None,
     ):
         """Same parameters as `Cordless.command`. Handlers registered here
         take effect once the cog is passed to `bot.add_cog(cog)`."""
@@ -62,6 +65,9 @@ class Cog:
                         "name_localizations": name_localizations,
                         "description_localizations": description_localizations,
                         "group_description": group_description,
+                        "group_name_localizations": group_name_localizations,
+                        "group_description_localizations": group_description_localizations,
+                        "parent_name_localizations": parent_name_localizations,
                     },
                 )
             )

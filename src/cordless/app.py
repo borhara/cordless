@@ -152,6 +152,16 @@ def options_from_signature(func):
     return options
 
 
+def choice(name, value, name_localizations=None):
+    """Build a single choice dict for `option(choices=[...])`.
+    `name_localizations` is a `{locale: name}` dict, e.g. `{"es-ES": "Rojo"}`
+    - choices have no description, so there's no `description_localizations`."""
+    c = {"name": name, "value": value}
+    if name_localizations is not None:
+        c["name_localizations"] = name_localizations
+    return c
+
+
 def option(
     name,
     description="No description provided.",
@@ -175,7 +185,7 @@ def option(
     | `type` | `"string"`, `"integer"`, `"number"`, `"boolean"`, `"user"`, `"channel"`, `"role"`, `"attachment"` |
     | `required` | Default `False`, note this is the opposite default from inferred options, where a parameter without a default value is required |
     | `autocomplete` | Pair with `@bot.autocomplete` |
-    | `choices` | List of `{"name": label, "value": value}` dicts; the user must pick one |
+    | `choices` | List of `{"name": label, "value": value}` dicts (build with `choice()` for per-choice localization); the user must pick one |
     | `min_value` / `max_value` | Bounds for `integer`/`number` options |
     | `min_length` / `max_length` | Length bounds for `string` options |
     | `channel_types` | Restrict a `channel` option to specific Discord channel type ints, e.g. `[0, 2]` for text + voice |
@@ -242,6 +252,9 @@ class Cordless:
         name_localizations=None,
         description_localizations=None,
         group_description=None,
+        group_name_localizations=None,
+        group_description_localizations=None,
+        parent_name_localizations=None,
     ):
         """Register a slash command.
 
@@ -260,6 +273,9 @@ class Cordless:
         | `name_localizations` | `{locale: name}` dict for Discord's per-locale command picker, e.g. `{"es-ES": "comprar"}` |
         | `description_localizations` | `{locale: description}` dict, same shape as `name_localizations` |
         | `group_description` | For a `parent/group/sub` path, the description shown on the auto-created group. Only the first subcommand registered under a given group needs to set it |
+        | `group_name_localizations` | `{locale: name}` dict for the auto-created group's name. Only the first subcommand registered under a given group needs to set it |
+        | `group_description_localizations` | `{locale: description}` dict for the auto-created group's description, same rule as `group_name_localizations` |
+        | `parent_name_localizations` | For a `parent/sub` or `parent/group/sub` path, `{locale: name}` for the auto-created parent's name. Doesn't leak in from a subcommand's own `name_localizations`, so set it explicitly; only the first subcommand registered needs to set it |
         """
         _validate_command_name(name)
 
@@ -283,6 +299,9 @@ class Cordless:
                 name_localizations=name_localizations,
                 description_localizations=description_localizations,
                 group_description=group_description,
+                group_name_localizations=group_name_localizations,
+                group_description_localizations=group_description_localizations,
+                parent_name_localizations=parent_name_localizations,
             )
             return func
 
@@ -791,6 +810,9 @@ class Cordless:
                     name_localizations=kwargs.get("name_localizations"),
                     description_localizations=kwargs.get("description_localizations"),
                     group_description=kwargs.get("group_description"),
+                    group_name_localizations=kwargs.get("group_name_localizations"),
+                    group_description_localizations=kwargs.get("group_description_localizations"),
+                    parent_name_localizations=kwargs.get("parent_name_localizations"),
                 )
             elif ctype == "button":
                 if kwargs.get("defer"):

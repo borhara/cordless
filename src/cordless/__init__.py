@@ -1,4 +1,4 @@
-from .app import Cordless, option
+from .app import Cordless, choice, option
 from .cog import Cog
 from .components import (
     ActionRow,
@@ -39,6 +39,7 @@ from .models import Attachment, Channel, Member, Message, Permissions, Role, Use
 
 __all__ = [
     "Cordless",
+    "choice",
     "option",
     # Cogs
     "Cog",

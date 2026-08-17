@@ -56,6 +56,9 @@ class Router:
         name_localizations=None,
         description_localizations=None,
         group_description=None,
+        group_name_localizations=None,
+        group_description_localizations=None,
+        parent_name_localizations=None,
     ):
         if cmd_type == 1:
             for existing, meta in self.commands.items():
@@ -82,6 +85,9 @@ class Router:
             "name_localizations": name_localizations,
             "description_localizations": description_localizations,
             "group_description": group_description,
+            "group_name_localizations": group_name_localizations,
+            "group_description_localizations": group_description_localizations,
+            "parent_name_localizations": parent_name_localizations,
         }
 
     def register_button(self, custom_id, handler):
@@ -220,6 +226,10 @@ class Router:
                             "type": _SUB_COMMAND_GROUP,
                             "options": [],
                         }
+                        if meta.get("group_name_localizations"):
+                            group["name_localizations"] = meta["group_name_localizations"]
+                        if meta.get("group_description_localizations"):
+                            group["description_localizations"] = meta["group_description_localizations"]
                         options.append(group)
                     sub = {
                         "name": sub_name,
@@ -242,6 +252,8 @@ class Router:
             }
             if first_meta.get("description_localizations"):
                 cmd["description_localizations"] = first_meta["description_localizations"]
+            if first_meta.get("parent_name_localizations"):
+                cmd["name_localizations"] = first_meta["parent_name_localizations"]
             installables = [m.get("user_installable") for m in entries.values()]
             # a subcommand wanting both guild and user install wins over one
             # wanting user-install "only", since they share one parent command
