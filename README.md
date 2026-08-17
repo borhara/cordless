@@ -67,7 +67,7 @@ DISCORD_PUBLIC_KEY=your_public_key
 DISCORD_BOT_TOKEN=your_bot_token
 ```
 
-**Test locally** — `cordless dev` runs your bot with hot reload. With [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) installed it opens a public tunnel so Discord can reach it directly.
+**Test locally**: `cordless dev` runs your bot with hot reload. With [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) installed it opens a public tunnel so Discord can reach it directly.
 
 ```bash
 cordless dev
@@ -86,7 +86,7 @@ Paste the URL into your Discord app's **Interactions Endpoint URL** and your bot
 
 ## Documentation
 
-Full docs at **[cordless.dev](https://cordless.dev)** — commands, options, buttons, modals, deferred interactions, Components v2, scheduled handlers, and the full deploy reference.
+Full docs at **[cordless.dev](https://cordless.dev)**: commands, options, buttons, modals, deferred interactions, Components v2, scheduled handlers, and the full deploy reference.
 
 
 > Please note that this is a work in progress, I have found genuine interest in serverless development and wanted an easy way to provision AWS.

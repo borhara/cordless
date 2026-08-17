@@ -569,6 +569,18 @@ def test_subcommand_group_definitions_structure():
     assert group["options"][0] == {"name": "ban", "description": "Ban a user", "type": 1, "options": []}
 
 
+def test_subcommand_group_description_can_be_set_explicitly():
+    bot = Cordless()
+
+    @bot.command("admin/users/ban", description="Ban a user", group_description="Manage users")
+    async def ban(ctx):
+        pass
+
+    parent = next(d for d in bot.router.command_definitions() if d["name"] == "admin")
+    group = next(o for o in parent["options"] if o["name"] == "users")
+    assert group["description"] == "Manage users"
+
+
 def test_subcommand_group_leaf_carries_its_own_localizations_but_group_does_not():
     bot = Cordless()
 

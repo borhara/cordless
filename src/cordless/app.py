@@ -229,6 +229,7 @@ class Cordless:
         user_installable=False,
         name_localizations=None,
         description_localizations=None,
+        group_description=None,
     ):
         """Register a slash command.
 
@@ -245,6 +246,7 @@ class Cordless:
         | `guild_ids` | Scope this command to specific guilds instead of registering it globally |
         | `name_localizations` | `{locale: name}` dict for Discord's per-locale command picker, e.g. `{"es-ES": "comprar"}` |
         | `description_localizations` | `{locale: description}` dict, same shape as `name_localizations` |
+        | `group_description` | For a `parent/group/sub` path, the description shown on the auto-created group. Only the first subcommand registered under a given group needs to set it |
         """
         _validate_command_name(name)
 
@@ -267,6 +269,7 @@ class Cordless:
                 user_installable=user_installable,
                 name_localizations=name_localizations,
                 description_localizations=description_localizations,
+                group_description=group_description,
             )
             return func
 
@@ -754,6 +757,7 @@ class Cordless:
                     user_installable=kwargs.get("user_installable", False),
                     name_localizations=kwargs.get("name_localizations"),
                     description_localizations=kwargs.get("description_localizations"),
+                    group_description=kwargs.get("group_description"),
                 )
             elif ctype == "button":
                 if kwargs.get("defer"):

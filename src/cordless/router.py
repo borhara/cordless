@@ -55,6 +55,7 @@ class Router:
         user_installable=False,
         name_localizations=None,
         description_localizations=None,
+        group_description=None,
     ):
         if cmd_type == 1:
             for existing, meta in self.commands.items():
@@ -80,6 +81,7 @@ class Router:
             "user_installable": user_installable,
             "name_localizations": name_localizations,
             "description_localizations": description_localizations,
+            "group_description": group_description,
         }
 
     def register_button(self, custom_id, handler):
@@ -98,12 +100,12 @@ class Router:
         self._error_handler = handler
 
     def command_definitions(self):
-        """Every registered command, regardless of guild scoping — the full
+        """Every registered command, regardless of guild scoping: the full
         set deploy tooling pushes to one guild for instant dev updates."""
         return self._definitions(self.commands)
 
     def scoped_command_definitions(self, guild_id):
-        """Only commands registered for this scope (None = global) — see
+        """Only commands registered for this scope (None = global), see
         register_command's guild_ids. A command with guild_ids=[a, b] shows
         up in both scoped_command_definitions(a) and (b)."""
         if guild_id is None:
@@ -203,7 +205,7 @@ class Router:
                     if group is None:
                         group = {
                             "name": group_name,
-                            "description": "No description provided.",
+                            "description": meta.get("group_description") or "No description provided.",
                             "type": _SUB_COMMAND_GROUP,
                             "options": [],
                         }
