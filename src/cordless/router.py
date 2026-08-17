@@ -122,12 +122,19 @@ class Router:
     def _apply_installability(cmd, user_installable):
         """contexts/integration_types replace dm_permission for the modern
         install model, so when this is set, dm_permission is left off
-        entirely rather than sent alongside a field that supersedes it."""
-        if user_installable:
+        entirely rather than sent alongside a field that supersedes it.
+        `user_installable=True` allows both guild and user install;
+        `user_installable="only"` drops the guild install, so the command
+        never shows up as a guild-wide command, only for users who've
+        installed it to their own account."""
+        if not user_installable:
+            return False
+        if user_installable == "only":
+            cmd["integration_types"] = [_INTEGRATION_TYPE_USER_INSTALL]
+        else:
             cmd["integration_types"] = [_INTEGRATION_TYPE_GUILD_INSTALL, _INTEGRATION_TYPE_USER_INSTALL]
-            cmd["contexts"] = [_CONTEXT_GUILD, _CONTEXT_BOT_DM, _CONTEXT_PRIVATE_CHANNEL]
-            return True
-        return False
+        cmd["contexts"] = [_CONTEXT_GUILD, _CONTEXT_BOT_DM, _CONTEXT_PRIVATE_CHANNEL]
+        return True
 
     def _definitions(self, commands):
         flat = {}  # name → meta
@@ -235,7 +242,16 @@ class Router:
             }
             if first_meta.get("description_localizations"):
                 cmd["description_localizations"] = first_meta["description_localizations"]
-            installable = self._apply_installability(cmd, any(m.get("user_installable") for m in entries.values()))
+            installables = [m.get("user_installable") for m in entries.values()]
+            # a subcommand wanting both guild and user install wins over one
+            # wanting user-install "only", since they share one parent command
+            if any(v is True for v in installables):
+                combined = True
+            elif any(v == "only" for v in installables):
+                combined = "only"
+            else:
+                combined = False
+            installable = self._apply_installability(cmd, combined)
             if not installable and any(not m.get("dm_permission", True) for m in entries.values()):
                 cmd["dm_permission"] = False
             # Discord only accepts these at the top level, so combine across

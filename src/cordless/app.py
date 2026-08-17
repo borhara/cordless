@@ -248,6 +248,7 @@ class Cordless:
         | `nsfw` | Restrict to age-verified channels |
         | `ephemeral` | Only meaningful with `defer=True`: makes the loading state and final reply private. For non-deferred commands, use `ctx.send(ephemeral=True)` instead |
         | `guild_ids` | Scope this command to specific guilds instead of registering it globally |
+        | `user_installable` | `True` lets users install this command to their own account and run it in any server or DM, alongside the normal guild install. `"only"` drops the guild install, so it's never a server-wide command, only usable by users who've installed it themselves |
         | `name_localizations` | `{locale: name}` dict for Discord's per-locale command picker, e.g. `{"es-ES": "comprar"}` |
         | `description_localizations` | `{locale: description}` dict, same shape as `name_localizations` |
         | `group_description` | For a `parent/group/sub` path, the description shown on the auto-created group. Only the first subcommand registered under a given group needs to set it |

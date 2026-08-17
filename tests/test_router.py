@@ -514,6 +514,35 @@ def test_user_installable_command_sets_integration_types_and_contexts():
     assert definition["contexts"] == [0, 1, 2]
 
 
+def test_user_installable_only_command_drops_guild_install():
+    bot = Cordless()
+
+    @bot.command("ping", description="Check the bot is alive", user_installable="only")
+    async def ping(ctx):
+        pass
+
+    definition = bot.router.command_definitions()[0]
+    assert definition["integration_types"] == [1]
+    assert definition["contexts"] == [0, 1, 2]
+
+
+def test_subcommand_user_installable_only_combines_with_full_installable():
+    """Both guild+user install wins over user-install-only, since subcommands
+    under one parent share a single installability setting."""
+    bot = Cordless()
+
+    @bot.command("admin/ban", description="Ban a user", user_installable="only")
+    async def ban(ctx):
+        pass
+
+    @bot.command("admin/kick", description="Kick a user", user_installable=True)
+    async def kick(ctx):
+        pass
+
+    parent = bot.router.command_definitions()[0]
+    assert parent["integration_types"] == [0, 1]
+
+
 def test_user_installable_command_omits_dm_permission():
     """contexts supersedes dm_permission - sending both is asking for trouble,
     so a user_installable command never gets a dm_permission key at all,
