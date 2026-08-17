@@ -164,6 +164,7 @@ def option(
     max_value=None,
     min_length=None,
     max_length=None,
+    channel_types=None,
 ):
     """Build a Discord application command option dict, for `@bot.command(options=[...])`.
 
@@ -175,6 +176,7 @@ def option(
     | `choices` | List of `{"name": label, "value": value}` dicts; the user must pick one |
     | `min_value` / `max_value` | Bounds for `integer`/`number` options |
     | `min_length` / `max_length` | Length bounds for `string` options |
+    | `channel_types` | Restrict a `channel` option to specific Discord channel type ints, e.g. `[0, 2]` for text + voice |
     """
     if isinstance(type, str) and type not in _OPTION_TYPES:
         raise ValueError(f"Unknown option type {type!r}: expected one of {', '.join(_OPTION_TYPES)}")
@@ -197,6 +199,8 @@ def option(
         opt["min_length"] = min_length
     if max_length is not None:
         opt["max_length"] = max_length
+    if channel_types is not None:
+        opt["channel_types"] = channel_types
     return opt
 
 

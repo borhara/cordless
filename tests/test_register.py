@@ -211,6 +211,11 @@ def test_option_min_max_length():
     assert o["max_length"] == 100
 
 
+def test_option_channel_types():
+    o = option("target", type="channel", channel_types=[0, 2])
+    assert o["channel_types"] == [0, 2]
+
+
 def test_option_raises_for_unknown_type_alias():
     with pytest.raises(ValueError, match="strnig"):
         option("x", type="strnig")
