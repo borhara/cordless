@@ -242,8 +242,9 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                             abs_path = os.path.join(root, fname)
                             _write(zf, abs_path, os.path.relpath(abs_path, pkg_parent))
 
-            # same pynacl bundling the layer path gets, so bundle_cordless doesn't
-            # silently fall back to slow signature verification
+            # same pynacl bundling the layer path gets, required for signature
+            # verification, so a fetch failure here raises rather than shipping
+            # a function that can't verify Discord's requests
             extras_dir = _layer_extras_dir(python_version, architecture)
             if extras_dir:
                 for root, dirs, files in os.walk(extras_dir):
@@ -291,7 +292,7 @@ def _ensure_packages(packages, python_version, architecture="x86_64"):
     venv_uv = os.path.join(os.path.dirname(sys.executable), "uv")
     uv = venv_uv if os.path.isfile(venv_uv) else shutil.which("uv")
     if uv is None:
-        raise RuntimeError("uv not found — install it: https://docs.astral.sh/uv/getting-started/installation/")
+        raise RuntimeError("uv not found, install it: https://docs.astral.sh/uv/getting-started/installation/")
 
     os.makedirs(os.path.dirname(cache_dir), exist_ok=True)
     staging = tempfile.mkdtemp(dir=os.path.dirname(cache_dir))
@@ -736,10 +737,6 @@ def deploy(
             _allow_ratelimit_table(iam, role_name, table_arn)
         env = {**env, "CORDLESS_RATELIMIT_TABLE": table_name}
 
-    from . import upload as _upload
-
-    _upload.pynacl_bundle_failed = False
-
     if bundle_cordless:
         with Spinner(f"cordless  {_cordless_version()} (local)"):
             layer_arn = None
@@ -883,11 +880,7 @@ def deploy(
     summary(
         [
             (True, "Runtime", runtime),
-            (
-                not _upload.pynacl_bundle_failed,
-                "Signature verification",
-                "pynacl" if not _upload.pynacl_bundle_failed else "pure-Python Ed25519 (slower than pynacl)",
-            ),
+            (True, "Signature verification", "pynacl"),
             *package_check,
             *health,
         ]
