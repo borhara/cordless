@@ -585,7 +585,16 @@ class Cordless:
 
         return decorator
 
-    def user_command(self, name, dm_permission=True, guild_ids=None, user_installable=False, name_localizations=None):
+    def user_command(
+        self,
+        name,
+        dm_permission=True,
+        default_member_permissions=None,
+        nsfw=False,
+        guild_ids=None,
+        user_installable=False,
+        name_localizations=None,
+    ):
         """Register a User context menu command (right-click → Apps → name).
 
         `name_localizations` is a `{locale: name}` dict, e.g. `{"es-ES": "inspeccionar"}`
@@ -599,6 +608,8 @@ class Cordless:
                 description=None,
                 options=[],
                 dm_permission=dm_permission,
+                default_member_permissions=default_member_permissions,
+                nsfw=nsfw,
                 cmd_type=2,
                 guild_ids=guild_ids,
                 user_installable=user_installable,
@@ -609,7 +620,14 @@ class Cordless:
         return decorator
 
     def message_command(
-        self, name, dm_permission=True, guild_ids=None, user_installable=False, name_localizations=None
+        self,
+        name,
+        dm_permission=True,
+        default_member_permissions=None,
+        nsfw=False,
+        guild_ids=None,
+        user_installable=False,
+        name_localizations=None,
     ):
         """Register a Message context menu command (right-click message → Apps → name).
 
@@ -624,6 +642,8 @@ class Cordless:
                 description=None,
                 options=[],
                 dm_permission=dm_permission,
+                default_member_permissions=default_member_permissions,
+                nsfw=nsfw,
                 cmd_type=3,
                 guild_ids=guild_ids,
                 user_installable=user_installable,
@@ -787,6 +807,8 @@ class Cordless:
                     description=None,
                     options=[],
                     dm_permission=kwargs["dm_permission"],
+                    default_member_permissions=kwargs.get("default_member_permissions"),
+                    nsfw=kwargs.get("nsfw", False),
                     cmd_type=2,
                     guild_ids=kwargs.get("guild_ids"),
                     user_installable=kwargs.get("user_installable", False),
@@ -799,6 +821,8 @@ class Cordless:
                     description=None,
                     options=[],
                     dm_permission=kwargs["dm_permission"],
+                    default_member_permissions=kwargs.get("default_member_permissions"),
+                    nsfw=kwargs.get("nsfw", False),
                     cmd_type=3,
                     guild_ids=kwargs.get("guild_ids"),
                     user_installable=kwargs.get("user_installable", False),

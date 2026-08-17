@@ -675,6 +675,30 @@ def test_context_menu_command_definitions():
     assert defs["Bookmark"] == {"name": "Bookmark", "type": 3}
 
 
+def test_user_command_default_member_permissions_and_nsfw():
+    bot = Cordless()
+
+    @bot.user_command("Ban User", default_member_permissions=Permissions(ban_members=True), nsfw=True)
+    async def ban(ctx):
+        pass
+
+    d = next(d for d in bot.router.command_definitions() if d["name"] == "Ban User")
+    assert d["default_member_permissions"] == str(int(Permissions(ban_members=True)))
+    assert d["nsfw"] is True
+
+
+def test_message_command_default_member_permissions_and_nsfw():
+    bot = Cordless()
+
+    @bot.message_command("Purge", default_member_permissions=Permissions(manage_messages=True), nsfw=True)
+    async def purge(ctx):
+        pass
+
+    d = next(d for d in bot.router.command_definitions() if d["name"] == "Purge")
+    assert d["default_member_permissions"] == str(int(Permissions(manage_messages=True)))
+    assert d["nsfw"] is True
+
+
 def test_context_menu_excluded_from_subcommand_grouping():
     bot = Cordless()
 

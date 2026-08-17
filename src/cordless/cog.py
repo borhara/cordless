@@ -114,7 +114,16 @@ class Cog:
 
         return decorator
 
-    def user_command(self, name, dm_permission=True, guild_ids=None, user_installable=False, name_localizations=None):
+    def user_command(
+        self,
+        name,
+        dm_permission=True,
+        default_member_permissions=None,
+        nsfw=False,
+        guild_ids=None,
+        user_installable=False,
+        name_localizations=None,
+    ):
         """Same as `Cordless.user_command`."""
 
         def decorator(func):
@@ -125,6 +134,8 @@ class Cog:
                     {
                         "name": name,
                         "dm_permission": dm_permission,
+                        "default_member_permissions": default_member_permissions,
+                        "nsfw": nsfw,
                         "guild_ids": guild_ids,
                         "user_installable": user_installable,
                         "name_localizations": name_localizations,
@@ -136,7 +147,14 @@ class Cog:
         return decorator
 
     def message_command(
-        self, name, dm_permission=True, guild_ids=None, user_installable=False, name_localizations=None
+        self,
+        name,
+        dm_permission=True,
+        default_member_permissions=None,
+        nsfw=False,
+        guild_ids=None,
+        user_installable=False,
+        name_localizations=None,
     ):
         """Same as `Cordless.message_command`."""
 
@@ -148,6 +166,8 @@ class Cog:
                     {
                         "name": name,
                         "dm_permission": dm_permission,
+                        "default_member_permissions": default_member_permissions,
+                        "nsfw": nsfw,
                         "guild_ids": guild_ids,
                         "user_installable": user_installable,
                         "name_localizations": name_localizations,

@@ -156,6 +156,10 @@ class Router:
                     "dm_permission", True
                 ):
                     cmd["dm_permission"] = False
+                if meta.get("default_member_permissions") is not None:
+                    cmd["default_member_permissions"] = str(int(meta["default_member_permissions"]))
+                if meta.get("nsfw"):
+                    cmd["nsfw"] = True
                 if meta.get("name_localizations"):
                     cmd["name_localizations"] = meta["name_localizations"]
                 result.append(cmd)
