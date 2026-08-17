@@ -271,6 +271,7 @@ source = { editable = "." }
 dependencies = [
     { name = "boto3" },
     { name = "botocore", extra = ["crt"] },
+    { name = "pynacl" },
     { name = "uv" },
 ]
 
@@ -289,6 +290,7 @@ dev = [
 requires-dist = [
     { name = "boto3", specifier = ">=1.20" },
     { name = "botocore", extras = ["crt"] },
+    { name = "pynacl", specifier = ">=1.5" },
     { name = "uv", specifier = ">=0.11" },
 ]
 
