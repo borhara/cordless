@@ -106,10 +106,14 @@ def _build_message_data(msg, content, embeds, components, ephemeral=False, allow
     is_uikit = _contains_uikit(components)
     if is_uikit:
         if _content is not None or embeds is not None:
-            raise ValueError("Components v2 messages can't also set content or embeds, use TextDisplay/Container instead")
+            raise ValueError(
+                "Components v2 messages can't also set content or embeds, use TextDisplay/Container instead"
+            )
         count = _count_components(components)
         if count > _MAX_UIKIT_COMPONENTS:
-            raise ValueError(f"Message has {count} components, which exceeds Discord's {_MAX_UIKIT_COMPONENTS}-component limit")
+            raise ValueError(
+                f"Message has {count} components, which exceeds Discord's {_MAX_UIKIT_COMPONENTS}-component limit"
+            )
         text_length = _uikit_text_length(components)
         if text_length > _MAX_UIKIT_TEXT_LENGTH:
             raise MessageTooLongError(
