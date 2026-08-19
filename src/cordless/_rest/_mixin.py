@@ -21,12 +21,32 @@ from . import (
     scheduled_events,
     stage_instances,
     stickers,
+    templates,
     threads,
     webhooks,
 )
 
 
 class RESTMixin:
+    # -- guild templates --
+    async def fetch_template(self, code, **kwargs):
+        return await templates.fetch_template(code, **kwargs)
+
+    async def fetch_guild_templates(self, guild_id, **kwargs):
+        return await templates.fetch_guild_templates(guild_id, **kwargs)
+
+    async def create_guild_template(self, guild_id, name, **kwargs):
+        return await templates.create_guild_template(guild_id, name, **kwargs)
+
+    async def sync_guild_template(self, guild_id, code, **kwargs):
+        return await templates.sync_guild_template(guild_id, code, **kwargs)
+
+    async def edit_guild_template(self, guild_id, code, **kwargs):
+        return await templates.edit_guild_template(guild_id, code, **kwargs)
+
+    async def delete_guild_template(self, guild_id, code, **kwargs):
+        return await templates.delete_guild_template(guild_id, code, **kwargs)
+
     # -- stage instances --
     async def create_stage_instance(self, channel_id, topic, **kwargs):
         return await stage_instances.create_stage_instance(channel_id, topic, **kwargs)

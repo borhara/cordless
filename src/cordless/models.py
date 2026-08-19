@@ -1019,6 +1019,20 @@ class Guild(DiscordObject):
             self.id, name, event_type, trigger_type, actions, **kwargs
         )
 
+    async def fetch_templates(self, **kwargs):
+        """List this guild's templates, as a list of `GuildTemplate`.
+        Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        from ._rest import templates
+
+        return await templates.fetch_guild_templates(self.id, **kwargs)
+
+    async def create_template(self, name, **kwargs):
+        """Create a template from this guild's current state. Returns the
+        new `GuildTemplate`. Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        from ._rest import templates
+
+        return await templates.create_guild_template(self.id, name, **kwargs)
+
 
 def _wrap(cls, data):
     return cls(data) if data is not None else None

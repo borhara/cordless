@@ -457,3 +457,39 @@ class StageInstance(DiscordObject):
         from . import stage_instances
 
         await stage_instances.delete_stage_instance(self.channel_id, **kwargs)
+
+
+class GuildTemplate(DiscordObject):
+    """A guild template, from `guild.fetch_templates()` or
+    `bot.fetch_template()`. `.code`, `.name`, `.description`, `.usage_count`,
+    `.creator_id`, `.source_guild_id`, `.serialized_source_guild`,
+    `.is_dirty`. Keyed by `code`, not `id`."""
+
+    @property
+    def creator(self):
+        """The `User` who created this template."""
+        from ..models import User
+
+        return User(self._data.get("creator"))
+
+    async def sync(self, **kwargs):
+        """Sync this template to its source guild's current state. Returns
+        the updated `GuildTemplate`. Requires `DISCORD_BOT_TOKEN` and
+        `MANAGE_GUILD`."""
+        from . import templates
+
+        return await templates.sync_guild_template(self.source_guild_id, self.code, **kwargs)
+
+    async def edit(self, **kwargs):
+        """Update this template's name/description. Returns the updated
+        `GuildTemplate`. Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        from . import templates
+
+        return await templates.edit_guild_template(self.source_guild_id, self.code, **kwargs)
+
+    async def delete(self, **kwargs):
+        """Delete this template. Returns the deleted `GuildTemplate`.
+        Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        from . import templates
+
+        return await templates.delete_guild_template(self.source_guild_id, self.code, **kwargs)
