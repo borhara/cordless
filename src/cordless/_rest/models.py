@@ -129,3 +129,54 @@ class MessagePin(DiscordObject):
         from ..models import Message
 
         return Message(self._data.get("message"))
+
+
+class Ban(DiscordObject):
+    """One entry from `guild.fetch_bans()`. `.reason`, `.user`."""
+
+    @property
+    def user(self):
+        """The banned `User`."""
+        from ..models import User
+
+        return User(self._data.get("user"))
+
+
+class Integration(DiscordObject):
+    """One entry from `guild.fetch_integrations()`. `.id`, `.name`, `.type`,
+    `.enabled`, `.account`, and any other field Discord sends."""
+
+
+class VoiceRegion(DiscordObject):
+    """One entry from `guild.fetch_voice_regions()`. `.id`, `.name`,
+    `.optimal`, `.deprecated`, `.custom`."""
+
+
+class GuildWidgetSettings(DiscordObject):
+    """From `guild.fetch_widget_settings()`/`guild.edit_widget()`.
+    `.enabled`, `.channel_id`."""
+
+
+class GuildWidget(DiscordObject):
+    """From `guild.fetch_widget()`. `.id`, `.name`, `.instant_invite`,
+    `.channels`, `.members`, `.presence_count`."""
+
+
+class WelcomeScreen(DiscordObject):
+    """From `guild.fetch_welcome_screen()`/`guild.edit_welcome_screen()`.
+    `.description`, `.welcome_channels`."""
+
+
+class GuildOnboarding(DiscordObject):
+    """From `guild.fetch_onboarding()`/`guild.edit_onboarding()`.
+    `.guild_id`, `.prompts`, `.default_channel_ids`, `.enabled`, `.mode`."""
+
+
+class IncidentsData(DiscordObject):
+    """From `guild.edit_incident_actions()`. `.invites_disabled_until`,
+    `.dms_disabled_until`, `.dm_spam_detected_at`, `.raid_detected_at`."""
+
+
+class BulkBanResult(DiscordObject):
+    """From `guild.bulk_ban()`. `.banned_users` and `.failed_users` are
+    both lists of user id strings."""

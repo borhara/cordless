@@ -10,10 +10,80 @@ Every method is async, matching the rest of Cordless's public REST surface
 (send_message, execute_webhook, ...): await bot.start_thread_from_message(...).
 """
 
-from . import channels, threads
+from . import channels, guilds, threads
 
 
 class RESTMixin:
+    # -- guilds --
+    async def fetch_guild(self, guild_id, **kwargs):
+        return await guilds.fetch_guild(guild_id, **kwargs)
+
+    async def fetch_guild_preview(self, guild_id, **kwargs):
+        return await guilds.fetch_guild_preview(guild_id, **kwargs)
+
+    async def edit_guild(self, guild_id, **kwargs):
+        return await guilds.edit_guild(guild_id, **kwargs)
+
+    async def fetch_guild_bans(self, guild_id, **kwargs):
+        return await guilds.fetch_guild_bans(guild_id, **kwargs)
+
+    async def fetch_guild_ban(self, guild_id, user_id, **kwargs):
+        return await guilds.fetch_guild_ban(guild_id, user_id, **kwargs)
+
+    async def create_guild_ban(self, guild_id, user_id, **kwargs):
+        return await guilds.create_guild_ban(guild_id, user_id, **kwargs)
+
+    async def remove_guild_ban(self, guild_id, user_id, **kwargs):
+        return await guilds.remove_guild_ban(guild_id, user_id, **kwargs)
+
+    async def bulk_guild_ban(self, guild_id, user_ids, **kwargs):
+        return await guilds.bulk_guild_ban(guild_id, user_ids, **kwargs)
+
+    async def fetch_guild_prune_count(self, guild_id, **kwargs):
+        return await guilds.fetch_guild_prune_count(guild_id, **kwargs)
+
+    async def begin_guild_prune(self, guild_id, **kwargs):
+        return await guilds.begin_guild_prune(guild_id, **kwargs)
+
+    async def fetch_guild_voice_regions(self, guild_id, **kwargs):
+        return await guilds.fetch_guild_voice_regions(guild_id, **kwargs)
+
+    async def fetch_guild_invites(self, guild_id, **kwargs):
+        return await guilds.fetch_guild_invites(guild_id, **kwargs)
+
+    async def fetch_guild_integrations(self, guild_id, **kwargs):
+        return await guilds.fetch_guild_integrations(guild_id, **kwargs)
+
+    async def delete_guild_integration(self, guild_id, integration_id, **kwargs):
+        return await guilds.delete_guild_integration(guild_id, integration_id, **kwargs)
+
+    async def fetch_guild_widget_settings(self, guild_id, **kwargs):
+        return await guilds.fetch_guild_widget_settings(guild_id, **kwargs)
+
+    async def edit_guild_widget(self, guild_id, **kwargs):
+        return await guilds.edit_guild_widget(guild_id, **kwargs)
+
+    async def fetch_guild_widget(self, guild_id, **kwargs):
+        return await guilds.fetch_guild_widget(guild_id, **kwargs)
+
+    async def fetch_guild_vanity_url(self, guild_id, **kwargs):
+        return await guilds.fetch_guild_vanity_url(guild_id, **kwargs)
+
+    async def fetch_guild_welcome_screen(self, guild_id, **kwargs):
+        return await guilds.fetch_guild_welcome_screen(guild_id, **kwargs)
+
+    async def edit_guild_welcome_screen(self, guild_id, **kwargs):
+        return await guilds.edit_guild_welcome_screen(guild_id, **kwargs)
+
+    async def fetch_guild_onboarding(self, guild_id, **kwargs):
+        return await guilds.fetch_guild_onboarding(guild_id, **kwargs)
+
+    async def edit_guild_onboarding(self, guild_id, **kwargs):
+        return await guilds.edit_guild_onboarding(guild_id, **kwargs)
+
+    async def edit_guild_incident_actions(self, guild_id, **kwargs):
+        return await guilds.edit_guild_incident_actions(guild_id, **kwargs)
+
     # -- channels --
     async def fetch_channel(self, channel_id, **kwargs):
         return await channels.fetch_channel(channel_id, **kwargs)

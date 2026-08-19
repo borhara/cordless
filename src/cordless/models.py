@@ -439,6 +439,13 @@ class Guild(DiscordObject):
         splash = self._data.get("discovery_splash")
         return _cdn_asset_url(f"discovery-splashes/{guild_id}/{{hash}}", splash) if guild_id else None
 
+    def widget_image_url(self, style="shield"):
+        """Full URL for this guild's widget image (a live PNG showing member
+        count). Public and unauthenticated, so this just builds the URL, it
+        doesn't call Discord. `style` is one of "shield", "banner1",
+        "banner2", "banner3", "banner4"."""
+        return f"https://discord.com/api/guilds/{self._data['id']}/widget.png?style={style}"
+
     async def fetch_active_threads(self, **kwargs):
         """List every active thread in this guild (public and private), as
         a list of `Thread`. Requires `DISCORD_BOT_TOKEN`."""
@@ -469,6 +476,171 @@ class Guild(DiscordObject):
         from ._rest import channels
 
         await channels.edit_guild_channel_positions(self.id, positions, **kwargs)
+
+    async def fetch(self, **kwargs):
+        """Re-fetch this guild's full object from Discord - `ctx.guild`
+        only carries `.id`, `.locale`, `.features`. Pass `with_counts=True`
+        for approximate member/presence counts. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import guilds
+
+        return await guilds.fetch_guild(self.id, **kwargs)
+
+    async def fetch_preview(self, **kwargs):
+        """Fetch this guild's preview object. Requires `DISCORD_BOT_TOKEN`
+        unless the guild is discoverable."""
+        from ._rest import guilds
+
+        return await guilds.fetch_guild_preview(self.id, **kwargs)
+
+    async def edit(self, **kwargs):
+        """Update this guild's settings. See `_rest.guilds.edit_guild` for
+        the full field list. Returns the updated `Guild`. Requires
+        `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        from ._rest import guilds
+
+        return await guilds.edit_guild(self.id, **kwargs)
+
+    async def fetch_bans(self, **kwargs):
+        """List this guild's bans, as a list of `Ban`. Requires
+        `DISCORD_BOT_TOKEN` and `BAN_MEMBERS`."""
+        from ._rest import guilds
+
+        return await guilds.fetch_guild_bans(self.id, **kwargs)
+
+    async def fetch_ban(self, user_id, **kwargs):
+        """Fetch a single `Ban` by user id. Requires `DISCORD_BOT_TOKEN`
+        and `BAN_MEMBERS`."""
+        from ._rest import guilds
+
+        return await guilds.fetch_guild_ban(self.id, user_id, **kwargs)
+
+    async def ban(self, user_id, **kwargs):
+        """Ban a user, optionally deleting their recent messages via
+        `delete_message_seconds`. Requires `DISCORD_BOT_TOKEN` and
+        `BAN_MEMBERS`."""
+        from ._rest import guilds
+
+        await guilds.create_guild_ban(self.id, user_id, **kwargs)
+
+    async def unban(self, user_id, **kwargs):
+        """Remove a ban. Requires `DISCORD_BOT_TOKEN` and `BAN_MEMBERS`."""
+        from ._rest import guilds
+
+        await guilds.remove_guild_ban(self.id, user_id, **kwargs)
+
+    async def bulk_ban(self, user_ids, **kwargs):
+        """Ban up to 200 users at once. Returns a `BulkBanResult`. Requires
+        `DISCORD_BOT_TOKEN`, `BAN_MEMBERS` and `MANAGE_GUILD`."""
+        from ._rest import guilds
+
+        return await guilds.bulk_guild_ban(self.id, user_ids, **kwargs)
+
+    async def fetch_prune_count(self, **kwargs):
+        """Preview how many inactive members a prune would remove, without
+        removing them. Requires `DISCORD_BOT_TOKEN`, `MANAGE_GUILD` and
+        `KICK_MEMBERS`."""
+        from ._rest import guilds
+
+        return await guilds.fetch_guild_prune_count(self.id, **kwargs)
+
+    async def prune(self, **kwargs):
+        """Kick inactive members. Returns the number removed, or `None`
+        if `compute_prune_count=False`. Requires `DISCORD_BOT_TOKEN`,
+        `MANAGE_GUILD` and `KICK_MEMBERS`."""
+        from ._rest import guilds
+
+        return await guilds.begin_guild_prune(self.id, **kwargs)
+
+    async def fetch_voice_regions(self, **kwargs):
+        """List this guild's available voice regions, as a list of
+        `VoiceRegion`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import guilds
+
+        return await guilds.fetch_guild_voice_regions(self.id, **kwargs)
+
+    async def fetch_invites(self, **kwargs):
+        """List every invite across this guild, as a list of `Invite`.
+        Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD` or `VIEW_AUDIT_LOG`."""
+        from ._rest import guilds
+
+        return await guilds.fetch_guild_invites(self.id, **kwargs)
+
+    async def fetch_integrations(self, **kwargs):
+        """List this guild's integrations, as a list of `Integration`.
+        Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        from ._rest import guilds
+
+        return await guilds.fetch_guild_integrations(self.id, **kwargs)
+
+    async def delete_integration(self, integration_id, **kwargs):
+        """Delete an integration, its webhooks, and kick its bot if it has
+        one. Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        from ._rest import guilds
+
+        await guilds.delete_guild_integration(self.id, integration_id, **kwargs)
+
+    async def fetch_widget_settings(self, **kwargs):
+        """Fetch this guild's widget settings. Requires `DISCORD_BOT_TOKEN`
+        and `MANAGE_GUILD`."""
+        from ._rest import guilds
+
+        return await guilds.fetch_guild_widget_settings(self.id, **kwargs)
+
+    async def edit_widget(self, **kwargs):
+        """Update this guild's widget settings (`enabled`, `channel_id`).
+        Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        from ._rest import guilds
+
+        return await guilds.edit_guild_widget(self.id, **kwargs)
+
+    async def fetch_widget(self, **kwargs):
+        """Fetch this guild's public widget object. No token required if
+        the widget is enabled."""
+        from ._rest import guilds
+
+        return await guilds.fetch_guild_widget(self.id, **kwargs)
+
+    async def fetch_vanity_url(self, **kwargs):
+        """Fetch this guild's vanity invite, as a partial `Invite` (`.code`
+        is `None` if unset). Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        from ._rest import guilds
+
+        return await guilds.fetch_guild_vanity_url(self.id, **kwargs)
+
+    async def fetch_welcome_screen(self, **kwargs):
+        """Fetch this guild's welcome screen. Requires `DISCORD_BOT_TOKEN`
+        and `MANAGE_GUILD` unless the welcome screen is enabled."""
+        from ._rest import guilds
+
+        return await guilds.fetch_guild_welcome_screen(self.id, **kwargs)
+
+    async def edit_welcome_screen(self, **kwargs):
+        """Update this guild's welcome screen. Requires `DISCORD_BOT_TOKEN`
+        and `MANAGE_GUILD`."""
+        from ._rest import guilds
+
+        return await guilds.edit_guild_welcome_screen(self.id, **kwargs)
+
+    async def fetch_onboarding(self, **kwargs):
+        """Fetch this guild's onboarding configuration. Requires
+        `DISCORD_BOT_TOKEN`."""
+        from ._rest import guilds
+
+        return await guilds.fetch_guild_onboarding(self.id, **kwargs)
+
+    async def edit_onboarding(self, **kwargs):
+        """Update this guild's onboarding configuration. Requires
+        `DISCORD_BOT_TOKEN`, `MANAGE_GUILD` and `MANAGE_ROLES`."""
+        from ._rest import guilds
+
+        return await guilds.edit_guild_onboarding(self.id, **kwargs)
+
+    async def edit_incident_actions(self, **kwargs):
+        """Pause invites and/or DMs for up to 24 hours (raid protection).
+        Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        from ._rest import guilds
+
+        return await guilds.edit_guild_incident_actions(self.id, **kwargs)
 
 
 def _wrap(cls, data):
