@@ -534,3 +534,27 @@ class AuditLog(DiscordObject):
     @property
     def guild_scheduled_events(self):
         return [GuildScheduledEvent(e) for e in self._data.get("guild_scheduled_events", [])]
+
+
+class Entitlement(DiscordObject):
+    """From `bot.fetch_entitlements()`. `.id`, `.sku_id`, `.application_id`,
+    `.user_id`, `.guild_id`, `.type`, `.deleted`, `.starts_at`, `.ends_at`,
+    `.consumed`."""
+
+    async def consume(self, **kwargs):
+        """Mark this one-time-purchase consumable entitlement as consumed.
+        Requires `DISCORD_BOT_TOKEN`."""
+        from . import entitlements
+
+        await entitlements.consume_entitlement(self.application_id, self.id, **kwargs)
+
+    async def delete(self, **kwargs):
+        """Delete this test entitlement. Requires `DISCORD_BOT_TOKEN`."""
+        from . import entitlements
+
+        await entitlements.delete_test_entitlement(self.application_id, self.id, **kwargs)
+
+
+class SKU(DiscordObject):
+    """From `bot.fetch_skus()`. `.id`, `.type`, `.application_id`, `.name`,
+    `.slug`, `.flags`."""

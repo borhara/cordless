@@ -15,11 +15,13 @@ from . import (
     auto_moderation,
     channels,
     emojis,
+    entitlements,
     guilds,
     invites,
     members,
     messages,
     scheduled_events,
+    skus,
     stage_instances,
     stickers,
     templates,
@@ -30,6 +32,25 @@ from . import (
 
 
 class RESTMixin:
+    # -- entitlements and skus --
+    async def fetch_entitlements(self, application_id, **kwargs):
+        return await entitlements.fetch_entitlements(application_id, **kwargs)
+
+    async def fetch_entitlement(self, application_id, entitlement_id, **kwargs):
+        return await entitlements.fetch_entitlement(application_id, entitlement_id, **kwargs)
+
+    async def consume_entitlement(self, application_id, entitlement_id, **kwargs):
+        return await entitlements.consume_entitlement(application_id, entitlement_id, **kwargs)
+
+    async def create_test_entitlement(self, application_id, sku_id, owner_id, owner_type, **kwargs):
+        return await entitlements.create_test_entitlement(application_id, sku_id, owner_id, owner_type, **kwargs)
+
+    async def delete_test_entitlement(self, application_id, entitlement_id, **kwargs):
+        return await entitlements.delete_test_entitlement(application_id, entitlement_id, **kwargs)
+
+    async def fetch_skus(self, application_id, **kwargs):
+        return await skus.fetch_skus(application_id, **kwargs)
+
     # -- users --
     async def fetch_current_user(self, **kwargs):
         return await users.fetch_current_user(**kwargs)
