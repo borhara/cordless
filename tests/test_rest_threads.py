@@ -48,6 +48,7 @@ def test_start_thread_from_message_posts_expected_path_and_payload():
     assert result.id == "1"
     assert result.mention == "<#1>"
     assert result.archived is False
+    assert result.locked is False
 
 
 def test_start_thread_from_message_omits_auto_archive_duration_by_default():
@@ -402,4 +403,90 @@ def test_bot_fetch_active_guild_threads_delegates_to_rest_module():
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
         result = run(bot.fetch_active_guild_threads("10"))
 
+    assert result == [Thread.from_dict(_THREAD_PAYLOAD)]
+
+
+# --- remaining bot.<verb>_thread() delegation (one per mixin method not already exercised above) ---
+
+
+def test_bot_start_thread_without_message_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_THREAD_PAYLOAD)]):
+        result = run(bot.start_thread_without_message("20", "discussion"))
+
+    assert isinstance(result, Thread)
+
+
+def test_bot_join_thread_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(bot.join_thread("20"))
+
+    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/thread-members/@me"
+
+
+def test_bot_leave_thread_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(bot.leave_thread("20"))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/channels/20/thread-members/@me"
+    assert req.get_method() == "DELETE"
+
+
+def test_bot_add_thread_member_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(bot.add_thread_member("20", "55"))
+
+    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/thread-members/55"
+
+
+def test_bot_remove_thread_member_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(bot.remove_thread_member("20", "55"))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/channels/20/thread-members/55"
+    assert req.get_method() == "DELETE"
+
+
+def test_bot_fetch_thread_member_delegates_to_rest_module():
+    bot = Cordless()
+    payload = {"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0}
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
+        result = run(bot.fetch_thread_member("20", "55"))
+
+    assert result == ThreadMember(id="1", user_id="55", join_timestamp="t", flags=0)
+
+
+def test_bot_fetch_thread_members_delegates_to_rest_module():
+    bot = Cordless()
+    payload = [{"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0}]
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
+        result = run(bot.fetch_thread_members("20"))
+
+    assert result == [ThreadMember(id="1", user_id="55", join_timestamp="t", flags=0)]
+
+
+def test_bot_fetch_private_archived_threads_delegates_to_rest_module():
+    bot = Cordless()
+    payload = {"threads": [_THREAD_PAYLOAD], "members": [], "has_more": False}
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+        result = run(bot.fetch_private_archived_threads("20"))
+
+    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/threads/archived/private"
+    assert result == [Thread.from_dict(_THREAD_PAYLOAD)]
+
+
+def test_bot_fetch_joined_private_archived_threads_delegates_to_rest_module():
+    bot = Cordless()
+    payload = {"threads": [_THREAD_PAYLOAD], "members": [], "has_more": False}
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+        result = run(bot.fetch_joined_private_archived_threads("20"))
+
+    url = urlopen.call_args.args[0].full_url
+    assert url == "https://discord.com/api/v10/channels/20/users/@me/threads/archived/private"
     assert result == [Thread.from_dict(_THREAD_PAYLOAD)]

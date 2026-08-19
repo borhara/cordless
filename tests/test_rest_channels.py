@@ -472,3 +472,162 @@ def test_message_unpin_delegates_to_rest_module():
     req = urlopen.call_args.args[0]
     assert req.full_url == "https://discord.com/api/v10/channels/20/messages/pins/1"
     assert req.get_method() == "DELETE"
+
+
+# --- remaining bot.<verb>() delegation (one per mixin method not already exercised above) ---
+
+
+def test_bot_fetch_channel_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_CHANNEL_PAYLOAD)]) as urlopen:
+        result = run(bot.fetch_channel("20"))
+
+    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20"
+    assert isinstance(result, Channel)
+
+
+def test_bot_delete_channel_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_CHANNEL_PAYLOAD)]) as urlopen:
+        result = run(bot.delete_channel("20"))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/channels/20"
+    assert req.get_method() == "DELETE"
+    assert isinstance(result, Channel)
+
+
+def test_bot_edit_channel_permissions_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(bot.edit_channel_permissions("20", "55", type=0, allow="1024"))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/channels/20/permissions/55"
+    assert json.loads(req.data) == {"type": 0, "allow": "1024"}
+
+
+def test_bot_delete_channel_permission_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(bot.delete_channel_permission("20", "55"))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/channels/20/permissions/55"
+    assert req.get_method() == "DELETE"
+
+
+def test_bot_fetch_channel_invites_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_INVITE_PAYLOAD])]):
+        result = run(bot.fetch_channel_invites("20"))
+
+    assert result == [Invite(_INVITE_PAYLOAD)]
+
+
+def test_bot_create_channel_invite_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_INVITE_PAYLOAD)]):
+        result = run(bot.create_channel_invite("20", max_uses=1))
+
+    assert isinstance(result, Invite)
+
+
+def test_bot_follow_announcement_channel_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_FOLLOWED_PAYLOAD)]) as urlopen:
+        result = run(bot.follow_announcement_channel("20", "30"))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/channels/20/followers"
+    assert json.loads(req.data) == {"webhook_channel_id": "30"}
+    assert isinstance(result, FollowedChannel)
+
+
+def test_bot_trigger_typing_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(bot.trigger_typing("20"))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/channels/20/typing"
+    assert req.get_method() == "POST"
+
+
+def test_bot_set_voice_channel_status_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(bot.set_voice_channel_status("20", "shiv is live"))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/channels/20/voice-status"
+    assert json.loads(req.data) == {"status": "shiv is live"}
+
+
+def test_bot_add_group_dm_recipient_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(bot.add_group_dm_recipient("20", "55", "oauth-token", nick="shiv"))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/channels/20/recipients/55"
+    assert json.loads(req.data) == {"access_token": "oauth-token", "nick": "shiv"}
+
+
+def test_bot_remove_group_dm_recipient_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(bot.remove_group_dm_recipient("20", "55"))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/channels/20/recipients/55"
+    assert req.get_method() == "DELETE"
+
+
+def test_bot_fetch_channel_pins_delegates_to_rest_module():
+    bot = Cordless()
+    payload = {"items": [_PIN_PAYLOAD], "has_more": False}
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
+        result = run(bot.fetch_channel_pins("20"))
+
+    assert len(result) == 1
+    assert isinstance(result[0], MessagePin)
+
+
+def test_bot_pin_message_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(bot.pin_message("20", "99"))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/channels/20/messages/pins/99"
+    assert req.get_method() == "PUT"
+
+
+def test_bot_unpin_message_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(bot.unpin_message("20", "99"))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/channels/20/messages/pins/99"
+    assert req.get_method() == "DELETE"
+
+
+def test_bot_fetch_guild_channels_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_CHANNEL_PAYLOAD])]):
+        result = run(bot.fetch_guild_channels("10"))
+
+    assert result == [Channel(_CHANNEL_PAYLOAD)]
+
+
+def test_bot_edit_guild_channel_positions_delegates_to_rest_module():
+    bot = Cordless()
+    positions = [{"id": "20", "position": 1}]
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(bot.edit_guild_channel_positions("10", positions))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/guilds/10/channels"
+    assert json.loads(req.data) == positions

@@ -775,6 +775,28 @@ def test_discord_request_retries_once_on_429_then_succeeds(monkeypatch):
     assert blocked == [0.2]
 
 
+def test_discord_request_defaults_retry_after_when_429_body_is_not_json(monkeypatch):
+    import os
+    import time
+
+    import cordless.ratelimit as ratelimit
+
+    blocked = []
+    monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: blocked.append(retry_after))
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+    responses = [
+        make_http_error(429, b"not json"),
+        FakeDiscordResponse({}),
+    ]
+
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
+        bot = Cordless()
+        result = asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
+
+    assert result == b"{}"
+    assert blocked == [1.0]
+
+
 def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(monkeypatch):
     """wait_if_needed must run before every attempt, not just the first - otherwise a
     sibling call's note_blocked() from a moment ago is never consulted before retrying."""
