@@ -73,27 +73,22 @@ async def fetch_thread_members(channel_id, *, with_member=False, token=None):
     return [ThreadMember.from_dict(m) for m in data]
 
 
-def _pagination_qs(*, before=None, limit=None):
-    params = [p for p in (f"before={before}" if before else None, f"limit={limit}" if limit else None) if p]
-    return ("?" + "&".join(params)) if params else ""
-
-
 async def fetch_public_archived_threads(channel_id, *, before=None, limit=None, token=None):
-    qs = _pagination_qs(before=before, limit=limit)
+    qs = _client.pagination_qs(before=before, limit=limit)
     data = await _client.request("GET", f"/channels/{channel_id}/threads/archived/public{qs}", token=token)
     assert data is not None, "GET always returns a body"
     return [Thread.from_dict(t) for t in data["threads"]]
 
 
 async def fetch_private_archived_threads(channel_id, *, before=None, limit=None, token=None):
-    qs = _pagination_qs(before=before, limit=limit)
+    qs = _client.pagination_qs(before=before, limit=limit)
     data = await _client.request("GET", f"/channels/{channel_id}/threads/archived/private{qs}", token=token)
     assert data is not None, "GET always returns a body"
     return [Thread.from_dict(t) for t in data["threads"]]
 
 
 async def fetch_joined_private_archived_threads(channel_id, *, before=None, limit=None, token=None):
-    qs = _pagination_qs(before=before, limit=limit)
+    qs = _client.pagination_qs(before=before, limit=limit)
     data = await _client.request("GET", f"/channels/{channel_id}/users/@me/threads/archived/private{qs}", token=token)
     assert data is not None, "GET always returns a body"
     return [Thread.from_dict(t) for t in data["threads"]]

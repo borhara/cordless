@@ -77,3 +77,10 @@ async def request(method, path, payload=None, files=None, token=None):
     """Like request_raw, but parses the JSON response body (None for an empty body)."""
     data = await request_raw(method, path, payload, files, token=token)
     return json.loads(data) if data else None
+
+
+def pagination_qs(*, before=None, limit=None):
+    """Shared query-string builder for the handful of endpoints paginated by
+    before/limit (archived threads, channel pins, ...)."""
+    params = [p for p in (f"before={before}" if before else None, f"limit={limit}" if limit else None) if p]
+    return ("?" + "&".join(params)) if params else ""

@@ -202,6 +202,18 @@ class Message(DiscordObject):
         author_data = self._data.get("author")
         return User(author_data) if author_data is not None else None
 
+    async def pin(self, **kwargs):
+        """Pin this message in its channel. Requires `DISCORD_BOT_TOKEN` and `PIN_MESSAGES`."""
+        from ._rest import channels
+
+        await channels.pin_message(self._data["channel_id"], self.id, **kwargs)
+
+    async def unpin(self, **kwargs):
+        """Unpin this message. Requires `DISCORD_BOT_TOKEN` and `PIN_MESSAGES`."""
+        from ._rest import channels
+
+        await channels.unpin_message(self._data["channel_id"], self.id, **kwargs)
+
 
 class Channel(DiscordObject):
     """A partial Discord channel, e.g. `ctx.channel`. `.id`, `.name`,
@@ -254,6 +266,108 @@ class Channel(DiscordObject):
         from ._rest import threads
 
         return await threads.fetch_joined_private_archived_threads(self.id, **kwargs)
+
+    async def fetch(self, **kwargs):
+        """Re-fetch this channel's full object from Discord - `ctx.channel`
+        only carries a partial payload. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import channels
+
+        return await channels.fetch_channel(self.id, **kwargs)
+
+    async def edit(self, **kwargs):
+        """Update this channel's settings. See `_rest.channels.edit_channel`
+        for the full field list. Returns the updated `Channel`. Requires
+        `DISCORD_BOT_TOKEN`."""
+        from ._rest import channels
+
+        return await channels.edit_channel(self.id, **kwargs)
+
+    async def delete(self, **kwargs):
+        """Delete this channel, close this DM, or delete this thread.
+        Returns the now-deleted `Channel`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import channels
+
+        return await channels.delete_channel(self.id, **kwargs)
+
+    async def set_permissions(self, overwrite_id, *, type, **kwargs):
+        """Add or edit a permission overwrite for a role or member.
+        `type` is 0 for a role, 1 for a member. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import channels
+
+        await channels.edit_channel_permissions(self.id, overwrite_id, type=type, **kwargs)
+
+    async def delete_permission(self, overwrite_id, **kwargs):
+        """Remove a permission overwrite. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import channels
+
+        await channels.delete_channel_permission(self.id, overwrite_id, **kwargs)
+
+    async def fetch_invites(self, **kwargs):
+        """List this channel's invites, as a list of `Invite`. Requires
+        `DISCORD_BOT_TOKEN`."""
+        from ._rest import channels
+
+        return await channels.fetch_channel_invites(self.id, **kwargs)
+
+    async def create_invite(self, **kwargs):
+        """Create an invite to this channel. Returns an `Invite`. Requires
+        `DISCORD_BOT_TOKEN`."""
+        from ._rest import channels
+
+        return await channels.create_channel_invite(self.id, **kwargs)
+
+    async def follow_announcement(self, webhook_channel_id, **kwargs):
+        """Mirror this announcement channel's posts into webhook_channel_id.
+        Returns a `FollowedChannel`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import channels
+
+        return await channels.follow_announcement_channel(self.id, webhook_channel_id, **kwargs)
+
+    async def trigger_typing(self, **kwargs):
+        """Show the typing indicator in this channel for ~10 seconds, or
+        until a message is sent. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import channels
+
+        await channels.trigger_typing(self.id, **kwargs)
+
+    async def set_voice_status(self, status=None, **kwargs):
+        """Set (or, with `status=None`, clear) this voice channel's status.
+        Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import channels
+
+        await channels.set_voice_channel_status(self.id, status, **kwargs)
+
+    async def add_recipient(self, user_id, access_token, **kwargs):
+        """Add a user to this group DM, given an OAuth2 token with the
+        `gdm.join` scope. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import channels
+
+        await channels.add_group_dm_recipient(self.id, user_id, access_token, **kwargs)
+
+    async def remove_recipient(self, user_id, **kwargs):
+        """Remove a user from this group DM. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import channels
+
+        await channels.remove_group_dm_recipient(self.id, user_id, **kwargs)
+
+    async def fetch_pins(self, **kwargs):
+        """List this channel's pinned messages, as a list of `MessagePin`.
+        Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import channels
+
+        return await channels.fetch_channel_pins(self.id, **kwargs)
+
+    async def pin_message(self, message_id, **kwargs):
+        """Pin a message in this channel. Requires `DISCORD_BOT_TOKEN` and `PIN_MESSAGES`."""
+        from ._rest import channels
+
+        await channels.pin_message(self.id, message_id, **kwargs)
+
+    async def unpin_message(self, message_id, **kwargs):
+        """Unpin a message in this channel. Requires `DISCORD_BOT_TOKEN` and `PIN_MESSAGES`."""
+        from ._rest import channels
+
+        await channels.unpin_message(self.id, message_id, **kwargs)
 
 
 class Attachment(DiscordObject):
@@ -331,6 +445,30 @@ class Guild(DiscordObject):
         from ._rest import threads
 
         return await threads.fetch_active_guild_threads(self.id, **kwargs)
+
+    async def create_channel(self, name, **kwargs):
+        """Create a channel in this guild. `type` picks the kind (0 text,
+        2 voice, 4 category, 5 announcement, 13 stage, 15 forum, 16 media,
+        ...); see `_rest.channels.create_guild_channel` for the full field
+        list. Returns the new `Channel`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import channels
+
+        return await channels.create_guild_channel(self.id, name, **kwargs)
+
+    async def fetch_channels(self, **kwargs):
+        """List this guild's channels, as a list of `Channel`. Requires
+        `DISCORD_BOT_TOKEN`."""
+        from ._rest import channels
+
+        return await channels.fetch_guild_channels(self.id, **kwargs)
+
+    async def edit_channel_positions(self, positions, **kwargs):
+        """Reorder this guild's channels. `positions` is a list of
+        `{"id": channel_id, "position": int, ...}` dicts. Requires
+        `DISCORD_BOT_TOKEN`."""
+        from ._rest import channels
+
+        await channels.edit_guild_channel_positions(self.id, positions, **kwargs)
 
 
 def _wrap(cls, data):

@@ -11,6 +11,8 @@ same code path, so there is no request logic duplicated between them.
 from dataclasses import Field, dataclass, field
 from typing import ClassVar
 
+from ..models import DiscordObject
+
 
 class _FromDict:
     """Parses only known fields; ignores whatever new keys Discord adds later
@@ -97,3 +99,33 @@ class Thread(_FromDict):
         from . import threads
 
         return await threads.fetch_thread_members(self.id, with_member=with_member, token=token)
+
+
+class Invite(DiscordObject):
+    """A Discord invite, e.g. from `channel.fetch_invites()` or
+    `channel.create_invite()`. `.code`, `.guild`, `.channel`, `.inviter`,
+    `.uses`, `.max_uses`, `.max_age`, `.temporary`, and any other field
+    Discord sends are available as attributes."""
+
+    @property
+    def url(self):
+        """Full `https://discord.gg/<code>` invite link."""
+        return f"https://discord.gg/{self._data['code']}"
+
+
+class FollowedChannel(DiscordObject):
+    """Returned by `channel.follow_announcement()`: the webhook created in
+    the target channel to mirror this announcement channel's posts.
+    `.channel_id`, `.webhook_id`."""
+
+
+class MessagePin(DiscordObject):
+    """One entry from `channel.fetch_pins()`. `.pinned_at` is an ISO 8601
+    timestamp string of when it was pinned."""
+
+    @property
+    def message(self):
+        """The pinned `Message`."""
+        from ..models import Message
+
+        return Message(self._data.get("message"))

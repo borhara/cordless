@@ -10,10 +10,65 @@ Every method is async, matching the rest of Cordless's public REST surface
 (send_message, execute_webhook, ...): await bot.start_thread_from_message(...).
 """
 
-from . import threads
+from . import channels, threads
 
 
 class RESTMixin:
+    # -- channels --
+    async def fetch_channel(self, channel_id, **kwargs):
+        return await channels.fetch_channel(channel_id, **kwargs)
+
+    async def edit_channel(self, channel_id, **kwargs):
+        return await channels.edit_channel(channel_id, **kwargs)
+
+    async def delete_channel(self, channel_id, **kwargs):
+        return await channels.delete_channel(channel_id, **kwargs)
+
+    async def edit_channel_permissions(self, channel_id, overwrite_id, **kwargs):
+        return await channels.edit_channel_permissions(channel_id, overwrite_id, **kwargs)
+
+    async def delete_channel_permission(self, channel_id, overwrite_id, **kwargs):
+        return await channels.delete_channel_permission(channel_id, overwrite_id, **kwargs)
+
+    async def fetch_channel_invites(self, channel_id, **kwargs):
+        return await channels.fetch_channel_invites(channel_id, **kwargs)
+
+    async def create_channel_invite(self, channel_id, **kwargs):
+        return await channels.create_channel_invite(channel_id, **kwargs)
+
+    async def follow_announcement_channel(self, channel_id, webhook_channel_id, **kwargs):
+        return await channels.follow_announcement_channel(channel_id, webhook_channel_id, **kwargs)
+
+    async def trigger_typing(self, channel_id, **kwargs):
+        return await channels.trigger_typing(channel_id, **kwargs)
+
+    async def set_voice_channel_status(self, channel_id, status=None, **kwargs):
+        return await channels.set_voice_channel_status(channel_id, status, **kwargs)
+
+    async def add_group_dm_recipient(self, channel_id, user_id, access_token, **kwargs):
+        return await channels.add_group_dm_recipient(channel_id, user_id, access_token, **kwargs)
+
+    async def remove_group_dm_recipient(self, channel_id, user_id, **kwargs):
+        return await channels.remove_group_dm_recipient(channel_id, user_id, **kwargs)
+
+    async def fetch_channel_pins(self, channel_id, **kwargs):
+        return await channels.fetch_channel_pins(channel_id, **kwargs)
+
+    async def pin_message(self, channel_id, message_id, **kwargs):
+        return await channels.pin_message(channel_id, message_id, **kwargs)
+
+    async def unpin_message(self, channel_id, message_id, **kwargs):
+        return await channels.unpin_message(channel_id, message_id, **kwargs)
+
+    async def fetch_guild_channels(self, guild_id, **kwargs):
+        return await channels.fetch_guild_channels(guild_id, **kwargs)
+
+    async def create_guild_channel(self, guild_id, name, **kwargs):
+        return await channels.create_guild_channel(guild_id, name, **kwargs)
+
+    async def edit_guild_channel_positions(self, guild_id, positions, **kwargs):
+        return await channels.edit_guild_channel_positions(guild_id, positions, **kwargs)
+
     # -- threads --
     async def start_thread_from_message(self, channel_id, message_id, name, **kwargs):
         return await threads.start_thread_from_message(channel_id, message_id, name, **kwargs)
