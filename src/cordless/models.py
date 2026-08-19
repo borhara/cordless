@@ -213,6 +213,48 @@ class Channel(DiscordObject):
         """`<#id>`, Discord's mention syntax for this channel."""
         return f"<#{self._data['id']}>"
 
+    async def start_thread_from_message(self, message_id, name, **kwargs):
+        """Start a thread off an existing message in this channel. Returns
+        a `Thread`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import threads
+
+        return await threads.start_thread_from_message(self.id, message_id, name, **kwargs)
+
+    async def start_thread_without_message(self, name, **kwargs):
+        """Start a thread not attached to any message in this channel.
+        Returns a `Thread`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import threads
+
+        return await threads.start_thread_without_message(self.id, name, **kwargs)
+
+    async def start_thread_from_forum(self, name, *, message, **kwargs):
+        """Start a forum post (a thread with its first message) in this
+        forum channel. Returns a `Thread`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import threads
+
+        return await threads.start_thread_from_forum(self.id, name, message=message, **kwargs)
+
+    async def fetch_public_archived_threads(self, **kwargs):
+        """List this channel's public archived threads, as a list of
+        `Thread`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import threads
+
+        return await threads.fetch_public_archived_threads(self.id, **kwargs)
+
+    async def fetch_private_archived_threads(self, **kwargs):
+        """List this channel's private archived threads, as a list of
+        `Thread`. Requires `DISCORD_BOT_TOKEN` and `MANAGE_THREADS`."""
+        from ._rest import threads
+
+        return await threads.fetch_private_archived_threads(self.id, **kwargs)
+
+    async def fetch_joined_private_archived_threads(self, **kwargs):
+        """List this channel's private archived threads the bot has joined,
+        as a list of `Thread`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import threads
+
+        return await threads.fetch_joined_private_archived_threads(self.id, **kwargs)
+
 
 class Attachment(DiscordObject):
     """A file attached to a command's `attachment` option, e.g.
@@ -282,6 +324,13 @@ class Guild(DiscordObject):
         guild_id = self._data.get("id")
         splash = self._data.get("discovery_splash")
         return _cdn_asset_url(f"discovery-splashes/{guild_id}/{{hash}}", splash) if guild_id else None
+
+    async def fetch_active_threads(self, **kwargs):
+        """List every active thread in this guild (public and private), as
+        a list of `Thread`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import threads
+
+        return await threads.fetch_active_guild_threads(self.id, **kwargs)
 
 
 def _wrap(cls, data):

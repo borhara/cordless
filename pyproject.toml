@@ -74,6 +74,8 @@ include = [
     "src/cordless/_rest",
     "src/cordless/context.py",
     "src/cordless/models.py",
+    "src/cordless/app.py",
+    "src/cordless/router.py",
 ]
 pythonVersion = "3.11"
 typeCheckingMode = "basic"

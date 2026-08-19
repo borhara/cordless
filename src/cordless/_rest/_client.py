@@ -1,11 +1,16 @@
 """Shared low-level HTTP plumbing for cordless's REST layer.
 
 Extracted from what used to be Cordless._discord_request so it works without a
-Cordless instance - every _rest/<resource>.py module calls request()/request_raw()
-directly. Cordless._discord_request is now a thin shim over request_raw() so
-existing callers/tests that patch it keep working unchanged.
+Cordless instance - every _rest/<resource>.py module awaits request()/request_raw()
+directly. Cordless._discord_request is now a thin async shim over request_raw().
+
+request()/request_raw() are async, matching every other public REST call in
+cordless, but the actual urllib work is blocking - each call runs the whole
+retry loop in a worker thread via run_in_executor, the same one-executor-call-
+per-outbound-request shape the rest of the codebase already uses.
 """
 
+import asyncio
 import json
 import os
 import time
@@ -24,8 +29,8 @@ from ..context import _attach_files
 _MAX_RETRY_SECONDS = 30.0
 
 
-def request_raw(method, path, payload=None, files=None, token=None):
-    """Make an authenticated Discord API call, retrying 429s. Returns the raw response body."""
+def _request_raw_sync(method, path, payload=None, files=None, token=None):
+    """The actual blocking urllib work; only ever run inside an executor thread."""
     token = token or os.environ["DISCORD_BOT_TOKEN"]
     if files:
         _attach_files(payload, files)
@@ -63,7 +68,12 @@ def request_raw(method, path, payload=None, files=None, token=None):
             raise RuntimeError(f"Discord API error {exc.code}: {body_out.decode(errors='replace')}") from exc
 
 
-def request(method, path, payload=None, files=None, token=None):
+async def request_raw(method, path, payload=None, files=None, token=None):
+    """Make an authenticated Discord API call, retrying 429s. Returns the raw response body."""
+    return await asyncio.get_event_loop().run_in_executor(None, _request_raw_sync, method, path, payload, files, token)
+
+
+async def request(method, path, payload=None, files=None, token=None):
     """Like request_raw, but parses the JSON response body (None for an empty body)."""
-    data = request_raw(method, path, payload, files, token=token)
+    data = await request_raw(method, path, payload, files, token=token)
     return json.loads(data) if data else None

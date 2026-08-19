@@ -710,7 +710,9 @@ def test_discord_request_attaches_files_metadata_and_builds_multipart():
 
     with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen([FakeDiscordResponse({})]) as urlopen:
         bot = Cordless()
-        bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}, [("board.png", b"\x89PNG...")])
+        asyncio.run(
+            bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}, [("board.png", b"\x89PNG...")])
+        )
 
     req = urlopen.call_args.args[0]
     assert req.get_header("Content-type").startswith("multipart/form-data; boundary=")
@@ -729,7 +731,7 @@ def test_discord_request_checks_ratelimit_before_sending(monkeypatch):
 
     with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen([FakeDiscordResponse({})]):
         bot = Cordless()
-        bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
+        asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
     assert calls == [("POST", "/channels/123/messages")]
 
@@ -746,7 +748,7 @@ def test_discord_request_records_response_headers_on_success(monkeypatch):
 
     with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen([resp]):
         bot = Cordless()
-        bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
+        asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
     assert recorded == [resp.headers]
 
@@ -767,7 +769,7 @@ def test_discord_request_retries_once_on_429_then_succeeds(monkeypatch):
 
     with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
         bot = Cordless()
-        result = bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
+        result = asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
     assert result == b"{}"
     assert blocked == [0.2]
@@ -792,7 +794,7 @@ def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(monkeypatch):
 
     with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
         bot = Cordless()
-        bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
+        asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
     assert waits == [("POST", "/channels/123/messages"), ("POST", "/channels/123/messages")]
 
@@ -819,7 +821,7 @@ def test_discord_request_gives_up_after_retry_budget_exhausted(monkeypatch):
         pytest.raises(RuntimeError, match="429"),
     ):
         bot = Cordless()
-        bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
+        asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
 
 # --- load_extension ---

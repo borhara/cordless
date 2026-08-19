@@ -94,7 +94,7 @@ def options_from_signature(func):
         annotation, _ = _unwrap_optional(annotation)
         is_optional = optional_from_default
 
-        opt = {"name": p.name, "description": "No description provided."}
+        opt: dict = {"name": p.name, "description": "No description provided."}
 
         if get_origin(annotation) is Literal:
             choices_vals = get_args(annotation)
@@ -275,10 +275,10 @@ class Cordless(RESTMixin):
 
         return decorator
 
-    def _discord_request(self, method, path, payload=None, files=None):
+    async def _discord_request(self, method, path, payload=None, files=None):
         from ._rest import _client
 
-        return _client.request_raw(method, path, payload, files, token=os.environ["DISCORD_BOT_TOKEN"])
+        return await _client.request_raw(method, path, payload, files, token=os.environ["DISCORD_BOT_TOKEN"])
 
     async def send_message(self, channel_id, content=None, *, embeds=None, components=None, files=None):
         """Send a message as the bot. Requires `DISCORD_BOT_TOKEN`, callable
@@ -295,11 +295,8 @@ class Cordless(RESTMixin):
             payload["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
         if _contains_uikit(components):
             payload["flags"] = _FLAG_UI_KIT
-        import asyncio
 
-        await asyncio.get_event_loop().run_in_executor(
-            None, self._discord_request, "POST", f"/channels/{channel_id}/messages", payload, files
-        )
+        await self._discord_request("POST", f"/channels/{channel_id}/messages", payload, files)
 
     async def edit_message(self, channel_id, message_id, content=None, *, embeds=None, components=None, files=None):
         """Edit a message the bot previously sent. Requires
@@ -315,19 +312,12 @@ class Cordless(RESTMixin):
             payload["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
         if _contains_uikit(components):
             payload["flags"] = _FLAG_UI_KIT
-        import asyncio
 
-        await asyncio.get_event_loop().run_in_executor(
-            None, self._discord_request, "PATCH", f"/channels/{channel_id}/messages/{message_id}", payload, files
-        )
+        await self._discord_request("PATCH", f"/channels/{channel_id}/messages/{message_id}", payload, files)
 
     async def delete_message(self, channel_id, message_id):
         """Delete a message. Requires `DISCORD_BOT_TOKEN`."""
-        import asyncio
-
-        await asyncio.get_event_loop().run_in_executor(
-            None, self._discord_request, "DELETE", f"/channels/{channel_id}/messages/{message_id}"
-        )
+        await self._discord_request("DELETE", f"/channels/{channel_id}/messages/{message_id}")
 
     async def execute_webhook(
         self,
@@ -408,19 +398,11 @@ class Cordless(RESTMixin):
 
     async def add_role(self, guild_id, user_id, role_id):
         """Grant a role to a guild member. Requires `DISCORD_BOT_TOKEN`."""
-        import asyncio
-
-        await asyncio.get_event_loop().run_in_executor(
-            None, self._discord_request, "PUT", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}"
-        )
+        await self._discord_request("PUT", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}")
 
     async def remove_role(self, guild_id, user_id, role_id):
         """Remove a role from a guild member. Requires `DISCORD_BOT_TOKEN`."""
-        import asyncio
-
-        await asyncio.get_event_loop().run_in_executor(
-            None, self._discord_request, "DELETE", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}"
-        )
+        await self._discord_request("DELETE", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}")
 
     async def create_webhook(self, channel_id, name, avatar=None):
         """Create a webhook in a channel. Requires DISCORD_BOT_TOKEN. Returns the
@@ -429,16 +411,12 @@ class Cordless(RESTMixin):
         if avatar is not None:
             payload["avatar"] = avatar
 
-        body = await asyncio.get_event_loop().run_in_executor(
-            None, self._discord_request, "POST", f"/channels/{channel_id}/webhooks", payload
-        )
+        body = await self._discord_request("POST", f"/channels/{channel_id}/webhooks", payload)
         return json.loads(body)
 
     async def get_channel_webhooks(self, channel_id):
         """List a channel's webhooks. Requires DISCORD_BOT_TOKEN."""
-        body = await asyncio.get_event_loop().run_in_executor(
-            None, self._discord_request, "GET", f"/channels/{channel_id}/webhooks"
-        )
+        body = await self._discord_request("GET", f"/channels/{channel_id}/webhooks")
         return json.loads(body)
 
     async def delete_webhook(self, webhook_id, webhook_token=None):
@@ -450,7 +428,7 @@ class Cordless(RESTMixin):
             await asyncio.get_event_loop().run_in_executor(None, _webhook.delete_webhook, webhook_id, webhook_token)
             return
 
-        await asyncio.get_event_loop().run_in_executor(None, self._discord_request, "DELETE", f"/webhooks/{webhook_id}")
+        await self._discord_request("DELETE", f"/webhooks/{webhook_id}")
 
     @property
     def worker_handler(self):

@@ -45,7 +45,7 @@ class Router:
         self,
         name,
         handler,
-        description="No description provided.",
+        description: str | None = "No description provided.",
         options=None,
         dm_permission=True,
         cmd_type=1,
