@@ -705,6 +705,12 @@ def _urlopen(responses):
     return patch("cordless._rest._client.urllib.request.urlopen", side_effect=responses)
 
 
+def test_unset_repr_is_readable():
+    from cordless._rest._client import UNSET
+
+    assert repr(UNSET) == "UNSET"
+
+
 def test_discord_request_attaches_files_metadata_and_builds_multipart():
     import os
 

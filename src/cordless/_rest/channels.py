@@ -4,13 +4,8 @@ them."""
 
 from ..models import Channel
 from . import _client
+from ._client import UNSET
 from .models import FollowedChannel, Invite, MessagePin
-
-
-def _payload(**fields):
-    """Drop whatever field was left at its default None, so a call only sends
-    what the caller actually set."""
-    return {k: v for k, v in fields.items() if v is not None}
 
 
 async def fetch_channel(channel_id, *, token=None):
@@ -21,37 +16,38 @@ async def fetch_channel(channel_id, *, token=None):
 async def edit_channel(
     channel_id,
     *,
-    name=None,
-    icon=None,
-    type=None,
-    position=None,
-    topic=None,
-    nsfw=None,
-    rate_limit_per_user=None,
-    bitrate=None,
-    user_limit=None,
-    permission_overwrites=None,
-    parent_id=None,
-    rtc_region=None,
-    video_quality_mode=None,
-    default_auto_archive_duration=None,
-    flags=None,
-    available_tags=None,
-    default_reaction_emoji=None,
-    default_thread_rate_limit_per_user=None,
-    default_sort_order=None,
-    default_forum_layout=None,
-    archived=None,
-    auto_archive_duration=None,
-    locked=None,
-    invitable=None,
-    applied_tags=None,
+    name=UNSET,
+    icon=UNSET,
+    type=UNSET,
+    position=UNSET,
+    topic=UNSET,
+    nsfw=UNSET,
+    rate_limit_per_user=UNSET,
+    bitrate=UNSET,
+    user_limit=UNSET,
+    permission_overwrites=UNSET,
+    parent_id=UNSET,
+    rtc_region=UNSET,
+    video_quality_mode=UNSET,
+    default_auto_archive_duration=UNSET,
+    flags=UNSET,
+    available_tags=UNSET,
+    default_reaction_emoji=UNSET,
+    default_thread_rate_limit_per_user=UNSET,
+    default_sort_order=UNSET,
+    default_forum_layout=UNSET,
+    archived=UNSET,
+    auto_archive_duration=UNSET,
+    locked=UNSET,
+    invitable=UNSET,
+    applied_tags=UNSET,
     token=None,
 ):
     """One endpoint covers group DMs, guild channels and threads alike -
     Discord just looks at which fields you actually send. Pass only the ones
-    that apply to what channel_id happens to be."""
-    payload = _payload(
+    that apply to what channel_id happens to be. Most nullable fields
+    (parent_id, icon, rtc_region, ...) can be cleared by passing None."""
+    payload = _client.payload(
         name=name,
         icon=icon,
         type=type,
@@ -89,10 +85,10 @@ async def delete_channel(channel_id, *, token=None):
     return Channel(data)
 
 
-async def edit_channel_permissions(channel_id, overwrite_id, *, type, allow=None, deny=None, token=None):
+async def edit_channel_permissions(channel_id, overwrite_id, *, type, allow=UNSET, deny=UNSET, token=None):
     """`type` is 0 for a role overwrite, 1 for a member overwrite. `allow`/`deny`
     are permission bitfields as strings (see `Permissions`)."""
-    payload = _payload(type=type, allow=allow, deny=deny)
+    payload = _client.payload(type=type, allow=allow, deny=deny)
     await _client.request("PUT", f"/channels/{channel_id}/permissions/{overwrite_id}", payload, token=token)
 
 
@@ -109,16 +105,16 @@ async def fetch_channel_invites(channel_id, *, token=None):
 async def create_channel_invite(
     channel_id,
     *,
-    max_age=None,
-    max_uses=None,
-    temporary=None,
-    unique=None,
-    target_type=None,
-    target_user_id=None,
-    target_application_id=None,
+    max_age=UNSET,
+    max_uses=UNSET,
+    temporary=UNSET,
+    unique=UNSET,
+    target_type=UNSET,
+    target_user_id=UNSET,
+    target_application_id=UNSET,
     token=None,
 ):
-    payload = _payload(
+    payload = _client.payload(
         max_age=max_age,
         max_uses=max_uses,
         temporary=temporary,
@@ -151,8 +147,8 @@ async def set_voice_channel_status(channel_id, status=None, *, token=None):
     await _client.request("PUT", f"/channels/{channel_id}/voice-status", {"status": status}, token=token)
 
 
-async def add_group_dm_recipient(channel_id, user_id, access_token, *, nick=None, token=None):
-    payload = _payload(access_token=access_token, nick=nick)
+async def add_group_dm_recipient(channel_id, user_id, access_token, *, nick=UNSET, token=None):
+    payload = _client.payload(access_token=access_token, nick=nick)
     await _client.request("PUT", f"/channels/{channel_id}/recipients/{user_id}", payload, token=token)
 
 
@@ -188,27 +184,27 @@ async def create_guild_channel(
     guild_id,
     name,
     *,
-    type=None,
-    topic=None,
-    bitrate=None,
-    user_limit=None,
-    rate_limit_per_user=None,
-    position=None,
-    permission_overwrites=None,
-    parent_id=None,
-    nsfw=None,
-    rtc_region=None,
-    video_quality_mode=None,
-    default_auto_archive_duration=None,
-    default_reaction_emoji=None,
-    available_tags=None,
-    default_sort_order=None,
-    default_forum_layout=None,
-    default_thread_rate_limit_per_user=None,
-    flags=None,
+    type=UNSET,
+    topic=UNSET,
+    bitrate=UNSET,
+    user_limit=UNSET,
+    rate_limit_per_user=UNSET,
+    position=UNSET,
+    permission_overwrites=UNSET,
+    parent_id=UNSET,
+    nsfw=UNSET,
+    rtc_region=UNSET,
+    video_quality_mode=UNSET,
+    default_auto_archive_duration=UNSET,
+    default_reaction_emoji=UNSET,
+    available_tags=UNSET,
+    default_sort_order=UNSET,
+    default_forum_layout=UNSET,
+    default_thread_rate_limit_per_user=UNSET,
+    flags=UNSET,
     token=None,
 ):
-    payload = _payload(
+    payload = _client.payload(
         name=name,
         type=type,
         topic=topic,

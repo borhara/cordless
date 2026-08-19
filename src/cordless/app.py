@@ -397,12 +397,18 @@ class Cordless(RESTMixin):
         )
 
     async def add_role(self, guild_id, user_id, role_id):
-        """Grant a role to a guild member. Requires `DISCORD_BOT_TOKEN`."""
-        await self._discord_request("PUT", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}")
+        """Grant a role to a guild member. Requires `DISCORD_BOT_TOKEN`.
+        Same as `add_guild_member_role`, kept under its older name."""
+        from ._rest import members
+
+        await members.add_guild_member_role(guild_id, user_id, role_id)
 
     async def remove_role(self, guild_id, user_id, role_id):
-        """Remove a role from a guild member. Requires `DISCORD_BOT_TOKEN`."""
-        await self._discord_request("DELETE", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}")
+        """Remove a role from a guild member. Requires `DISCORD_BOT_TOKEN`.
+        Same as `remove_guild_member_role`, kept under its older name."""
+        from ._rest import members
+
+        await members.remove_guild_member_role(guild_id, user_id, role_id)
 
     async def create_webhook(self, channel_id, name, avatar=None):
         """Create a webhook in a channel. Requires DISCORD_BOT_TOKEN. Returns the

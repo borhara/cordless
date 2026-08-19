@@ -190,6 +190,42 @@ class Member(DiscordObject):
         raw = self._data.get("permissions")
         return Permissions(raw) if raw is not None else None
 
+    async def edit(self, **kwargs):
+        """Update this member's nick, roles, mute/deaf, voice channel or
+        timeout. Returns the updated `Member`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import members
+
+        return await members.edit_guild_member(self._data["guild_id"], self._data["user"]["id"], **kwargs)
+
+    async def add_role(self, role_id, **kwargs):
+        """Grant this member a role. Requires `DISCORD_BOT_TOKEN` and `MANAGE_ROLES`."""
+        from ._rest import members
+
+        await members.add_guild_member_role(self._data["guild_id"], self._data["user"]["id"], role_id, **kwargs)
+
+    async def remove_role(self, role_id, **kwargs):
+        """Remove a role from this member. Requires `DISCORD_BOT_TOKEN` and `MANAGE_ROLES`."""
+        from ._rest import members
+
+        await members.remove_guild_member_role(self._data["guild_id"], self._data["user"]["id"], role_id, **kwargs)
+
+    async def kick(self, **kwargs):
+        """Remove this member from the guild. Requires `DISCORD_BOT_TOKEN`
+        and `KICK_MEMBERS`."""
+        from ._rest import members
+
+        await members.remove_guild_member(self._data["guild_id"], self._data["user"]["id"], **kwargs)
+
+    async def timeout(self, until, **kwargs):
+        """Time this member out until an ISO 8601 timestamp (up to 28 days
+        out), or pass `None` to clear an existing timeout. Requires
+        `DISCORD_BOT_TOKEN` and `MODERATE_MEMBERS`."""
+        from ._rest import members
+
+        return await members.edit_guild_member(
+            self._data["guild_id"], self._data["user"]["id"], communication_disabled_until=until, **kwargs
+        )
+
 
 class Message(DiscordObject):
     """A Discord message, e.g. `ctx.message` (the message a component sits
@@ -403,6 +439,19 @@ class Role(DiscordObject):
         bitfield string Discord sends."""
         raw = self._data.get("permissions")
         return Permissions(raw) if raw is not None else None
+
+    async def edit(self, **kwargs):
+        """Update this role. Returns the updated `Role`. Requires
+        `DISCORD_BOT_TOKEN` and `MANAGE_ROLES`."""
+        from ._rest import members
+
+        return await members.edit_guild_role(self._data["guild_id"], self.id, **kwargs)
+
+    async def delete(self, **kwargs):
+        """Delete this role. Requires `DISCORD_BOT_TOKEN` and `MANAGE_ROLES`."""
+        from ._rest import members
+
+        await members.delete_guild_role(self._data["guild_id"], self.id, **kwargs)
 
 
 class Guild(DiscordObject):
@@ -641,6 +690,102 @@ class Guild(DiscordObject):
         from ._rest import guilds
 
         return await guilds.edit_guild_incident_actions(self.id, **kwargs)
+
+    async def fetch_member(self, user_id, **kwargs):
+        """Fetch a single guild `Member` by user id. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import members
+
+        return await members.fetch_guild_member(self.id, user_id, **kwargs)
+
+    async def fetch_members(self, **kwargs):
+        """List this guild's members, as a list of `Member`. Requires the
+        `GUILD_MEMBERS` privileged intent and `DISCORD_BOT_TOKEN`."""
+        from ._rest import members
+
+        return await members.fetch_guild_members(self.id, **kwargs)
+
+    async def search_members(self, query, **kwargs):
+        """Find members whose username or nickname starts with query, as a
+        list of `Member`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import members
+
+        return await members.search_guild_members(self.id, query, **kwargs)
+
+    async def add_member(self, user_id, access_token, **kwargs):
+        """Add a user to this guild via an OAuth2 token with the
+        `guilds.join` scope. Returns the new `Member`, or `None` if they
+        were already a member. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import members
+
+        return await members.add_guild_member(self.id, user_id, access_token, **kwargs)
+
+    async def edit_member(self, user_id, **kwargs):
+        """Update a member's nick, roles, mute/deaf, voice channel or
+        timeout. Returns the updated `Member`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import members
+
+        return await members.edit_guild_member(self.id, user_id, **kwargs)
+
+    async def edit_current_member(self, **kwargs):
+        """Update the bot's own nick, banner, avatar or bio in this guild.
+        Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import members
+
+        return await members.edit_current_member(self.id, **kwargs)
+
+    async def add_member_role(self, user_id, role_id, **kwargs):
+        """Grant a role to a member. Requires `DISCORD_BOT_TOKEN` and `MANAGE_ROLES`."""
+        from ._rest import members
+
+        await members.add_guild_member_role(self.id, user_id, role_id, **kwargs)
+
+    async def remove_member_role(self, user_id, role_id, **kwargs):
+        """Remove a role from a member. Requires `DISCORD_BOT_TOKEN` and `MANAGE_ROLES`."""
+        from ._rest import members
+
+        await members.remove_guild_member_role(self.id, user_id, role_id, **kwargs)
+
+    async def kick(self, user_id, **kwargs):
+        """Remove a member from this guild. Requires `DISCORD_BOT_TOKEN` and
+        `KICK_MEMBERS`."""
+        from ._rest import members
+
+        await members.remove_guild_member(self.id, user_id, **kwargs)
+
+    async def fetch_roles(self, **kwargs):
+        """List this guild's roles, as a list of `Role`. Requires
+        `DISCORD_BOT_TOKEN`."""
+        from ._rest import members
+
+        return await members.fetch_guild_roles(self.id, **kwargs)
+
+    async def fetch_role(self, role_id, **kwargs):
+        """Fetch a single `Role` by id. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import members
+
+        return await members.fetch_guild_role(self.id, role_id, **kwargs)
+
+    async def fetch_role_member_counts(self, **kwargs):
+        """Map of role id to member count, excluding @everyone. Requires
+        `DISCORD_BOT_TOKEN`."""
+        from ._rest import members
+
+        return await members.fetch_guild_role_member_counts(self.id, **kwargs)
+
+    async def create_role(self, **kwargs):
+        """Create a role in this guild. Returns the new `Role`. Requires
+        `DISCORD_BOT_TOKEN` and `MANAGE_ROLES`."""
+        from ._rest import members
+
+        return await members.create_guild_role(self.id, **kwargs)
+
+    async def edit_role_positions(self, positions, **kwargs):
+        """Reorder this guild's roles. `positions` is a list of
+        `{"id": role_id, "position": int}` dicts. Returns every `Role` in
+        the guild. Requires `DISCORD_BOT_TOKEN` and `MANAGE_ROLES`."""
+        from ._rest import members
+
+        return await members.edit_guild_role_positions(self.id, positions, **kwargs)
 
 
 def _wrap(cls, data):

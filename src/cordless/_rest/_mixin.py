@@ -10,10 +10,59 @@ Every method is async, matching the rest of Cordless's public REST surface
 (send_message, execute_webhook, ...): await bot.start_thread_from_message(...).
 """
 
-from . import channels, guilds, threads
+from . import channels, guilds, members, threads
 
 
 class RESTMixin:
+    # -- members and roles --
+    async def fetch_guild_member(self, guild_id, user_id, **kwargs):
+        return await members.fetch_guild_member(guild_id, user_id, **kwargs)
+
+    async def fetch_guild_members(self, guild_id, **kwargs):
+        return await members.fetch_guild_members(guild_id, **kwargs)
+
+    async def search_guild_members(self, guild_id, query, **kwargs):
+        return await members.search_guild_members(guild_id, query, **kwargs)
+
+    async def add_guild_member(self, guild_id, user_id, access_token, **kwargs):
+        return await members.add_guild_member(guild_id, user_id, access_token, **kwargs)
+
+    async def edit_guild_member(self, guild_id, user_id, **kwargs):
+        return await members.edit_guild_member(guild_id, user_id, **kwargs)
+
+    async def edit_current_member(self, guild_id, **kwargs):
+        return await members.edit_current_member(guild_id, **kwargs)
+
+    async def add_guild_member_role(self, guild_id, user_id, role_id, **kwargs):
+        return await members.add_guild_member_role(guild_id, user_id, role_id, **kwargs)
+
+    async def remove_guild_member_role(self, guild_id, user_id, role_id, **kwargs):
+        return await members.remove_guild_member_role(guild_id, user_id, role_id, **kwargs)
+
+    async def remove_guild_member(self, guild_id, user_id, **kwargs):
+        return await members.remove_guild_member(guild_id, user_id, **kwargs)
+
+    async def fetch_guild_roles(self, guild_id, **kwargs):
+        return await members.fetch_guild_roles(guild_id, **kwargs)
+
+    async def fetch_guild_role(self, guild_id, role_id, **kwargs):
+        return await members.fetch_guild_role(guild_id, role_id, **kwargs)
+
+    async def fetch_guild_role_member_counts(self, guild_id, **kwargs):
+        return await members.fetch_guild_role_member_counts(guild_id, **kwargs)
+
+    async def create_guild_role(self, guild_id, **kwargs):
+        return await members.create_guild_role(guild_id, **kwargs)
+
+    async def edit_guild_role_positions(self, guild_id, positions, **kwargs):
+        return await members.edit_guild_role_positions(guild_id, positions, **kwargs)
+
+    async def edit_guild_role(self, guild_id, role_id, **kwargs):
+        return await members.edit_guild_role(guild_id, role_id, **kwargs)
+
+    async def delete_guild_role(self, guild_id, role_id, **kwargs):
+        return await members.delete_guild_role(guild_id, role_id, **kwargs)
+
     # -- guilds --
     async def fetch_guild(self, guild_id, **kwargs):
         return await guilds.fetch_guild(guild_id, **kwargs)

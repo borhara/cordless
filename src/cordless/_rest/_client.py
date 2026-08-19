@@ -84,3 +84,22 @@ def pagination_qs(*, before=None, limit=None):
     before/limit (archived threads, channel pins, ...)."""
     params = [p for p in (f"before={before}" if before else None, f"limit={limit}" if limit else None) if p]
     return ("?" + "&".join(params)) if params else ""
+
+
+class _Unset:
+    __slots__ = ()
+
+    def __repr__(self):
+        return "UNSET"
+
+
+UNSET = _Unset()
+
+
+def payload(**fields):
+    """Build a request body from a resource function's optional kwargs,
+    keeping only the ones the caller actually set. Fields default to UNSET
+    rather than None, so passing None explicitly (Discord's way of clearing
+    a nullable field, e.g. nick=None or parent_id=None) still comes through
+    instead of being silently dropped."""
+    return {k: v for k, v in fields.items() if v is not UNSET}
