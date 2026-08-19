@@ -29,10 +29,17 @@ from ..context import _attach_files
 _MAX_RETRY_SECONDS = 30.0
 
 
-def _request_raw_sync(method, path, payload=None, files=None, token=None):
-    """The actual blocking urllib work; only ever run inside an executor thread."""
+def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_body=None):
+    """The actual blocking urllib work; only ever run inside an executor thread.
+
+    raw_body is an escape hatch for the handful of endpoints that don't use
+    Discord's payload_json + files[n] attachment convention (e.g. Create
+    Guild Sticker's plain multipart form): pass a pre-built
+    (body_bytes, content_type) pair and it's sent as-is, bypassing payload/files."""
     token = token or os.environ["DISCORD_BOT_TOKEN"]
-    if files:
+    if raw_body is not None:
+        body, content_type = raw_body
+    elif files:
         _attach_files(payload, files)
         body, content_type = build_multipart_body(payload, files)
     elif payload is not None:
@@ -68,14 +75,16 @@ def _request_raw_sync(method, path, payload=None, files=None, token=None):
             raise RuntimeError(f"Discord API error {exc.code}: {body_out.decode(errors='replace')}") from exc
 
 
-async def request_raw(method, path, payload=None, files=None, token=None):
+async def request_raw(method, path, payload=None, files=None, token=None, raw_body=None):
     """Make an authenticated Discord API call, retrying 429s. Returns the raw response body."""
-    return await asyncio.get_event_loop().run_in_executor(None, _request_raw_sync, method, path, payload, files, token)
+    return await asyncio.get_event_loop().run_in_executor(
+        None, _request_raw_sync, method, path, payload, files, token, raw_body
+    )
 
 
-async def request(method, path, payload=None, files=None, token=None):
+async def request(method, path, payload=None, files=None, token=None, raw_body=None):
     """Like request_raw, but parses the JSON response body (None for an empty body)."""
-    data = await request_raw(method, path, payload, files, token=token)
+    data = await request_raw(method, path, payload, files, token=token, raw_body=raw_body)
     return json.loads(data) if data else None
 
 

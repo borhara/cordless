@@ -633,7 +633,7 @@ def test_raw_dict_uikit_component_sets_flag():
 def _captured_request(coro):
     captured = {}
 
-    def fake_request(method, path, payload=None, files=None, token=None):
+    def fake_request(method, path, payload=None, files=None, token=None, raw_body=None):
         captured["payload"] = payload
         captured["files"] = files
         return b"{}"

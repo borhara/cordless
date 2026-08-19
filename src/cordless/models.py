@@ -915,6 +915,48 @@ class Guild(DiscordObject):
 
         return await webhooks.fetch_guild_webhooks(self.id, **kwargs)
 
+    async def fetch_emojis(self, **kwargs):
+        """List this guild's custom emojis, as a list of `Emoji`. Requires
+        `DISCORD_BOT_TOKEN`."""
+        from ._rest import emojis
+
+        return await emojis.fetch_guild_emojis(self.id, **kwargs)
+
+    async def fetch_emoji(self, emoji_id, **kwargs):
+        """Fetch a single custom emoji by id. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import emojis
+
+        return await emojis.fetch_guild_emoji(self.id, emoji_id, **kwargs)
+
+    async def create_emoji(self, name, image, **kwargs):
+        """Upload a new custom emoji (128x128, up to 256 KiB). `image` is
+        base64 image data. Returns the new `Emoji`. Requires
+        `DISCORD_BOT_TOKEN` and `CREATE_GUILD_EXPRESSIONS`."""
+        from ._rest import emojis
+
+        return await emojis.create_guild_emoji(self.id, name, image, **kwargs)
+
+    async def fetch_stickers(self, **kwargs):
+        """List this guild's stickers, as a list of `Sticker`. Requires
+        `DISCORD_BOT_TOKEN`."""
+        from ._rest import stickers
+
+        return await stickers.fetch_guild_stickers(self.id, **kwargs)
+
+    async def fetch_sticker(self, sticker_id, **kwargs):
+        """Fetch a single guild sticker by id. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import stickers
+
+        return await stickers.fetch_guild_sticker(self.id, sticker_id, **kwargs)
+
+    async def create_sticker(self, name, description, tags, filename, file_bytes, **kwargs):
+        """Upload a new sticker (PNG, APNG, GIF, or Lottie JSON, up to 512 KiB,
+        320x320, animated ones under 5 seconds). Returns the new `Sticker`.
+        Requires `DISCORD_BOT_TOKEN` and `CREATE_GUILD_EXPRESSIONS`."""
+        from ._rest import stickers
+
+        return await stickers.create_guild_sticker(self.id, name, description, tags, filename, file_bytes, **kwargs)
+
 
 def _wrap(cls, data):
     return cls(data) if data is not None else None

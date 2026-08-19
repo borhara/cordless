@@ -304,3 +304,61 @@ class Webhook(DiscordObject):
         from .. import webhook as _webhook
 
         await asyncio.get_event_loop().run_in_executor(None, _webhook.delete_message, self.id, self.token, message_id)
+
+
+class Emoji(DiscordObject):
+    """A custom emoji, from `guild.fetch_emojis()` or
+    `bot.fetch_application_emojis()`. `.id`, `.name`, `.roles`, `.animated`,
+    `.available`, and any other field Discord sends."""
+
+    async def edit(self, **kwargs):
+        """Update this emoji. Requires `DISCORD_BOT_TOKEN`, and
+        `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS` for a guild
+        emoji."""
+        from . import emojis
+
+        if "guild_id" in self._data:
+            return await emojis.edit_guild_emoji(self._data["guild_id"], self.id, **kwargs)
+        return await emojis.edit_application_emoji(self._data["application_id"], self.id, **kwargs)
+
+    async def delete(self, **kwargs):
+        """Delete this emoji. Requires `DISCORD_BOT_TOKEN`, and
+        `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS` for a guild
+        emoji."""
+        from . import emojis
+
+        if "guild_id" in self._data:
+            await emojis.delete_guild_emoji(self._data["guild_id"], self.id, **kwargs)
+        else:
+            await emojis.delete_application_emoji(self._data["application_id"], self.id, **kwargs)
+
+
+class Sticker(DiscordObject):
+    """A sticker, from `guild.fetch_stickers()` or a message's
+    `sticker_items`. `.id`, `.name`, `.description`, `.tags`, `.type`,
+    `.format_type`, and any other field Discord sends. `.guild_id` is only
+    present on guild stickers, not standard (pack) ones."""
+
+    async def edit(self, **kwargs):
+        """Update this guild sticker. Requires `DISCORD_BOT_TOKEN`, and
+        `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS`."""
+        from . import stickers
+
+        return await stickers.edit_guild_sticker(self._data["guild_id"], self.id, **kwargs)
+
+    async def delete(self, **kwargs):
+        """Delete this guild sticker. Requires `DISCORD_BOT_TOKEN`, and
+        `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS`."""
+        from . import stickers
+
+        await stickers.delete_guild_sticker(self._data["guild_id"], self.id, **kwargs)
+
+
+class StickerPack(DiscordObject):
+    """One of Discord's official sticker packs, from `bot.fetch_sticker_packs()`.
+    `.id`, `.name`, `.description`, `.sku_id`, `.cover_sticker_id`,
+    `.banner_asset_id`. `.stickers` is a list of `Sticker`."""
+
+    @property
+    def stickers(self):
+        return [Sticker(s) for s in self._data.get("stickers", [])]

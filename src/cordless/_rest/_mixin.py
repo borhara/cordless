@@ -10,10 +10,66 @@ Every method is async, matching the rest of Cordless's public REST surface
 (send_message, execute_webhook, ...): await bot.start_thread_from_message(...).
 """
 
-from . import channels, guilds, invites, members, messages, threads, webhooks
+from . import channels, emojis, guilds, invites, members, messages, stickers, threads, webhooks
 
 
 class RESTMixin:
+    # -- emojis --
+    async def fetch_guild_emojis(self, guild_id, **kwargs):
+        return await emojis.fetch_guild_emojis(guild_id, **kwargs)
+
+    async def fetch_guild_emoji(self, guild_id, emoji_id, **kwargs):
+        return await emojis.fetch_guild_emoji(guild_id, emoji_id, **kwargs)
+
+    async def create_guild_emoji(self, guild_id, name, image, **kwargs):
+        return await emojis.create_guild_emoji(guild_id, name, image, **kwargs)
+
+    async def edit_guild_emoji(self, guild_id, emoji_id, **kwargs):
+        return await emojis.edit_guild_emoji(guild_id, emoji_id, **kwargs)
+
+    async def delete_guild_emoji(self, guild_id, emoji_id, **kwargs):
+        return await emojis.delete_guild_emoji(guild_id, emoji_id, **kwargs)
+
+    async def fetch_application_emojis(self, application_id, **kwargs):
+        return await emojis.fetch_application_emojis(application_id, **kwargs)
+
+    async def fetch_application_emoji(self, application_id, emoji_id, **kwargs):
+        return await emojis.fetch_application_emoji(application_id, emoji_id, **kwargs)
+
+    async def create_application_emoji(self, application_id, name, image, **kwargs):
+        return await emojis.create_application_emoji(application_id, name, image, **kwargs)
+
+    async def edit_application_emoji(self, application_id, emoji_id, **kwargs):
+        return await emojis.edit_application_emoji(application_id, emoji_id, **kwargs)
+
+    async def delete_application_emoji(self, application_id, emoji_id, **kwargs):
+        return await emojis.delete_application_emoji(application_id, emoji_id, **kwargs)
+
+    # -- stickers --
+    async def fetch_sticker(self, sticker_id, **kwargs):
+        return await stickers.fetch_sticker(sticker_id, **kwargs)
+
+    async def fetch_sticker_packs(self, **kwargs):
+        return await stickers.fetch_sticker_packs(**kwargs)
+
+    async def fetch_sticker_pack(self, pack_id, **kwargs):
+        return await stickers.fetch_sticker_pack(pack_id, **kwargs)
+
+    async def fetch_guild_stickers(self, guild_id, **kwargs):
+        return await stickers.fetch_guild_stickers(guild_id, **kwargs)
+
+    async def fetch_guild_sticker(self, guild_id, sticker_id, **kwargs):
+        return await stickers.fetch_guild_sticker(guild_id, sticker_id, **kwargs)
+
+    async def create_guild_sticker(self, guild_id, name, description, tags, filename, file_bytes, **kwargs):
+        return await stickers.create_guild_sticker(guild_id, name, description, tags, filename, file_bytes, **kwargs)
+
+    async def edit_guild_sticker(self, guild_id, sticker_id, **kwargs):
+        return await stickers.edit_guild_sticker(guild_id, sticker_id, **kwargs)
+
+    async def delete_guild_sticker(self, guild_id, sticker_id, **kwargs):
+        return await stickers.delete_guild_sticker(guild_id, sticker_id, **kwargs)
+
     # -- invites --
     async def fetch_invite(self, code, **kwargs):
         return await invites.fetch_invite(code, **kwargs)
