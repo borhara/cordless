@@ -24,11 +24,34 @@ from . import (
     stickers,
     templates,
     threads,
+    users,
     webhooks,
 )
 
 
 class RESTMixin:
+    # -- users --
+    async def fetch_current_user(self, **kwargs):
+        return await users.fetch_current_user(**kwargs)
+
+    async def fetch_user(self, user_id, **kwargs):
+        return await users.fetch_user(user_id, **kwargs)
+
+    async def edit_current_user(self, **kwargs):
+        return await users.edit_current_user(**kwargs)
+
+    async def fetch_current_user_guilds(self, **kwargs):
+        return await users.fetch_current_user_guilds(**kwargs)
+
+    async def fetch_current_user_guild_member(self, guild_id, **kwargs):
+        return await users.fetch_current_user_guild_member(guild_id, **kwargs)
+
+    async def leave_guild(self, guild_id, **kwargs):
+        return await users.leave_guild(guild_id, **kwargs)
+
+    async def create_dm(self, recipient_id, **kwargs):
+        return await users.create_dm(recipient_id, **kwargs)
+
     # -- audit log --
     async def fetch_audit_log(self, guild_id, **kwargs):
         return await audit_log.fetch_audit_log(guild_id, **kwargs)

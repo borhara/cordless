@@ -161,6 +161,20 @@ class User(DiscordObject):
         banner = self._data.get("banner")
         return _cdn_asset_url(f"banners/{user_id}/{{hash}}", banner) if user_id else None
 
+    async def fetch(self, **kwargs):
+        """Re-fetch this user by id. Returns a fresh `User`. Requires
+        `DISCORD_BOT_TOKEN`."""
+        from ._rest import users
+
+        return await users.fetch_user(self.id, **kwargs)
+
+    async def create_dm(self, **kwargs):
+        """Open (or fetch the existing) DM channel with this user. Returns
+        the DM `Channel`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import users
+
+        return await users.create_dm(self.id, **kwargs)
+
 
 class Member(DiscordObject):
     """A guild member, e.g. `ctx.member` (`None` in DMs). `.nick`, `.roles`,
@@ -1039,6 +1053,19 @@ class Guild(DiscordObject):
         from ._rest import audit_log
 
         return await audit_log.fetch_audit_log(self.id, **kwargs)
+
+    async def fetch_current_member(self, **kwargs):
+        """Fetch the bot's own `Member` object in this guild. Requires
+        `DISCORD_BOT_TOKEN`."""
+        from ._rest import users
+
+        return await users.fetch_current_user_guild_member(self.id, **kwargs)
+
+    async def leave(self, **kwargs):
+        """Leave this guild. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import users
+
+        await users.leave_guild(self.id, **kwargs)
 
 
 def _wrap(cls, data):
