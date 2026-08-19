@@ -517,6 +517,21 @@ class Channel(DiscordObject):
 
         return await webhooks.fetch_channel_webhooks(self.id, **kwargs)
 
+    async def create_stage_instance(self, topic, **kwargs):
+        """Start a live Stage on this Stage channel. Returns the new
+        `StageInstance`. Requires `DISCORD_BOT_TOKEN` and Stage moderator
+        permissions."""
+        from ._rest import stage_instances
+
+        return await stage_instances.create_stage_instance(self.id, topic, **kwargs)
+
+    async def fetch_stage_instance(self, **kwargs):
+        """Fetch this Stage channel's live `StageInstance`, if it has one.
+        Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import stage_instances
+
+        return await stage_instances.fetch_stage_instance(self.id, **kwargs)
+
 
 class Attachment(DiscordObject):
     """A file attached to a command's `attachment` option, e.g.

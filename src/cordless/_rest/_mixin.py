@@ -19,6 +19,7 @@ from . import (
     members,
     messages,
     scheduled_events,
+    stage_instances,
     stickers,
     threads,
     webhooks,
@@ -26,6 +27,19 @@ from . import (
 
 
 class RESTMixin:
+    # -- stage instances --
+    async def create_stage_instance(self, channel_id, topic, **kwargs):
+        return await stage_instances.create_stage_instance(channel_id, topic, **kwargs)
+
+    async def fetch_stage_instance(self, channel_id, **kwargs):
+        return await stage_instances.fetch_stage_instance(channel_id, **kwargs)
+
+    async def edit_stage_instance(self, channel_id, **kwargs):
+        return await stage_instances.edit_stage_instance(channel_id, **kwargs)
+
+    async def delete_stage_instance(self, channel_id, **kwargs):
+        return await stage_instances.delete_stage_instance(channel_id, **kwargs)
+
     # -- auto moderation --
     async def fetch_auto_moderation_rules(self, guild_id, **kwargs):
         return await auto_moderation.fetch_auto_moderation_rules(guild_id, **kwargs)

@@ -437,3 +437,23 @@ class GuildScheduledEventUser(DiscordObject):
 
         member_data = self._data.get("member")
         return Member(member_data) if member_data is not None else None
+
+
+class StageInstance(DiscordObject):
+    """A live Stage's instance, from `channel.fetch_stage_instance()` or
+    `channel.create_stage_instance()`. `.id`, `.guild_id`, `.channel_id`,
+    `.topic`, `.privacy_level`, `.guild_scheduled_event_id`."""
+
+    async def edit(self, **kwargs):
+        """Update this Stage instance. Returns the updated `StageInstance`.
+        Requires `DISCORD_BOT_TOKEN` and Stage moderator permissions."""
+        from . import stage_instances
+
+        return await stage_instances.edit_stage_instance(self.channel_id, **kwargs)
+
+    async def delete(self, **kwargs):
+        """Delete this Stage instance. Requires `DISCORD_BOT_TOKEN` and
+        Stage moderator permissions."""
+        from . import stage_instances
+
+        await stage_instances.delete_stage_instance(self.channel_id, **kwargs)
