@@ -362,3 +362,58 @@ class StickerPack(DiscordObject):
     @property
     def stickers(self):
         return [Sticker(s) for s in self._data.get("stickers", [])]
+
+
+class GuildScheduledEvent(DiscordObject):
+    """A guild scheduled event, from `guild.fetch_scheduled_events()`.
+    `.id`, `.guild_id`, `.name`, `.description`, `.scheduled_start_time`,
+    `.status`, `.entity_type`, and any other field Discord sends."""
+
+    @property
+    def creator(self):
+        """The `User` that created this event, or `None` (always `None`
+        for events created before 25 October 2021)."""
+        from ..models import User
+
+        creator_data = self._data.get("creator")
+        return User(creator_data) if creator_data is not None else None
+
+    async def edit(self, **kwargs):
+        """Update this event. Set `status` to start/end it. Returns the
+        updated `GuildScheduledEvent`. Requires `DISCORD_BOT_TOKEN`."""
+        from . import scheduled_events
+
+        return await scheduled_events.edit_guild_scheduled_event(self.guild_id, self.id, **kwargs)
+
+    async def delete(self, **kwargs):
+        """Delete this event. Requires `DISCORD_BOT_TOKEN`."""
+        from . import scheduled_events
+
+        await scheduled_events.delete_guild_scheduled_event(self.guild_id, self.id, **kwargs)
+
+    async def fetch_users(self, **kwargs):
+        """List users subscribed to this event, as a list of
+        `GuildScheduledEventUser`. Requires `DISCORD_BOT_TOKEN`."""
+        from . import scheduled_events
+
+        return await scheduled_events.fetch_guild_scheduled_event_users(self.guild_id, self.id, **kwargs)
+
+
+class GuildScheduledEventUser(DiscordObject):
+    """One entry from `event.fetch_users()`. `.guild_scheduled_event_id`."""
+
+    @property
+    def user(self):
+        """The subscribed `User`."""
+        from ..models import User
+
+        return User(self._data.get("user"))
+
+    @property
+    def member(self):
+        """The subscribing `Member`, if included (`with_member=True`),
+        else `None`."""
+        from ..models import Member
+
+        member_data = self._data.get("member")
+        return Member(member_data) if member_data is not None else None

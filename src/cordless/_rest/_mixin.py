@@ -10,10 +10,33 @@ Every method is async, matching the rest of Cordless's public REST surface
 (send_message, execute_webhook, ...): await bot.start_thread_from_message(...).
 """
 
-from . import channels, emojis, guilds, invites, members, messages, stickers, threads, webhooks
+from . import channels, emojis, guilds, invites, members, messages, scheduled_events, stickers, threads, webhooks
 
 
 class RESTMixin:
+    # -- guild scheduled events --
+    async def fetch_guild_scheduled_events(self, guild_id, **kwargs):
+        return await scheduled_events.fetch_guild_scheduled_events(guild_id, **kwargs)
+
+    async def create_guild_scheduled_event(
+        self, guild_id, name, privacy_level, scheduled_start_time, entity_type, **kwargs
+    ):
+        return await scheduled_events.create_guild_scheduled_event(
+            guild_id, name, privacy_level, scheduled_start_time, entity_type, **kwargs
+        )
+
+    async def fetch_guild_scheduled_event(self, guild_id, event_id, **kwargs):
+        return await scheduled_events.fetch_guild_scheduled_event(guild_id, event_id, **kwargs)
+
+    async def edit_guild_scheduled_event(self, guild_id, event_id, **kwargs):
+        return await scheduled_events.edit_guild_scheduled_event(guild_id, event_id, **kwargs)
+
+    async def delete_guild_scheduled_event(self, guild_id, event_id, **kwargs):
+        return await scheduled_events.delete_guild_scheduled_event(guild_id, event_id, **kwargs)
+
+    async def fetch_guild_scheduled_event_users(self, guild_id, event_id, **kwargs):
+        return await scheduled_events.fetch_guild_scheduled_event_users(guild_id, event_id, **kwargs)
+
     # -- emojis --
     async def fetch_guild_emojis(self, guild_id, **kwargs):
         return await emojis.fetch_guild_emojis(guild_id, **kwargs)

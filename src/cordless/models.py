@@ -957,6 +957,30 @@ class Guild(DiscordObject):
 
         return await stickers.create_guild_sticker(self.id, name, description, tags, filename, file_bytes, **kwargs)
 
+    async def fetch_scheduled_events(self, **kwargs):
+        """List this guild's scheduled events, as a list of
+        `GuildScheduledEvent`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import scheduled_events
+
+        return await scheduled_events.fetch_guild_scheduled_events(self.id, **kwargs)
+
+    async def create_scheduled_event(self, name, privacy_level, scheduled_start_time, entity_type, **kwargs):
+        """Create a scheduled event. `entity_type` picks the kind (1 stage,
+        2 voice, 3 external); external events also need `channel_id=None`,
+        `entity_metadata={"location": ...}` and `scheduled_end_time`. Returns
+        the new `GuildScheduledEvent`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import scheduled_events
+
+        return await scheduled_events.create_guild_scheduled_event(
+            self.id, name, privacy_level, scheduled_start_time, entity_type, **kwargs
+        )
+
+    async def fetch_scheduled_event(self, event_id, **kwargs):
+        """Fetch a single scheduled event by id. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import scheduled_events
+
+        return await scheduled_events.fetch_guild_scheduled_event(self.id, event_id, **kwargs)
+
 
 def _wrap(cls, data):
     return cls(data) if data is not None else None
