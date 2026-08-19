@@ -1033,6 +1033,13 @@ class Guild(DiscordObject):
 
         return await templates.create_guild_template(self.id, name, **kwargs)
 
+    async def fetch_audit_log(self, **kwargs):
+        """Fetch this guild's audit log, as an `AuditLog`. Requires
+        `DISCORD_BOT_TOKEN` and `VIEW_AUDIT_LOG`."""
+        from ._rest import audit_log
+
+        return await audit_log.fetch_audit_log(self.id, **kwargs)
+
 
 def _wrap(cls, data):
     return cls(data) if data is not None else None

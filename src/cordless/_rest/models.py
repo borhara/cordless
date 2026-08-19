@@ -493,3 +493,44 @@ class GuildTemplate(DiscordObject):
         from . import templates
 
         return await templates.delete_guild_template(self.source_guild_id, self.code, **kwargs)
+
+
+class AuditLogEntry(DiscordObject):
+    """One entry from `guild.fetch_audit_log()`. `.id`, `.user_id`,
+    `.target_id`, `.action_type`, `.changes`, `.options`, `.reason`."""
+
+
+class AuditLog(DiscordObject):
+    """From `guild.fetch_audit_log()`. `.application_commands` and
+    `.audit_log_entries` are raw dicts; the rest are wrapped in their usual
+    model classes."""
+
+    @property
+    def entries(self):
+        return [AuditLogEntry(e) for e in self._data.get("audit_log_entries", [])]
+
+    @property
+    def users(self):
+        from ..models import User
+
+        return [User(u) for u in self._data.get("users", [])]
+
+    @property
+    def webhooks(self):
+        return [Webhook(w) for w in self._data.get("webhooks", [])]
+
+    @property
+    def integrations(self):
+        return [Integration(i) for i in self._data.get("integrations", [])]
+
+    @property
+    def threads(self):
+        return [Thread.from_dict(t) for t in self._data.get("threads", [])]
+
+    @property
+    def auto_moderation_rules(self):
+        return [AutoModerationRule(r) for r in self._data.get("auto_moderation_rules", [])]
+
+    @property
+    def guild_scheduled_events(self):
+        return [GuildScheduledEvent(e) for e in self._data.get("guild_scheduled_events", [])]

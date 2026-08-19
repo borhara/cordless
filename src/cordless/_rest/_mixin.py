@@ -11,6 +11,7 @@ Every method is async, matching the rest of Cordless's public REST surface
 """
 
 from . import (
+    audit_log,
     auto_moderation,
     channels,
     emojis,
@@ -28,6 +29,10 @@ from . import (
 
 
 class RESTMixin:
+    # -- audit log --
+    async def fetch_audit_log(self, guild_id, **kwargs):
+        return await audit_log.fetch_audit_log(guild_id, **kwargs)
+
     # -- guild templates --
     async def fetch_template(self, code, **kwargs):
         return await templates.fetch_template(code, **kwargs)
