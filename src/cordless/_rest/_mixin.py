@@ -10,10 +10,33 @@ Every method is async, matching the rest of Cordless's public REST surface
 (send_message, execute_webhook, ...): await bot.start_thread_from_message(...).
 """
 
-from . import channels, guilds, members, messages, threads
+from . import channels, guilds, invites, members, messages, threads, webhooks
 
 
 class RESTMixin:
+    # -- invites --
+    async def fetch_invite(self, code, **kwargs):
+        return await invites.fetch_invite(code, **kwargs)
+
+    async def delete_invite(self, code, **kwargs):
+        return await invites.delete_invite(code, **kwargs)
+
+    # -- webhooks (bot token) --
+    # create_webhook()/get_channel_webhooks()/delete_webhook() already live
+    # directly on Cordless (see app.py) and delegate to webhooks.py
+    # themselves, same reason messages.py has no bot.create_message().
+    async def fetch_channel_webhooks(self, channel_id, **kwargs):
+        return await webhooks.fetch_channel_webhooks(channel_id, **kwargs)
+
+    async def fetch_guild_webhooks(self, guild_id, **kwargs):
+        return await webhooks.fetch_guild_webhooks(guild_id, **kwargs)
+
+    async def fetch_webhook(self, webhook_id, **kwargs):
+        return await webhooks.fetch_webhook(webhook_id, **kwargs)
+
+    async def edit_webhook(self, webhook_id, **kwargs):
+        return await webhooks.edit_webhook(webhook_id, **kwargs)
+
     # -- messages and reactions --
     # no bot.create_message()/edit_message() here on purpose - send_message()
     # and edit_message() already own those verbs directly on Cordless (see

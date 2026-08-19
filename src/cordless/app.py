@@ -395,6 +395,65 @@ class Cordless(RESTMixin):
             None, _webhook.delete_message, webhook_id, webhook_token, message_id
         )
 
+    async def fetch_webhook_message(self, webhook_id, webhook_token=None, message_id="@original"):
+        """Fetch a message previously sent through a webhook. No bot token required."""
+        from . import webhook as _webhook
+
+        if webhook_token is None:
+            webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
+
+        _, body = await asyncio.get_event_loop().run_in_executor(
+            None, _webhook.get_message, webhook_id, webhook_token, message_id
+        )
+        return json.loads(body)
+
+    async def fetch_webhook_with_token(self, webhook_id, webhook_token=None):
+        """Fetch a webhook using its own token rather than DISCORD_BOT_TOKEN.
+        The returned object omits the owning user, unlike `fetch_webhook`."""
+        from . import webhook as _webhook
+
+        if webhook_token is None:
+            webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
+
+        _, body = await asyncio.get_event_loop().run_in_executor(None, _webhook.get_webhook, webhook_id, webhook_token)
+        return json.loads(body)
+
+    async def edit_webhook_with_token(self, webhook_id, webhook_token=None, *, name=None, avatar=None):
+        """Rename a webhook or change its avatar using its own token rather
+        than DISCORD_BOT_TOKEN. Unlike `edit_webhook`, this can't move it to
+        a different channel."""
+        from . import webhook as _webhook
+
+        if webhook_token is None:
+            webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
+
+        _, body = await asyncio.get_event_loop().run_in_executor(
+            None, _webhook.edit_webhook, webhook_id, webhook_token, name, avatar
+        )
+        return json.loads(body)
+
+    async def execute_slack_webhook(self, webhook_id, webhook_token=None, payload=None, *, wait=False, thread_id=None):
+        """Post a Slack-formatted payload through a webhook. No bot token required."""
+        from . import webhook as _webhook
+
+        if webhook_token is None:
+            webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
+
+        await asyncio.get_event_loop().run_in_executor(
+            None, _webhook.execute_slack_compatible, webhook_id, webhook_token, payload, wait, thread_id
+        )
+
+    async def execute_github_webhook(self, webhook_id, webhook_token=None, payload=None, *, wait=False, thread_id=None):
+        """Post a GitHub-formatted payload through a webhook. No bot token required."""
+        from . import webhook as _webhook
+
+        if webhook_token is None:
+            webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
+
+        await asyncio.get_event_loop().run_in_executor(
+            None, _webhook.execute_github_compatible, webhook_id, webhook_token, payload, wait, thread_id
+        )
+
     async def add_role(self, guild_id, user_id, role_id):
         """Grant a role to a guild member. Requires `DISCORD_BOT_TOKEN`.
         Same as `add_guild_member_role`, kept under its older name."""
@@ -412,17 +471,18 @@ class Cordless(RESTMixin):
     async def create_webhook(self, channel_id, name, avatar=None):
         """Create a webhook in a channel. Requires DISCORD_BOT_TOKEN. Returns the
         webhook object, including the id/token pair execute_webhook needs."""
-        payload = {"name": name}
-        if avatar is not None:
-            payload["avatar"] = avatar
+        from ._rest import webhooks
+        from ._rest._client import UNSET
 
-        body = await self._discord_request("POST", f"/channels/{channel_id}/webhooks", payload)
-        return json.loads(body)
+        webhook = await webhooks.create_webhook(channel_id, name, avatar=avatar if avatar is not None else UNSET)
+        return webhook._data
 
     async def get_channel_webhooks(self, channel_id):
         """List a channel's webhooks. Requires DISCORD_BOT_TOKEN."""
-        body = await self._discord_request("GET", f"/channels/{channel_id}/webhooks")
-        return json.loads(body)
+        from ._rest import webhooks
+
+        result = await webhooks.fetch_channel_webhooks(channel_id)
+        return [webhook._data for webhook in result]
 
     async def delete_webhook(self, webhook_id, webhook_token=None):
         """Delete a webhook. With webhook_token, authenticates with the webhook's
@@ -433,7 +493,9 @@ class Cordless(RESTMixin):
             await asyncio.get_event_loop().run_in_executor(None, _webhook.delete_webhook, webhook_id, webhook_token)
             return
 
-        await self._discord_request("DELETE", f"/webhooks/{webhook_id}")
+        from ._rest import webhooks
+
+        await webhooks.delete_webhook(webhook_id)
 
     @property
     def worker_handler(self):

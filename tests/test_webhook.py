@@ -193,6 +193,59 @@ def test_delete_webhook_deletes_webhook_path(fake_conn):
     assert req["url"] == "/api/v10/webhooks/123/abc"
 
 
+def test_get_webhook_gets_webhook_path(fake_conn):
+    cordless.webhook.get_webhook("123", "abc")
+    req = fake_conn.requests[0]
+    assert req["method"] == "GET"
+    assert req["url"] == "/api/v10/webhooks/123/abc"
+
+
+def test_edit_webhook_patches_name_and_avatar(fake_conn):
+    cordless.webhook.edit_webhook("123", "abc", name="shiv", avatar="data:...")
+    req = fake_conn.requests[0]
+    assert req["method"] == "PATCH"
+    assert req["url"] == "/api/v10/webhooks/123/abc"
+    assert json.loads(req["body"]) == {"name": "shiv", "avatar": "data:..."}
+
+
+def test_edit_webhook_name_only_omits_avatar(fake_conn):
+    cordless.webhook.edit_webhook("123", "abc", name="shiv")
+    assert json.loads(fake_conn.requests[0]["body"]) == {"name": "shiv"}
+
+
+def test_get_message_gets_message_path(fake_conn):
+    cordless.webhook.get_message("123", "abc", "999")
+    req = fake_conn.requests[0]
+    assert req["method"] == "GET"
+    assert req["url"] == "/api/v10/webhooks/123/abc/messages/999"
+
+
+def test_get_message_default_original(fake_conn):
+    cordless.webhook.get_message("123", "abc")
+    assert fake_conn.requests[0]["url"] == "/api/v10/webhooks/123/abc/messages/@original"
+
+
+def test_execute_slack_compatible_posts_slack_path(fake_conn):
+    cordless.webhook.execute_slack_compatible("123", "abc", {"text": "hi"})
+    req = fake_conn.requests[0]
+    assert req["method"] == "POST"
+    assert req["url"] == "/api/v10/webhooks/123/abc/slack"
+    assert json.loads(req["body"]) == {"text": "hi"}
+
+
+def test_execute_slack_compatible_wait_and_thread_id_become_query_params(fake_conn):
+    cordless.webhook.execute_slack_compatible("123", "abc", {"text": "hi"}, wait=True, thread_id="456")
+    assert fake_conn.requests[0]["url"] == "/api/v10/webhooks/123/abc/slack?wait=true&thread_id=456"
+
+
+def test_execute_github_compatible_posts_github_path(fake_conn):
+    cordless.webhook.execute_github_compatible("123", "abc", {"action": "opened"})
+    req = fake_conn.requests[0]
+    assert req["method"] == "POST"
+    assert req["url"] == "/api/v10/webhooks/123/abc/github"
+    assert json.loads(req["body"]) == {"action": "opened"}
+
+
 def test_non_2xx_status_raises(fake_conn):
     fake_conn.responses = [(404, b'{"message": "Unknown Webhook"}')]
     with pytest.raises(RuntimeError, match="Discord API error 404.*Unknown Webhook"):
@@ -242,6 +295,31 @@ def webhook_calls(monkeypatch):
     )
     monkeypatch.setattr(
         cordless.webhook, "delete_webhook", lambda *a: calls.setdefault("delete_webhook", []).append(a) or (204, b"")
+    )
+    monkeypatch.setattr(
+        cordless.webhook,
+        "get_message",
+        lambda *a: calls.setdefault("get_message", []).append(a) or (200, b'{"id": "msg-1"}'),
+    )
+    monkeypatch.setattr(
+        cordless.webhook,
+        "get_webhook",
+        lambda *a: calls.setdefault("get_webhook", []).append(a) or (200, b'{"id": "123"}'),
+    )
+    monkeypatch.setattr(
+        cordless.webhook,
+        "edit_webhook",
+        lambda *a: calls.setdefault("edit_webhook", []).append(a) or (200, b'{"id": "123", "name": "shiv"}'),
+    )
+    monkeypatch.setattr(
+        cordless.webhook,
+        "execute_slack_compatible",
+        lambda *a: calls.setdefault("execute_slack_compatible", []).append(a) or (204, b""),
+    )
+    monkeypatch.setattr(
+        cordless.webhook,
+        "execute_github_compatible",
+        lambda *a: calls.setdefault("execute_github_compatible", []).append(a) or (204, b""),
     )
     return calls
 
@@ -332,6 +410,112 @@ def test_execute_webhook_returns_none_without_wait(monkeypatch):
     result = asyncio.run(bot.execute_webhook("123", "abc", content="hi"))
 
     assert result is None
+
+
+# --- Cordless.fetch_webhook_message / fetch_webhook_with_token / edit_webhook_with_token ---
+# --- Cordless.execute_slack_webhook / execute_github_webhook ---
+
+
+def test_fetch_webhook_message_parses_full_url(webhook_calls):
+    import asyncio
+
+    bot = Cordless()
+    result = asyncio.run(bot.fetch_webhook_message("https://discord.com/api/webhooks/123/abc"))
+
+    webhook_id, webhook_token, message_id = webhook_calls["get_message"][0]
+    assert (webhook_id, webhook_token, message_id) == ("123", "abc", "@original")
+    assert result == {"id": "msg-1"}
+
+
+def test_fetch_webhook_message_accepts_id_and_token(webhook_calls):
+    import asyncio
+
+    bot = Cordless()
+    asyncio.run(bot.fetch_webhook_message("123", "abc", "999"))
+
+    webhook_id, webhook_token, message_id = webhook_calls["get_message"][0]
+    assert (webhook_id, webhook_token, message_id) == ("123", "abc", "999")
+
+
+def test_fetch_webhook_with_token_accepts_id_and_token(webhook_calls):
+    import asyncio
+
+    bot = Cordless()
+    result = asyncio.run(bot.fetch_webhook_with_token("123", "abc"))
+
+    assert webhook_calls["get_webhook"][0] == ("123", "abc")
+    assert result == {"id": "123"}
+
+
+def test_fetch_webhook_with_token_parses_full_url(webhook_calls):
+    import asyncio
+
+    bot = Cordless()
+    asyncio.run(bot.fetch_webhook_with_token("https://discord.com/api/webhooks/123/abc"))
+
+    assert webhook_calls["get_webhook"][0] == ("123", "abc")
+
+
+def test_edit_webhook_with_token_passes_name_and_avatar(webhook_calls):
+    import asyncio
+
+    bot = Cordless()
+    result = asyncio.run(bot.edit_webhook_with_token("123", "abc", name="shiv", avatar="data:..."))
+
+    webhook_id, webhook_token, name, avatar = webhook_calls["edit_webhook"][0]
+    assert (webhook_id, webhook_token, name, avatar) == ("123", "abc", "shiv", "data:...")
+    assert result == {"id": "123", "name": "shiv"}
+
+
+def test_edit_webhook_with_token_parses_full_url(webhook_calls):
+    import asyncio
+
+    bot = Cordless()
+    asyncio.run(bot.edit_webhook_with_token("https://discord.com/api/webhooks/123/abc", name="shiv"))
+
+    webhook_id, webhook_token, name, avatar = webhook_calls["edit_webhook"][0]
+    assert (webhook_id, webhook_token) == ("123", "abc")
+
+
+def test_execute_slack_webhook_parses_full_url(webhook_calls):
+    import asyncio
+
+    bot = Cordless()
+    asyncio.run(bot.execute_slack_webhook("https://discord.com/api/webhooks/123/abc", payload={"text": "hi"}))
+
+    webhook_id, webhook_token, payload, wait, thread_id = webhook_calls["execute_slack_compatible"][0]
+    assert (webhook_id, webhook_token) == ("123", "abc")
+    assert payload == {"text": "hi"}
+
+
+def test_execute_slack_webhook_accepts_id_and_token(webhook_calls):
+    import asyncio
+
+    bot = Cordless()
+    asyncio.run(bot.execute_slack_webhook("123", "abc", payload={"text": "hi"}))
+
+    webhook_id, webhook_token, payload, wait, thread_id = webhook_calls["execute_slack_compatible"][0]
+    assert (webhook_id, webhook_token) == ("123", "abc")
+
+
+def test_execute_github_webhook_parses_full_url(webhook_calls):
+    import asyncio
+
+    bot = Cordless()
+    asyncio.run(bot.execute_github_webhook("https://discord.com/api/webhooks/123/abc", payload={"action": "opened"}))
+
+    webhook_id, webhook_token, payload, wait, thread_id = webhook_calls["execute_github_compatible"][0]
+    assert (webhook_id, webhook_token) == ("123", "abc")
+
+
+def test_execute_github_webhook_accepts_id_and_token(webhook_calls):
+    import asyncio
+
+    bot = Cordless()
+    asyncio.run(bot.execute_github_webhook("123", "abc", {"action": "opened"}, wait=True, thread_id="456"))
+
+    webhook_id, webhook_token, payload, wait, thread_id = webhook_calls["execute_github_compatible"][0]
+    assert (webhook_id, webhook_token, wait, thread_id) == ("123", "abc", True, "456")
 
 
 # --- Cordless.create_webhook / get_channel_webhooks / delete_webhook (bot-token) ---

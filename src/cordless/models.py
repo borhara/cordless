@@ -510,6 +510,13 @@ class Channel(DiscordObject):
 
         await messages.bulk_delete_messages(self.id, message_ids, **kwargs)
 
+    async def fetch_webhooks(self, **kwargs):
+        """List this channel's webhooks, as a list of `Webhook`. Requires
+        `DISCORD_BOT_TOKEN` and `MANAGE_WEBHOOKS`."""
+        from ._rest import webhooks
+
+        return await webhooks.fetch_channel_webhooks(self.id, **kwargs)
+
 
 class Attachment(DiscordObject):
     """A file attached to a command's `attachment` option, e.g.
@@ -900,6 +907,13 @@ class Guild(DiscordObject):
         from ._rest import messages
 
         return await messages.search_guild_messages(self.id, **kwargs)
+
+    async def fetch_webhooks(self, **kwargs):
+        """List this guild's webhooks, as a list of `Webhook`. Requires
+        `DISCORD_BOT_TOKEN` and `MANAGE_WEBHOOKS`."""
+        from ._rest import webhooks
+
+        return await webhooks.fetch_guild_webhooks(self.id, **kwargs)
 
 
 def _wrap(cls, data):

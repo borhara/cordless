@@ -109,16 +109,59 @@ def _encode(payload, files):
     return json.dumps(payload).encode(), "application/json"
 
 
-def execute(webhook_id, webhook_token, payload, files=None, wait=False, thread_id=None):
-    """POST a message to a webhook. Returns (status, body)."""
+def _wait_qs(wait, thread_id):
     query = []
     if wait:
         query.append("wait=true")
     if thread_id:
         query.append(f"thread_id={thread_id}")
-    qs = ("?" + "&".join(query)) if query else ""
+    return ("?" + "&".join(query)) if query else ""
+
+
+def execute(webhook_id, webhook_token, payload, files=None, wait=False, thread_id=None):
+    """POST a message to a webhook. Returns (status, body)."""
     body, content_type = _encode(payload, files)
-    return _request("POST", f"/api/v10/webhooks/{webhook_id}/{webhook_token}{qs}", body, content_type)
+    path = f"/api/v10/webhooks/{webhook_id}/{webhook_token}{_wait_qs(wait, thread_id)}"
+    return _request("POST", path, body, content_type)
+
+
+def execute_slack_compatible(webhook_id, webhook_token, payload, wait=False, thread_id=None):
+    """POST a Slack-formatted payload straight through to Discord."""
+    body = json.dumps(payload).encode()
+    path = f"/api/v10/webhooks/{webhook_id}/{webhook_token}/slack{_wait_qs(wait, thread_id)}"
+    return _request("POST", path, body, "application/json")
+
+
+def execute_github_compatible(webhook_id, webhook_token, payload, wait=False, thread_id=None):
+    """POST a GitHub-formatted payload straight through to Discord."""
+    body = json.dumps(payload).encode()
+    path = f"/api/v10/webhooks/{webhook_id}/{webhook_token}/github{_wait_qs(wait, thread_id)}"
+    return _request("POST", path, body, "application/json")
+
+
+def get_webhook(webhook_id, webhook_token):
+    """GET the webhook itself, authenticated with its own token. The
+    returned object omits `user`, unlike the bot-token equivalent."""
+    return _request("GET", f"/api/v10/webhooks/{webhook_id}/{webhook_token}")
+
+
+def edit_webhook(webhook_id, webhook_token, name=None, avatar=None):
+    """PATCH the webhook's own name/avatar, authenticated with its own
+    token. Unlike the bot-token equivalent, this can't move it to a
+    different channel_id."""
+    payload = {}
+    if name is not None:
+        payload["name"] = name
+    if avatar is not None:
+        payload["avatar"] = avatar
+    body = json.dumps(payload).encode()
+    return _request("PATCH", f"/api/v10/webhooks/{webhook_id}/{webhook_token}", body, "application/json")
+
+
+def get_message(webhook_id, webhook_token, message_id="@original"):
+    """GET a message previously sent through this webhook."""
+    path = f"/api/v10/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}"
+    return _request("GET", path)
 
 
 def edit_message(webhook_id, webhook_token, message_id, payload, files=None):

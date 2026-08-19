@@ -8,6 +8,8 @@ id and, optionally, an explicit token kwarg - both call shapes hit the exact
 same code path, so there is no request logic duplicated between them.
 """
 
+import asyncio
+import json
 from dataclasses import Field, dataclass, field
 from typing import ClassVar
 
@@ -112,6 +114,20 @@ class Invite(DiscordObject):
         """Full `https://discord.gg/<code>` invite link."""
         return f"https://discord.gg/{self._data['code']}"
 
+    async def fetch(self, **kwargs):
+        """Re-fetch this invite by code. Returns the refreshed `Invite`."""
+        from . import invites
+
+        return await invites.fetch_invite(self.code, **kwargs)
+
+    async def delete(self, **kwargs):
+        """Delete this invite. Returns the now-deleted `Invite`. Requires
+        `DISCORD_BOT_TOKEN` and `MANAGE_CHANNELS` (or `MANAGE_GUILD` to
+        remove any invite in the guild)."""
+        from . import invites
+
+        return await invites.delete_invite(self.code, **kwargs)
+
 
 class FollowedChannel(DiscordObject):
     """Returned by `channel.follow_announcement()`: the webhook created in
@@ -206,3 +222,85 @@ class MessageSearchResult(DiscordObject):
     def members(self):
         """A `ThreadMember` per thread in `.threads` the bot has joined."""
         return [ThreadMember.from_dict(m) for m in self._data.get("members", [])]
+
+
+class Webhook(DiscordObject):
+    """A Discord webhook. `.id`, `.type`, `.name`, `.avatar`, `.channel_id`,
+    `.guild_id`, `.token` (only present for Incoming Webhooks, e.g. right
+    after `guild.create_webhook()`), and any other field Discord sends."""
+
+    async def edit(self, **kwargs):
+        """Update this webhook. Requires `DISCORD_BOT_TOKEN` and `MANAGE_WEBHOOKS`."""
+        from . import webhooks
+
+        return await webhooks.edit_webhook(self.id, **kwargs)
+
+    async def delete(self, **kwargs):
+        """Delete this webhook. Requires `DISCORD_BOT_TOKEN` and `MANAGE_WEBHOOKS`."""
+        from . import webhooks
+
+        await webhooks.delete_webhook(self.id, **kwargs)
+
+    async def execute(
+        self,
+        content=None,
+        *,
+        embeds=None,
+        components=None,
+        files=None,
+        username=None,
+        avatar_url=None,
+        tts=False,
+        allowed_mentions=None,
+        wait=False,
+        thread_id=None,
+    ):
+        """Send a message through this webhook, authenticated with its own
+        token rather than `DISCORD_BOT_TOKEN`. Only works on a `Webhook`
+        that carries `.token` (Incoming Webhooks, e.g. straight after
+        `guild.create_webhook()`)."""
+        from .. import webhook as _webhook
+
+        payload = _webhook.build_payload(
+            content,
+            embeds,
+            components,
+            username=username,
+            avatar_url=avatar_url,
+            tts=tts,
+            allowed_mentions=allowed_mentions,
+        )
+        _, body = await asyncio.get_event_loop().run_in_executor(
+            None, _webhook.execute, self.id, self.token, payload, files, wait, thread_id
+        )
+        if wait and body:
+            return json.loads(body)
+
+    async def fetch_message(self, message_id="@original", **kwargs):
+        """Fetch a message previously sent through this webhook. Uses its
+        own token, not `DISCORD_BOT_TOKEN`."""
+        from .. import webhook as _webhook
+
+        _, body = await asyncio.get_event_loop().run_in_executor(
+            None, _webhook.get_message, self.id, self.token, message_id
+        )
+        return json.loads(body)
+
+    async def edit_message(
+        self, message_id="@original", content=None, *, embeds=None, components=None, files=None, allowed_mentions=None
+    ):
+        """Edit a message previously sent through this webhook. Uses its
+        own token, not `DISCORD_BOT_TOKEN`."""
+        from .. import webhook as _webhook
+
+        payload = _webhook.build_payload(content, embeds, components, allowed_mentions=allowed_mentions)
+        await asyncio.get_event_loop().run_in_executor(
+            None, _webhook.edit_message, self.id, self.token, message_id, payload, files
+        )
+
+    async def delete_message(self, message_id="@original"):
+        """Delete a message previously sent through this webhook. Uses its
+        own token, not `DISCORD_BOT_TOKEN`."""
+        from .. import webhook as _webhook
+
+        await asyncio.get_event_loop().run_in_executor(None, _webhook.delete_message, self.id, self.token, message_id)
