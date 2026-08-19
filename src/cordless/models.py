@@ -981,6 +981,29 @@ class Guild(DiscordObject):
 
         return await scheduled_events.fetch_guild_scheduled_event(self.id, event_id, **kwargs)
 
+    async def fetch_auto_moderation_rules(self, **kwargs):
+        """List this guild's auto moderation rules, as a list of
+        `AutoModerationRule`. Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        from ._rest import auto_moderation
+
+        return await auto_moderation.fetch_auto_moderation_rules(self.id, **kwargs)
+
+    async def fetch_auto_moderation_rule(self, rule_id, **kwargs):
+        """Fetch a single auto moderation rule by id. Requires
+        `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        from ._rest import auto_moderation
+
+        return await auto_moderation.fetch_auto_moderation_rule(self.id, rule_id, **kwargs)
+
+    async def create_auto_moderation_rule(self, name, event_type, trigger_type, actions, **kwargs):
+        """Create an auto moderation rule. Returns the new
+        `AutoModerationRule`. Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        from ._rest import auto_moderation
+
+        return await auto_moderation.create_auto_moderation_rule(
+            self.id, name, event_type, trigger_type, actions, **kwargs
+        )
+
 
 def _wrap(cls, data):
     return cls(data) if data is not None else None

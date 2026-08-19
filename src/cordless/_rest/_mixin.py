@@ -10,10 +10,40 @@ Every method is async, matching the rest of Cordless's public REST surface
 (send_message, execute_webhook, ...): await bot.start_thread_from_message(...).
 """
 
-from . import channels, emojis, guilds, invites, members, messages, scheduled_events, stickers, threads, webhooks
+from . import (
+    auto_moderation,
+    channels,
+    emojis,
+    guilds,
+    invites,
+    members,
+    messages,
+    scheduled_events,
+    stickers,
+    threads,
+    webhooks,
+)
 
 
 class RESTMixin:
+    # -- auto moderation --
+    async def fetch_auto_moderation_rules(self, guild_id, **kwargs):
+        return await auto_moderation.fetch_auto_moderation_rules(guild_id, **kwargs)
+
+    async def fetch_auto_moderation_rule(self, guild_id, rule_id, **kwargs):
+        return await auto_moderation.fetch_auto_moderation_rule(guild_id, rule_id, **kwargs)
+
+    async def create_auto_moderation_rule(self, guild_id, name, event_type, trigger_type, actions, **kwargs):
+        return await auto_moderation.create_auto_moderation_rule(
+            guild_id, name, event_type, trigger_type, actions, **kwargs
+        )
+
+    async def edit_auto_moderation_rule(self, guild_id, rule_id, **kwargs):
+        return await auto_moderation.edit_auto_moderation_rule(guild_id, rule_id, **kwargs)
+
+    async def delete_auto_moderation_rule(self, guild_id, rule_id, **kwargs):
+        return await auto_moderation.delete_auto_moderation_rule(guild_id, rule_id, **kwargs)
+
     # -- guild scheduled events --
     async def fetch_guild_scheduled_events(self, guild_id, **kwargs):
         return await scheduled_events.fetch_guild_scheduled_events(guild_id, **kwargs)

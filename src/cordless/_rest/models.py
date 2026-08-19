@@ -399,6 +399,26 @@ class GuildScheduledEvent(DiscordObject):
         return await scheduled_events.fetch_guild_scheduled_event_users(self.guild_id, self.id, **kwargs)
 
 
+class AutoModerationRule(DiscordObject):
+    """An auto moderation rule, from `guild.fetch_auto_moderation_rules()`.
+    `.id`, `.guild_id`, `.name`, `.creator_id`, `.event_type`,
+    `.trigger_type`, `.trigger_metadata`, `.actions`, `.enabled`,
+    `.exempt_roles`, `.exempt_channels`."""
+
+    async def edit(self, **kwargs):
+        """Update this rule. Returns the updated `AutoModerationRule`.
+        Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        from . import auto_moderation
+
+        return await auto_moderation.edit_auto_moderation_rule(self.guild_id, self.id, **kwargs)
+
+    async def delete(self, **kwargs):
+        """Delete this rule. Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        from . import auto_moderation
+
+        await auto_moderation.delete_auto_moderation_rule(self.guild_id, self.id, **kwargs)
+
+
 class GuildScheduledEventUser(DiscordObject):
     """One entry from `event.fetch_users()`. `.guild_scheduled_event_id`."""
 
