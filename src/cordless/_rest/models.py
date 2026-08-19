@@ -558,3 +558,44 @@ class Entitlement(DiscordObject):
 class SKU(DiscordObject):
     """From `bot.fetch_skus()`. `.id`, `.type`, `.application_id`, `.name`,
     `.slug`, `.flags`."""
+
+
+class ApplicationCommand(DiscordObject):
+    """From `bot.fetch_global_commands()`/`bot.fetch_guild_commands()`.
+    `.id`, `.application_id`, `.guild_id` (only for guild-scoped commands),
+    `.name`, `.description`, `.options`, `.type`, `.version`, and any other
+    field Discord sends."""
+
+    async def edit(self, **kwargs):
+        """Update this command. Returns the updated `ApplicationCommand`.
+        Requires `DISCORD_BOT_TOKEN`."""
+        from . import application_commands
+
+        guild_id = self._data.get("guild_id")
+        if guild_id:
+            return await application_commands.edit_guild_command(self.application_id, guild_id, self.id, **kwargs)
+        return await application_commands.edit_global_command(self.application_id, self.id, **kwargs)
+
+    async def delete(self, **kwargs):
+        """Delete this command. Requires `DISCORD_BOT_TOKEN`."""
+        from . import application_commands
+
+        guild_id = self._data.get("guild_id")
+        if guild_id:
+            await application_commands.delete_guild_command(self.application_id, guild_id, self.id, **kwargs)
+        else:
+            await application_commands.delete_global_command(self.application_id, self.id, **kwargs)
+
+    async def fetch_permissions(self, **kwargs):
+        """Fetch this guild command's permissions. Guild-scoped commands
+        only. Requires `DISCORD_BOT_TOKEN`."""
+        from . import application_commands
+
+        return await application_commands.fetch_command_permissions(
+            self.application_id, self._data["guild_id"], self.id, **kwargs
+        )
+
+
+class GuildApplicationCommandPermissions(DiscordObject):
+    """From `bot.fetch_command_permissions()`. `.id` (the command id),
+    `.application_id`, `.guild_id`, `.permissions`."""

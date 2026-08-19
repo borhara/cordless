@@ -11,6 +11,7 @@ Every method is async, matching the rest of Cordless's public REST surface
 """
 
 from . import (
+    application_commands,
     audit_log,
     auto_moderation,
     channels,
@@ -32,6 +33,49 @@ from . import (
 
 
 class RESTMixin:
+    # -- application commands --
+    async def fetch_global_commands(self, application_id, **kwargs):
+        return await application_commands.fetch_global_commands(application_id, **kwargs)
+
+    async def create_global_command(self, application_id, name, **kwargs):
+        return await application_commands.create_global_command(application_id, name, **kwargs)
+
+    async def fetch_global_command(self, application_id, command_id, **kwargs):
+        return await application_commands.fetch_global_command(application_id, command_id, **kwargs)
+
+    async def edit_global_command(self, application_id, command_id, **kwargs):
+        return await application_commands.edit_global_command(application_id, command_id, **kwargs)
+
+    async def delete_global_command(self, application_id, command_id, **kwargs):
+        return await application_commands.delete_global_command(application_id, command_id, **kwargs)
+
+    async def bulk_overwrite_global_commands(self, application_id, commands, **kwargs):
+        return await application_commands.bulk_overwrite_global_commands(application_id, commands, **kwargs)
+
+    async def fetch_guild_commands(self, application_id, guild_id, **kwargs):
+        return await application_commands.fetch_guild_commands(application_id, guild_id, **kwargs)
+
+    async def create_guild_command(self, application_id, guild_id, name, **kwargs):
+        return await application_commands.create_guild_command(application_id, guild_id, name, **kwargs)
+
+    async def fetch_guild_command(self, application_id, guild_id, command_id, **kwargs):
+        return await application_commands.fetch_guild_command(application_id, guild_id, command_id, **kwargs)
+
+    async def edit_guild_command(self, application_id, guild_id, command_id, **kwargs):
+        return await application_commands.edit_guild_command(application_id, guild_id, command_id, **kwargs)
+
+    async def delete_guild_command(self, application_id, guild_id, command_id, **kwargs):
+        return await application_commands.delete_guild_command(application_id, guild_id, command_id, **kwargs)
+
+    async def bulk_overwrite_guild_commands(self, application_id, guild_id, commands, **kwargs):
+        return await application_commands.bulk_overwrite_guild_commands(application_id, guild_id, commands, **kwargs)
+
+    async def fetch_guild_command_permissions(self, application_id, guild_id, **kwargs):
+        return await application_commands.fetch_guild_command_permissions(application_id, guild_id, **kwargs)
+
+    async def fetch_command_permissions(self, application_id, guild_id, command_id, **kwargs):
+        return await application_commands.fetch_command_permissions(application_id, guild_id, command_id, **kwargs)
+
     # -- entitlements and skus --
     async def fetch_entitlements(self, application_id, **kwargs):
         return await entitlements.fetch_entitlements(application_id, **kwargs)
