@@ -10,10 +10,49 @@ Every method is async, matching the rest of Cordless's public REST surface
 (send_message, execute_webhook, ...): await bot.start_thread_from_message(...).
 """
 
-from . import channels, guilds, members, threads
+from . import channels, guilds, members, messages, threads
 
 
 class RESTMixin:
+    # -- messages and reactions --
+    # no bot.create_message()/edit_message() here on purpose - send_message()
+    # and edit_message() already own those verbs directly on Cordless (see
+    # app.py) and delegate to messages.py themselves; a second, similarly
+    # named flat method would just be confusing. Use channel.send() or
+    # message.edit() for the fuller field set.
+    async def fetch_channel_messages(self, channel_id, **kwargs):
+        return await messages.fetch_channel_messages(channel_id, **kwargs)
+
+    async def fetch_message(self, channel_id, message_id, **kwargs):
+        return await messages.fetch_message(channel_id, message_id, **kwargs)
+
+    async def crosspost_message(self, channel_id, message_id, **kwargs):
+        return await messages.crosspost_message(channel_id, message_id, **kwargs)
+
+    async def bulk_delete_messages(self, channel_id, message_ids, **kwargs):
+        return await messages.bulk_delete_messages(channel_id, message_ids, **kwargs)
+
+    async def create_reaction(self, channel_id, message_id, emoji, **kwargs):
+        return await messages.create_reaction(channel_id, message_id, emoji, **kwargs)
+
+    async def delete_own_reaction(self, channel_id, message_id, emoji, **kwargs):
+        return await messages.delete_own_reaction(channel_id, message_id, emoji, **kwargs)
+
+    async def delete_user_reaction(self, channel_id, message_id, emoji, user_id, **kwargs):
+        return await messages.delete_user_reaction(channel_id, message_id, emoji, user_id, **kwargs)
+
+    async def fetch_reactions(self, channel_id, message_id, emoji, **kwargs):
+        return await messages.fetch_reactions(channel_id, message_id, emoji, **kwargs)
+
+    async def delete_all_reactions(self, channel_id, message_id, **kwargs):
+        return await messages.delete_all_reactions(channel_id, message_id, **kwargs)
+
+    async def delete_all_reactions_for_emoji(self, channel_id, message_id, emoji, **kwargs):
+        return await messages.delete_all_reactions_for_emoji(channel_id, message_id, emoji, **kwargs)
+
+    async def search_guild_messages(self, guild_id, **kwargs):
+        return await messages.search_guild_messages(guild_id, **kwargs)
+
     # -- members and roles --
     async def fetch_guild_member(self, guild_id, user_id, **kwargs):
         return await members.fetch_guild_member(guild_id, user_id, **kwargs)

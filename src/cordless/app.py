@@ -7,7 +7,7 @@ import re
 from typing import Literal, Union, get_args, get_origin
 
 from ._rest._mixin import RESTMixin
-from .context import _FLAG_UI_KIT, Context, _contains_uikit, _validate_content_length
+from .context import Context
 from .errors import CordlessError
 from .register import sync_commands
 from .router import Router
@@ -284,40 +284,39 @@ class Cordless(RESTMixin):
         """Send a message as the bot. Requires `DISCORD_BOT_TOKEN`, callable
         from anywhere with no interaction to respond to, typically cron
         handlers. `files` is a list of `(filename, bytes)` tuples, same as
-        `ctx.send`/`ctx.edit`."""
-        _validate_content_length(content)
-        payload = {}
-        if content is not None:
-            payload["content"] = content
-        if embeds is not None:
-            payload["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
-        if components is not None:
-            payload["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
-        if _contains_uikit(components):
-            payload["flags"] = _FLAG_UI_KIT
+        `ctx.send`/`ctx.edit`. Returns the sent `Message`. For replies,
+        polls, stickers or other fields Create Message supports, use
+        `channel.send()` instead."""
+        from ._rest import messages
 
-        await self._discord_request("POST", f"/channels/{channel_id}/messages", payload, files)
+        return await messages.create_message(
+            channel_id, content=content, embeds=embeds, components=components, files=files
+        )
 
     async def edit_message(self, channel_id, message_id, content=None, *, embeds=None, components=None, files=None):
         """Edit a message the bot previously sent. Requires
         `DISCORD_BOT_TOKEN`. `files` is a list of `(filename, bytes)`
-        tuples, same as `ctx.send`/`ctx.edit`."""
-        _validate_content_length(content)
-        payload = {}
-        if content is not None:
-            payload["content"] = content
-        if embeds is not None:
-            payload["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
-        if components is not None:
-            payload["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
-        if _contains_uikit(components):
-            payload["flags"] = _FLAG_UI_KIT
+        tuples, same as `ctx.send`/`ctx.edit`. Returns the edited `Message`.
+        `content`/`embeds`/`components` left at their default here just
+        leave that field untouched, they can't be cleared through this
+        method, use `message.edit(field=None)` for that."""
+        from ._rest import messages
+        from ._rest._client import UNSET
 
-        await self._discord_request("PATCH", f"/channels/{channel_id}/messages/{message_id}", payload, files)
+        return await messages.edit_channel_message(
+            channel_id,
+            message_id,
+            content=content if content is not None else UNSET,
+            embeds=embeds if embeds is not None else UNSET,
+            components=components if components is not None else UNSET,
+            files=files,
+        )
 
     async def delete_message(self, channel_id, message_id):
         """Delete a message. Requires `DISCORD_BOT_TOKEN`."""
-        await self._discord_request("DELETE", f"/channels/{channel_id}/messages/{message_id}")
+        from ._rest import messages
+
+        await messages.delete_channel_message(channel_id, message_id)
 
     async def execute_webhook(
         self,

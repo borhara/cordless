@@ -180,3 +180,29 @@ class IncidentsData(DiscordObject):
 class BulkBanResult(DiscordObject):
     """From `guild.bulk_ban()`. `.banned_users` and `.failed_users` are
     both lists of user id strings."""
+
+
+class MessageSearchResult(DiscordObject):
+    """From `guild.search_messages()`. `.total_results`,
+    `.doing_deep_historical_index`."""
+
+    @property
+    def messages(self):
+        """The matching messages, as a list of `Message`. Discord used to
+        nest each hit in its own array to carry surrounding context, that
+        context is no longer returned, so this flattens it back out."""
+        from ..models import Message
+
+        return [Message(hit[0]) for hit in self._data.get("messages", []) if hit]
+
+    @property
+    def threads(self):
+        """Threads containing any of the matched messages, as a list of `Channel`."""
+        from ..models import Channel
+
+        return [Channel(c) for c in self._data.get("threads", [])]
+
+    @property
+    def members(self):
+        """A `ThreadMember` per thread in `.threads` the bot has joined."""
+        return [ThreadMember.from_dict(m) for m in self._data.get("members", [])]

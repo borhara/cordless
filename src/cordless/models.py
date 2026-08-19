@@ -250,6 +250,82 @@ class Message(DiscordObject):
 
         await channels.unpin_message(self._data["channel_id"], self.id, **kwargs)
 
+    async def fetch(self, **kwargs):
+        """Re-fetch this message's full object from Discord. Requires
+        `DISCORD_BOT_TOKEN`."""
+        from ._rest import messages
+
+        return await messages.fetch_message(self._data["channel_id"], self.id, **kwargs)
+
+    async def edit(self, **kwargs):
+        """Edit this message (only the original author can change
+        content/embeds/components; anyone with `MANAGE_MESSAGES` can change
+        `flags`). Nullable fields can be cleared by passing `None`. Returns
+        the updated `Message`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import messages
+
+        return await messages.edit_channel_message(self._data["channel_id"], self.id, **kwargs)
+
+    async def delete(self, **kwargs):
+        """Delete this message. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import messages
+
+        await messages.delete_channel_message(self._data["channel_id"], self.id, **kwargs)
+
+    async def crosspost(self, **kwargs):
+        """Publish this message from an announcement channel to its
+        following channels. Returns the updated `Message`. Requires
+        `DISCORD_BOT_TOKEN`."""
+        from ._rest import messages
+
+        return await messages.crosspost_message(self._data["channel_id"], self.id, **kwargs)
+
+    async def reply(self, **kwargs):
+        """Send a new message that replies to this one. Same fields as
+        `channel.send()`. Returns the sent `Message`. Requires
+        `DISCORD_BOT_TOKEN`."""
+        from ._rest import messages
+
+        reference = {"message_id": self.id}
+        return await messages.create_message(self._data["channel_id"], message_reference=reference, **kwargs)
+
+    async def add_reaction(self, emoji, **kwargs):
+        """React to this message as the bot. `emoji` is a unicode emoji, or
+        `name:id` for a custom one. Requires `DISCORD_BOT_TOKEN` and (unless
+        someone already reacted with it) `ADD_REACTIONS`."""
+        from ._rest import messages
+
+        await messages.create_reaction(self._data["channel_id"], self.id, emoji, **kwargs)
+
+    async def remove_reaction(self, emoji, user_id=None, **kwargs):
+        """Remove a reaction. Removes the bot's own by default; pass
+        `user_id` to remove someone else's, which needs `MANAGE_MESSAGES`.
+        Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import messages
+
+        if user_id is None:
+            await messages.delete_own_reaction(self._data["channel_id"], self.id, emoji, **kwargs)
+        else:
+            await messages.delete_user_reaction(self._data["channel_id"], self.id, emoji, user_id, **kwargs)
+
+    async def fetch_reactions(self, emoji, **kwargs):
+        """List the users who reacted with a given emoji, as a list of
+        `User`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import messages
+
+        return await messages.fetch_reactions(self._data["channel_id"], self.id, emoji, **kwargs)
+
+    async def clear_reactions(self, emoji=None, **kwargs):
+        """Remove every reaction from this message, or every reaction for
+        one emoji if `emoji` is given. Requires `DISCORD_BOT_TOKEN` and
+        `MANAGE_MESSAGES`."""
+        from ._rest import messages
+
+        if emoji is None:
+            await messages.delete_all_reactions(self._data["channel_id"], self.id, **kwargs)
+        else:
+            await messages.delete_all_reactions_for_emoji(self._data["channel_id"], self.id, emoji, **kwargs)
+
 
 class Channel(DiscordObject):
     """A partial Discord channel, e.g. `ctx.channel`. `.id`, `.name`,
@@ -404,6 +480,35 @@ class Channel(DiscordObject):
         from ._rest import channels
 
         await channels.unpin_message(self.id, message_id, **kwargs)
+
+    async def fetch_messages(self, **kwargs):
+        """List recent messages in this channel, newest first, as a list
+        of `Message`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import messages
+
+        return await messages.fetch_channel_messages(self.id, **kwargs)
+
+    async def fetch_message(self, message_id, **kwargs):
+        """Fetch a single `Message` by id. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import messages
+
+        return await messages.fetch_message(self.id, message_id, **kwargs)
+
+    async def send(self, **kwargs):
+        """Send a message with the full Create Message field set (replies
+        via `message_reference`, `poll`, `sticker_ids`, `tts`, `nonce`, ...),
+        unlike the simpler `bot.send_message()`. Returns the sent `Message`.
+        Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import messages
+
+        return await messages.create_message(self.id, **kwargs)
+
+    async def bulk_delete_messages(self, message_ids, **kwargs):
+        """Delete 2-100 messages at once, none older than two weeks.
+        Guild channels only. Requires `DISCORD_BOT_TOKEN` and `MANAGE_MESSAGES`."""
+        from ._rest import messages
+
+        await messages.bulk_delete_messages(self.id, message_ids, **kwargs)
 
 
 class Attachment(DiscordObject):
@@ -786,6 +891,15 @@ class Guild(DiscordObject):
         from ._rest import members
 
         return await members.edit_guild_role_positions(self.id, positions, **kwargs)
+
+    async def search_messages(self, **kwargs):
+        """Full text search across this guild's messages. Returns a
+        `MessageSearchResult`. Requires `DISCORD_BOT_TOKEN`,
+        `READ_MESSAGE_HISTORY`, and possibly the `MESSAGE_CONTENT`
+        privileged intent."""
+        from ._rest import messages
+
+        return await messages.search_guild_messages(self.id, **kwargs)
 
 
 def _wrap(cls, data):

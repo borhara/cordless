@@ -630,58 +630,58 @@ def test_raw_dict_uikit_component_sets_flag():
 # --- send_message / edit_message ---
 
 
-def _captured_request(bot, coro):
+def _captured_request(coro):
     captured = {}
 
-    def fake_request(method, path, payload=None, files=None):
+    def fake_request(method, path, payload=None, files=None, token=None):
         captured["payload"] = payload
         captured["files"] = files
         return b"{}"
 
-    with patch.object(bot, "_discord_request", side_effect=fake_request):
+    with patch("cordless._rest._client._request_raw_sync", side_effect=fake_request):
         asyncio.run(coro)
     return captured
 
 
-def _captured_payload(bot, coro):
-    return _captured_request(bot, coro)["payload"]
+def _captured_payload(coro):
+    return _captured_request(coro)["payload"]
 
 
 def test_send_message_sets_components_v2_flag():
     bot = Cordless()
-    payload = _captured_payload(bot, bot.send_message("123", components=[{"type": 17, "components": []}]))
+    payload = _captured_payload(bot.send_message("123", components=[{"type": 17, "components": []}]))
     assert payload["flags"] & 32768
 
 
 def test_send_message_omits_flags_without_uikit_components():
     bot = Cordless()
-    payload = _captured_payload(bot, bot.send_message("123", content="hi"))
+    payload = _captured_payload(bot.send_message("123", content="hi"))
     assert "flags" not in payload
 
 
 def test_edit_message_sets_components_v2_flag():
     bot = Cordless()
-    payload = _captured_payload(bot, bot.edit_message("123", "456", components=[{"type": 17, "components": []}]))
+    payload = _captured_payload(bot.edit_message("123", "456", components=[{"type": 17, "components": []}]))
     assert payload["flags"] & 32768
 
 
 def test_send_message_passes_files_through_to_discord_request():
     bot = Cordless()
     files = [("board.png", b"\x89PNG...")]
-    captured = _captured_request(bot, bot.send_message("123", content="hi", files=files))
+    captured = _captured_request(bot.send_message("123", content="hi", files=files))
     assert captured["files"] == files
 
 
 def test_send_message_without_files_passes_none():
     bot = Cordless()
-    captured = _captured_request(bot, bot.send_message("123", content="hi"))
+    captured = _captured_request(bot.send_message("123", content="hi"))
     assert captured["files"] is None
 
 
 def test_edit_message_passes_files_through_to_discord_request():
     bot = Cordless()
     files = [("board.png", b"\x89PNG...")]
-    captured = _captured_request(bot, bot.edit_message("123", "456", files=files))
+    captured = _captured_request(bot.edit_message("123", "456", files=files))
     assert captured["files"] == files
 
 
