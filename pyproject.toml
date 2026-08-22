@@ -59,10 +59,28 @@ dev = [
     "botocore[crt]",
     "moto[iam,awslambda-simple,apigatewayv2,events,logs,s3]>=5.0",
     "pynacl>=1.5",
+    "pyright>=1.1",
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.15.20",
 ]
+
+[tool.pyright]
+# Scoped to the REST layer and whatever else has been touched while building
+# it, not the whole codebase - the rest of cordless predates pyright and
+# isn't annotated for it. Add a path here whenever a file outside this list
+# gets touched, and fix what pyright flags in it before moving on.
+include = [
+    "src/cordless/_rest",
+    "src/cordless/context.py",
+    "src/cordless/models.py",
+    "src/cordless/app.py",
+    "src/cordless/router.py",
+    "src/cordless/webhook.py",
+    "src/cordless/_multipart.py",
+]
+pythonVersion = "3.11"
+typeCheckingMode = "basic"
 
 [tool.ruff]
 line-length = 120

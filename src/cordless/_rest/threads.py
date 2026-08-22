@@ -1,0 +1,100 @@
+"""Thread REST endpoints (Discord API v10)."""
+
+from . import _client
+from .models import Thread, ThreadMember
+
+
+async def start_thread_from_message(channel_id, message_id, name, *, auto_archive_duration=None, token=None):
+    payload = {"name": name}
+    if auto_archive_duration is not None:
+        payload["auto_archive_duration"] = auto_archive_duration
+    data = await _client.request("POST", f"/channels/{channel_id}/messages/{message_id}/threads", payload, token=token)
+    return Thread.from_dict(data)
+
+
+async def start_thread_without_message(channel_id, name, *, thread_type=11, invitable=None, token=None):
+    payload = {"name": name, "type": thread_type}
+    if invitable is not None:
+        payload["invitable"] = invitable
+    data = await _client.request("POST", f"/channels/{channel_id}/threads", payload, token=token)
+    return Thread.from_dict(data)
+
+
+async def start_thread_from_forum(
+    channel_id,
+    name,
+    *,
+    message,
+    applied_tags=None,
+    auto_archive_duration=None,
+    rate_limit_per_user=0,
+    token=None,
+    files=None,
+):
+    payload = {"name": name, "rate_limit_per_user": rate_limit_per_user, "message": {"content": message}}
+
+    if applied_tags:
+        payload["applied_tags"] = applied_tags
+
+    if auto_archive_duration:
+        payload["auto_archive_duration"] = auto_archive_duration
+
+    data = await _client.request("POST", f"/channels/{channel_id}/threads", payload, files=files, token=token)
+    return Thread.from_dict(data)
+
+
+async def join_thread(channel_id, token=None):
+    await _client.request("PUT", f"/channels/{channel_id}/thread-members/@me", token=token)
+
+
+async def leave_thread(channel_id, token=None):
+    await _client.request("DELETE", f"/channels/{channel_id}/thread-members/@me", token=token)
+
+
+async def add_thread_member(channel_id, user_id, token=None):
+    await _client.request("PUT", f"/channels/{channel_id}/thread-members/{user_id}", token=token)
+
+
+async def remove_thread_member(channel_id, user_id, token=None):
+    await _client.request("DELETE", f"/channels/{channel_id}/thread-members/{user_id}", token=token)
+
+
+async def fetch_thread_member(channel_id, user_id, *, with_member=False, token=None):
+    qs = "?with_member=true" if with_member else ""
+    data = await _client.request("GET", f"/channels/{channel_id}/thread-members/{user_id}{qs}", token=token)
+    assert data is not None, "GET always returns a body"
+    return ThreadMember.from_dict(data)
+
+
+async def fetch_thread_members(channel_id, *, with_member=False, token=None):
+    qs = "?with_member=true" if with_member else ""
+    data = await _client.request("GET", f"/channels/{channel_id}/thread-members{qs}", token=token)
+    assert data is not None, "GET always returns a body"
+    return [ThreadMember.from_dict(m) for m in data]
+
+
+async def fetch_public_archived_threads(channel_id, *, before=None, limit=None, token=None):
+    qs = _client.pagination_qs(before=before, limit=limit)
+    data = await _client.request("GET", f"/channels/{channel_id}/threads/archived/public{qs}", token=token)
+    assert data is not None, "GET always returns a body"
+    return [Thread.from_dict(t) for t in data["threads"]]
+
+
+async def fetch_private_archived_threads(channel_id, *, before=None, limit=None, token=None):
+    qs = _client.pagination_qs(before=before, limit=limit)
+    data = await _client.request("GET", f"/channels/{channel_id}/threads/archived/private{qs}", token=token)
+    assert data is not None, "GET always returns a body"
+    return [Thread.from_dict(t) for t in data["threads"]]
+
+
+async def fetch_joined_private_archived_threads(channel_id, *, before=None, limit=None, token=None):
+    qs = _client.pagination_qs(before=before, limit=limit)
+    data = await _client.request("GET", f"/channels/{channel_id}/users/@me/threads/archived/private{qs}", token=token)
+    assert data is not None, "GET always returns a body"
+    return [Thread.from_dict(t) for t in data["threads"]]
+
+
+async def fetch_active_guild_threads(guild_id, *, token=None):
+    data = await _client.request("GET", f"/guilds/{guild_id}/threads/active", token=token)
+    assert data is not None, "GET always returns a body"
+    return [Thread.from_dict(t) for t in data["threads"]]

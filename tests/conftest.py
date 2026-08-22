@@ -1,6 +1,6 @@
+import io
 import json
-
-import pytest
+import urllib.error
 
 
 class FakeDiscordResponse:
@@ -20,43 +20,6 @@ class FakeDiscordResponse:
         return False
 
 
-class FakeAppHTTPSConnection:
-    """Stub for cordless.app.HTTPSConnection. One instance per fresh connection,
-    but requests/responses are tracked on the class so tests can see every
-    call even across a reconnect."""
-
-    requests = []
-    responses = []  # list of (status, headers, body) consumed per request
-    raise_once = None  # set to an exception instance to make the next request() raise
-    close_calls = 0
-
-    def __init__(self, host):
-        self.host = host
-
-    def request(self, method, path, body, headers):
-        cls = FakeAppHTTPSConnection
-        if cls.raise_once is not None:
-            exc = cls.raise_once
-            cls.raise_once = None
-            raise exc
-        cls.requests.append({"method": method, "path": path, "body": body, "headers": headers})
-
-    def getresponse(self):
-        status, headers, body = FakeAppHTTPSConnection.responses.pop(0)
-        return type("R", (), {"status": status, "headers": headers, "read": lambda self: body})()
-
-    def close(self):
-        FakeAppHTTPSConnection.close_calls += 1
-
-
-@pytest.fixture
-def fake_app_conn(monkeypatch):
-    import cordless.app
-
-    FakeAppHTTPSConnection.requests = []
-    FakeAppHTTPSConnection.responses = []
-    FakeAppHTTPSConnection.raise_once = None
-    FakeAppHTTPSConnection.close_calls = 0
-    monkeypatch.setattr(cordless.app, "HTTPSConnection", FakeAppHTTPSConnection)
-    monkeypatch.setattr(cordless.app, "_conn", None)
-    return FakeAppHTTPSConnection
+def make_http_error(code, body=b""):
+    """A real urllib.error.HTTPError, for simulating a non-2xx urlopen() response."""
+    return urllib.error.HTTPError(url="https://discord.com/api/v10", code=code, msg="", hdrs=None, fp=io.BytesIO(body))

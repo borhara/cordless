@@ -4,48 +4,16 @@ import inspect
 import json
 import os
 import re
-import threading
-from http.client import HTTPException, HTTPSConnection
 from typing import Literal, Union, get_args, get_origin
 
-from .context import _FLAG_UI_KIT, Context, _attach_files, _contains_uikit, _validate_content_length
+from ._rest._mixin import RESTMixin
+from .context import Context
 from .errors import CordlessError
 from .register import sync_commands
 from .router import Router
 from .verify import verify_signature
 
 PING = 1
-
-# How long _discord_request keeps retrying a 429 before giving up. Matches
-# defer_worker's 30s default timeout - callers doing bursty sends from the
-# main function's default 10s timeout should raise `timeout` in
-# cordless.toml or move the work behind defer_worker.
-_MAX_RETRY_SECONDS = 30.0
-
-# Kept open across invocations in a warm Lambda container, so most requests
-# skip the TLS handshake instead of paying for it every time.
-_conn = None
-_conn_lock = threading.Lock()
-
-
-def _send_discord_request(method, path, body, headers):
-    global _conn
-    with _conn_lock:
-        if _conn is None:
-            _conn = HTTPSConnection("discord.com")
-        try:
-            _conn.request(method, path, body, headers)
-            resp = _conn.getresponse()
-            data = resp.read()
-        except (HTTPException, OSError):
-            # the other end closed the kept-alive connection, reconnect once
-            _conn.close()
-            _conn = HTTPSConnection("discord.com")
-            _conn.request(method, path, body, headers)
-            resp = _conn.getresponse()
-            data = resp.read()
-        return resp.status, resp.headers, data
-
 
 _OPTION_TYPES = {
     "string": 3,
@@ -126,7 +94,7 @@ def options_from_signature(func):
         annotation, _ = _unwrap_optional(annotation)
         is_optional = optional_from_default
 
-        opt = {"name": p.name, "description": "No description provided."}
+        opt: dict = {"name": p.name, "description": "No description provided."}
 
         if get_origin(annotation) is Literal:
             choices_vals = get_args(annotation)
@@ -222,7 +190,7 @@ def option(
     return opt
 
 
-class Cordless:
+class Cordless(RESTMixin):
     def __init__(self, public_key=None):
         """`public_key` is your app's hex-encoded public key from the Discord
         Developer Portal. Every request is verified against it (Ed25519) and
@@ -307,95 +275,48 @@ class Cordless:
 
         return decorator
 
-    def _discord_request(self, method, path, payload=None, files=None):
-        import json
-        import time
-        from importlib.metadata import version as _ver
+    async def _discord_request(self, method, path, payload=None, files=None):
+        from ._rest import _client
 
-        from . import ratelimit
-
-        token = os.environ["DISCORD_BOT_TOKEN"]
-        if files:
-            from ._multipart import build_multipart_body
-
-            _attach_files(payload, files)
-            body, content_type = build_multipart_body(payload, files)
-        elif payload is not None:
-            body, content_type = json.dumps(payload).encode(), "application/json"
-        else:
-            body, content_type = None, None
-        headers = {
-            "Authorization": f"Bot {token}",
-            "User-Agent": f"DiscordBot (https://cordless.dev, {_ver('cordless')})",
-            **({"Content-Type": content_type} if content_type else {}),
-        }
-
-        full_path = f"/api/v10{path}"
-        deadline = time.monotonic() + _MAX_RETRY_SECONDS
-        while True:
-            ratelimit.wait_if_needed(method, path)
-            status, resp_headers, data = _send_discord_request(method, full_path, body, headers)
-            if status < 300:
-                ratelimit.record_response(method, path, resp_headers)
-                return data
-            if status == 429 and time.monotonic() < deadline:
-                try:
-                    retry_after = float(json.loads(data).get("retry_after", 1))
-                except (ValueError, AttributeError):
-                    retry_after = 1.0
-                ratelimit.note_blocked(method, path, retry_after)
-                time.sleep(ratelimit.jittered_wait(retry_after))
-                continue
-            raise RuntimeError(f"Discord API error {status}: {data.decode(errors='replace')}")
+        return await _client.request_raw(method, path, payload, files, token=os.environ["DISCORD_BOT_TOKEN"])
 
     async def send_message(self, channel_id, content=None, *, embeds=None, components=None, files=None):
         """Send a message as the bot. Requires `DISCORD_BOT_TOKEN`, callable
         from anywhere with no interaction to respond to, typically cron
         handlers. `files` is a list of `(filename, bytes)` tuples, same as
-        `ctx.send`/`ctx.edit`."""
-        _validate_content_length(content)
-        payload = {}
-        if content is not None:
-            payload["content"] = content
-        if embeds is not None:
-            payload["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
-        if components is not None:
-            payload["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
-        if _contains_uikit(components):
-            payload["flags"] = _FLAG_UI_KIT
-        import asyncio
+        `ctx.send`/`ctx.edit`. Returns the sent `Message`. For replies,
+        polls, stickers or other fields Create Message supports, use
+        `channel.send()` instead."""
+        from ._rest import messages
 
-        await asyncio.get_event_loop().run_in_executor(
-            None, self._discord_request, "POST", f"/channels/{channel_id}/messages", payload, files
+        return await messages.create_message(
+            channel_id, content=content, embeds=embeds, components=components, files=files
         )
 
     async def edit_message(self, channel_id, message_id, content=None, *, embeds=None, components=None, files=None):
         """Edit a message the bot previously sent. Requires
         `DISCORD_BOT_TOKEN`. `files` is a list of `(filename, bytes)`
-        tuples, same as `ctx.send`/`ctx.edit`."""
-        _validate_content_length(content)
-        payload = {}
-        if content is not None:
-            payload["content"] = content
-        if embeds is not None:
-            payload["embeds"] = [e.to_dict() if hasattr(e, "to_dict") else e for e in embeds]
-        if components is not None:
-            payload["components"] = [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
-        if _contains_uikit(components):
-            payload["flags"] = _FLAG_UI_KIT
-        import asyncio
+        tuples, same as `ctx.send`/`ctx.edit`. Returns the edited `Message`.
+        `content`/`embeds`/`components` left at their default here just
+        leave that field untouched, they can't be cleared through this
+        method, use `message.edit(field=None)` for that."""
+        from ._rest import messages
+        from ._rest._client import UNSET
 
-        await asyncio.get_event_loop().run_in_executor(
-            None, self._discord_request, "PATCH", f"/channels/{channel_id}/messages/{message_id}", payload, files
+        return await messages.edit_channel_message(
+            channel_id,
+            message_id,
+            content=content if content is not None else UNSET,
+            embeds=embeds if embeds is not None else UNSET,
+            components=components if components is not None else UNSET,
+            files=files,
         )
 
     async def delete_message(self, channel_id, message_id):
         """Delete a message. Requires `DISCORD_BOT_TOKEN`."""
-        import asyncio
+        from ._rest import messages
 
-        await asyncio.get_event_loop().run_in_executor(
-            None, self._discord_request, "DELETE", f"/channels/{channel_id}/messages/{message_id}"
-        )
+        await messages.delete_channel_message(channel_id, message_id)
 
     async def execute_webhook(
         self,
@@ -474,40 +395,97 @@ class Cordless:
             None, _webhook.delete_message, webhook_id, webhook_token, message_id
         )
 
-    async def add_role(self, guild_id, user_id, role_id):
-        """Grant a role to a guild member. Requires `DISCORD_BOT_TOKEN`."""
-        import asyncio
+    async def fetch_webhook_message(self, webhook_id, webhook_token=None, message_id="@original"):
+        """Fetch a message previously sent through a webhook. No bot token required."""
+        from . import webhook as _webhook
+        from .models import Message
+
+        if webhook_token is None:
+            webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
+
+        _, body = await asyncio.get_event_loop().run_in_executor(
+            None, _webhook.get_message, webhook_id, webhook_token, message_id
+        )
+        return Message(json.loads(body))
+
+    async def fetch_webhook_with_token(self, webhook_id, webhook_token=None):
+        """Fetch a webhook using its own token rather than DISCORD_BOT_TOKEN.
+        The returned object omits the owning user, unlike `fetch_webhook`."""
+        from . import webhook as _webhook
+        from ._rest.models import Webhook
+
+        if webhook_token is None:
+            webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
+
+        _, body = await asyncio.get_event_loop().run_in_executor(None, _webhook.get_webhook, webhook_id, webhook_token)
+        return Webhook(json.loads(body))
+
+    async def edit_webhook_with_token(self, webhook_id, webhook_token=None, *, name=None, avatar=None):
+        """Rename a webhook or change its avatar using its own token rather
+        than DISCORD_BOT_TOKEN. Unlike `edit_webhook`, this can't move it to
+        a different channel."""
+        from . import webhook as _webhook
+        from ._rest.models import Webhook
+
+        if webhook_token is None:
+            webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
+
+        _, body = await asyncio.get_event_loop().run_in_executor(
+            None, _webhook.edit_webhook, webhook_id, webhook_token, name, avatar
+        )
+        return Webhook(json.loads(body))
+
+    async def execute_slack_webhook(self, webhook_id, webhook_token=None, payload=None, *, wait=False, thread_id=None):
+        """Post a Slack-formatted payload through a webhook. No bot token required."""
+        from . import webhook as _webhook
+
+        if webhook_token is None:
+            webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
 
         await asyncio.get_event_loop().run_in_executor(
-            None, self._discord_request, "PUT", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}"
+            None, _webhook.execute_slack_compatible, webhook_id, webhook_token, payload, wait, thread_id
         )
 
-    async def remove_role(self, guild_id, user_id, role_id):
-        """Remove a role from a guild member. Requires `DISCORD_BOT_TOKEN`."""
-        import asyncio
+    async def execute_github_webhook(self, webhook_id, webhook_token=None, payload=None, *, wait=False, thread_id=None):
+        """Post a GitHub-formatted payload through a webhook. No bot token required."""
+        from . import webhook as _webhook
+
+        if webhook_token is None:
+            webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
 
         await asyncio.get_event_loop().run_in_executor(
-            None, self._discord_request, "DELETE", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}"
+            None, _webhook.execute_github_compatible, webhook_id, webhook_token, payload, wait, thread_id
         )
+
+    async def add_role(self, guild_id, user_id, role_id, *, reason=None):
+        """Grant a role to a guild member. Requires `DISCORD_BOT_TOKEN`.
+        Same as `add_guild_member_role`, kept under its older name."""
+        from ._rest import members
+
+        await members.add_guild_member_role(guild_id, user_id, role_id, reason=reason)
+
+    async def remove_role(self, guild_id, user_id, role_id, *, reason=None):
+        """Remove a role from a guild member. Requires `DISCORD_BOT_TOKEN`.
+        Same as `remove_guild_member_role`, kept under its older name."""
+        from ._rest import members
+
+        await members.remove_guild_member_role(guild_id, user_id, role_id, reason=reason)
 
     async def create_webhook(self, channel_id, name, avatar=None):
         """Create a webhook in a channel. Requires DISCORD_BOT_TOKEN. Returns the
         webhook object, including the id/token pair execute_webhook needs."""
-        payload = {"name": name}
-        if avatar is not None:
-            payload["avatar"] = avatar
+        from ._rest import webhooks
+        from ._rest._client import UNSET
 
-        body = await asyncio.get_event_loop().run_in_executor(
-            None, self._discord_request, "POST", f"/channels/{channel_id}/webhooks", payload
-        )
-        return json.loads(body)
+        webhook = await webhooks.create_webhook(channel_id, name, avatar=avatar if avatar is not None else UNSET)
+        return webhook._data
 
     async def get_channel_webhooks(self, channel_id):
         """List a channel's webhooks. Requires DISCORD_BOT_TOKEN."""
-        body = await asyncio.get_event_loop().run_in_executor(
-            None, self._discord_request, "GET", f"/channels/{channel_id}/webhooks"
-        )
-        return json.loads(body)
+        from ._rest import webhooks
+
+        result = await webhooks.fetch_channel_webhooks(channel_id)
+        return [webhook._data for webhook in result]
 
     async def delete_webhook(self, webhook_id, webhook_token=None):
         """Delete a webhook. With webhook_token, authenticates with the webhook's
@@ -518,7 +496,9 @@ class Cordless:
             await asyncio.get_event_loop().run_in_executor(None, _webhook.delete_webhook, webhook_id, webhook_token)
             return
 
-        await asyncio.get_event_loop().run_in_executor(None, self._discord_request, "DELETE", f"/webhooks/{webhook_id}")
+        from ._rest import webhooks
+
+        await webhooks.delete_webhook(webhook_id)
 
     @property
     def worker_handler(self):

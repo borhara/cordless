@@ -144,11 +144,26 @@ def _build_message_data(msg, content, embeds, components, ephemeral=False, allow
 
 
 def _attach_files(data, files):
-    """Add the attachments metadata array Discord expects alongside a multipart body."""
-    data["attachments"] = [{"id": i, "filename": name} for i, (name, _) in enumerate(files)]
+    """Add the attachments metadata array Discord expects alongside a multipart body.
+
+    Appended after whatever's already in data["attachments"] (e.g. an edit's
+    retained-attachment list), rather than replacing it: the new entries'
+    "id" is the file's index, matching the "files[n]" part build_multipart_body
+    gives it, while retained attachments keep their own real snowflake id."""
+    existing = data.get("attachments") or []
+    data["attachments"] = existing + [{"id": i, "filename": name} for i, (name, _) in enumerate(files)]
 
 
-def _wrap_members(members, users):
+def _with_guild_id(data, guild_id):
+    """Discord's member and role payloads never carry their own guild_id -
+    it's implied by the endpoint you fetched them from. Stitch it in so
+    member.add_role()/role.edit() and friends know which guild to act on."""
+    if data is None or guild_id is None:
+        return data
+    return {**data, "guild_id": guild_id}
+
+
+def _wrap_members(members, users, guild_id):
     """Discord's resolved.members entries omit the nested `user` object
     that's normally embedded on a member payload - it lives separately in
     resolved.users instead. Stitch it back in so `.user` works on a
@@ -158,7 +173,7 @@ def _wrap_members(members, users):
         user_data = users.get(member_id)
         if user_data is not None and "user" not in member_data:
             member_data = {**member_data, "user": user_data}
-        result[member_id] = Member(member_data)
+        result[member_id] = Member(_with_guild_id(member_data, guild_id))
     return result
 
 
@@ -210,13 +225,14 @@ class Context:
         # Suffix segments when a handler matched by prefix, e.g. "shop:item1" → ["item1"]
         self.custom_id_args = []
         self.options = {opt["name"]: opt["value"] for opt in _leaf_options(data) if "value" in opt}
+        guild_id = interaction.get("guild_id")
         self.user = _wrap(User, (interaction.get("member") or {}).get("user") or interaction.get("user"))
-        self.member = _wrap(Member, interaction.get("member"))
+        self.member = _wrap(Member, _with_guild_id(interaction.get("member"), guild_id))
         self.message = _wrap(Message, interaction.get("message"))
         self.channel = _wrap(Channel, interaction.get("channel"))
         self.guild = _wrap(Guild, interaction.get("guild"))
         self.locale = interaction.get("locale")
-        self.guild_id = interaction.get("guild_id")
+        self.guild_id = guild_id
         self.channel_id = interaction.get("channel_id")
         self.interaction_id = interaction.get("id")
         self.token = interaction.get("token")
@@ -244,7 +260,7 @@ class Context:
         # (data.target_id, or ctx.values for selects).
         resolved = data.get("resolved", {})
         resolved_users = resolved.get("users", {})
-        resolved_members = _wrap_members(resolved.get("members", {}), resolved_users)
+        resolved_members = _wrap_members(resolved.get("members", {}), resolved_users, guild_id)
 
         # Attachment options (type 11): ctx.options holds the id,
         # ctx.attachments[id] holds the filename/url/size metadata
@@ -256,7 +272,7 @@ class Context:
 
         self.resolved_users = {uid: User(u) for uid, u in resolved_users.items()}
         self.resolved_members = resolved_members
-        self.resolved_roles = {rid: Role(r) for rid, r in resolved.get("roles", {}).items()}
+        self.resolved_roles = {rid: Role(_with_guild_id(r, guild_id)) for rid, r in resolved.get("roles", {}).items()}
         self.resolved_channels = {cid: Channel(c) for cid, c in resolved.get("channels", {}).items()}
 
     async def send(
@@ -364,7 +380,7 @@ class Context:
         """Loading state, for commands/modals. You don't normally call this
         yourself; decorator `defer=True` handles the ack and runs your
         handler on the worker."""
-        data = {"type": _DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE}
+        data: dict = {"type": _DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE}
         if ephemeral:
             data["data"] = {"flags": _FLAG_EPHEMERAL}
         self.response = _response(data)
