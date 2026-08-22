@@ -1,12 +1,13 @@
 """Guild scheduled event REST endpoints (Discord API v10)."""
 
+from ..context import _with_guild_id
 from . import _client
 from ._client import UNSET
 from .models import GuildScheduledEvent, GuildScheduledEventUser
 
 
 async def fetch_guild_scheduled_events(guild_id, *, with_user_count=False, token=None):
-    qs = "?with_user_count=true" if with_user_count else ""
+    qs = _client.query_string(with_user_count=with_user_count)
     data = await _client.request("GET", f"/guilds/{guild_id}/scheduled-events{qs}", token=token)
     assert data is not None, "GET always returns a body"
     return [GuildScheduledEvent(e) for e in data]
@@ -46,7 +47,7 @@ async def create_guild_scheduled_event(
 
 
 async def fetch_guild_scheduled_event(guild_id, event_id, *, with_user_count=False, token=None):
-    qs = "?with_user_count=true" if with_user_count else ""
+    qs = _client.query_string(with_user_count=with_user_count)
     data = await _client.request("GET", f"/guilds/{guild_id}/scheduled-events/{event_id}{qs}", token=token)
     return GuildScheduledEvent(data)
 
@@ -95,17 +96,7 @@ async def delete_guild_scheduled_event(guild_id, event_id, *, token=None):
 async def fetch_guild_scheduled_event_users(
     guild_id, event_id, *, limit=None, with_member=False, before=None, after=None, token=None
 ):
-    params = [
-        p
-        for p in (
-            f"limit={limit}" if limit else None,
-            "with_member=true" if with_member else None,
-            f"before={before}" if before else None,
-            f"after={after}" if after else None,
-        )
-        if p
-    ]
-    qs = ("?" + "&".join(params)) if params else ""
+    qs = _client.query_string(limit=limit, with_member=with_member, before=before, after=after)
     data = await _client.request("GET", f"/guilds/{guild_id}/scheduled-events/{event_id}/users{qs}", token=token)
     assert data is not None, "GET always returns a body"
-    return [GuildScheduledEventUser(u) for u in data]
+    return [GuildScheduledEventUser(_with_guild_id(u, guild_id)) for u in data]

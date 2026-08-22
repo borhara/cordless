@@ -6,7 +6,9 @@ from unittest.mock import patch
 import pytest
 from conftest import FakeDiscordResponse
 
+import cordless.models
 import cordless.webhook
+from cordless._rest.models import Webhook
 from cordless.app import Cordless
 
 
@@ -424,6 +426,7 @@ def test_fetch_webhook_message_parses_full_url(webhook_calls):
 
     webhook_id, webhook_token, message_id = webhook_calls["get_message"][0]
     assert (webhook_id, webhook_token, message_id) == ("123", "abc", "@original")
+    assert isinstance(result, cordless.models.Message)
     assert result == {"id": "msg-1"}
 
 
@@ -444,6 +447,7 @@ def test_fetch_webhook_with_token_accepts_id_and_token(webhook_calls):
     result = asyncio.run(bot.fetch_webhook_with_token("123", "abc"))
 
     assert webhook_calls["get_webhook"][0] == ("123", "abc")
+    assert isinstance(result, Webhook)
     assert result == {"id": "123"}
 
 
@@ -464,6 +468,7 @@ def test_edit_webhook_with_token_passes_name_and_avatar(webhook_calls):
 
     webhook_id, webhook_token, name, avatar = webhook_calls["edit_webhook"][0]
     assert (webhook_id, webhook_token, name, avatar) == ("123", "abc", "shiv", "data:...")
+    assert isinstance(result, Webhook)
     assert result == {"id": "123", "name": "shiv"}
 
 

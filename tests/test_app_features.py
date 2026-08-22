@@ -633,7 +633,7 @@ def test_raw_dict_uikit_component_sets_flag():
 def _captured_request(coro):
     captured = {}
 
-    def fake_request(method, path, payload=None, files=None, token=None, raw_body=None):
+    def fake_request(method, path, payload=None, files=None, token=None, raw_body=None, reason=None):
         captured["payload"] = payload
         captured["files"] = files
         return b"{}"
@@ -779,6 +779,36 @@ def test_discord_request_retries_once_on_429_then_succeeds(monkeypatch):
 
     assert result == b"{}"
     assert blocked == [0.2]
+
+
+def test_discord_request_retries_once_on_transient_network_error(monkeypatch):
+    """A transient network blip (connection reset, dropped keep-alive, ...)
+    raises a plain OSError out of urlopen(), distinct from the HTTPError 429
+    handling above: _request_raw_sync must retry it once rather than
+    aborting the request outright."""
+    import os
+
+    responses = [OSError("connection reset by peer"), FakeDiscordResponse({})]
+
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
+        bot = Cordless()
+        result = asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
+
+    assert result == b"{}"
+
+
+def test_discord_request_only_retries_network_error_once(monkeypatch):
+    import os
+
+    responses = [OSError("connection reset by peer"), OSError("connection reset by peer")]
+
+    with (
+        patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
+        _urlopen(responses),
+        pytest.raises(OSError),
+    ):
+        bot = Cordless()
+        asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
 
 def test_discord_request_defaults_retry_after_when_429_body_is_not_json(monkeypatch):

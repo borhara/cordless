@@ -41,6 +41,7 @@ async def edit_channel(
     locked=UNSET,
     invitable=UNSET,
     applied_tags=UNSET,
+    reason=None,
     token=None,
 ):
     """One endpoint covers group DMs, guild channels and threads alike -
@@ -74,26 +75,27 @@ async def edit_channel(
         invitable=invitable,
         applied_tags=applied_tags,
     )
-    data = await _client.request("PATCH", f"/channels/{channel_id}", payload, token=token)
+    data = await _client.request("PATCH", f"/channels/{channel_id}", payload, token=token, reason=reason)
     return Channel(data)
 
 
-async def delete_channel(channel_id, *, token=None):
+async def delete_channel(channel_id, *, reason=None, token=None):
     """Deletes a guild channel, closes a DM, or deletes a thread - returns
     the now-deleted channel object."""
-    data = await _client.request("DELETE", f"/channels/{channel_id}", token=token)
+    data = await _client.request("DELETE", f"/channels/{channel_id}", token=token, reason=reason)
     return Channel(data)
 
 
-async def edit_channel_permissions(channel_id, overwrite_id, *, type, allow=UNSET, deny=UNSET, token=None):
+async def edit_channel_permissions(channel_id, overwrite_id, *, type, allow=UNSET, deny=UNSET, reason=None, token=None):
     """`type` is 0 for a role overwrite, 1 for a member overwrite. `allow`/`deny`
     are permission bitfields as strings (see `Permissions`)."""
     payload = _client.payload(type=type, allow=allow, deny=deny)
-    await _client.request("PUT", f"/channels/{channel_id}/permissions/{overwrite_id}", payload, token=token)
+    path = f"/channels/{channel_id}/permissions/{overwrite_id}"
+    await _client.request("PUT", path, payload, token=token, reason=reason)
 
 
-async def delete_channel_permission(channel_id, overwrite_id, *, token=None):
-    await _client.request("DELETE", f"/channels/{channel_id}/permissions/{overwrite_id}", token=token)
+async def delete_channel_permission(channel_id, overwrite_id, *, reason=None, token=None):
+    await _client.request("DELETE", f"/channels/{channel_id}/permissions/{overwrite_id}", token=token, reason=reason)
 
 
 async def fetch_channel_invites(channel_id, *, token=None):
@@ -202,6 +204,7 @@ async def create_guild_channel(
     default_forum_layout=UNSET,
     default_thread_rate_limit_per_user=UNSET,
     flags=UNSET,
+    reason=None,
     token=None,
 ):
     payload = _client.payload(
@@ -225,11 +228,12 @@ async def create_guild_channel(
         default_thread_rate_limit_per_user=default_thread_rate_limit_per_user,
         flags=flags,
     )
-    data = await _client.request("POST", f"/guilds/{guild_id}/channels", payload, token=token)
+    data = await _client.request("POST", f"/guilds/{guild_id}/channels", payload, token=token, reason=reason)
     return Channel(data)
 
 
 async def edit_guild_channel_positions(guild_id, positions, *, token=None):
     """positions is a list of {"id": channel_id, "position": int, ...} dicts,
-    per Discord's Modify Guild Channel Positions body."""
+    per Discord's Modify Guild Channel Positions body. Not audit-logged by
+    Discord, unlike every other mutating endpoint in this module."""
     await _client.request("PATCH", f"/guilds/{guild_id}/channels", positions, token=token)

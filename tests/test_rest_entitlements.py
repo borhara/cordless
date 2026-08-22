@@ -58,7 +58,7 @@ def test_fetch_entitlements_passes_query_params():
 
     url = urlopen.call_args.args[0].full_url
     assert "user_id=55" in url
-    assert "sku_ids=2,4" in url
+    assert "sku_ids=2%2C4" in url
     assert "before=90" in url
     assert "after=10" in url
     assert "limit=5" in url

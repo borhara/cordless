@@ -144,8 +144,14 @@ def _build_message_data(msg, content, embeds, components, ephemeral=False, allow
 
 
 def _attach_files(data, files):
-    """Add the attachments metadata array Discord expects alongside a multipart body."""
-    data["attachments"] = [{"id": i, "filename": name} for i, (name, _) in enumerate(files)]
+    """Add the attachments metadata array Discord expects alongside a multipart body.
+
+    Appended after whatever's already in data["attachments"] (e.g. an edit's
+    retained-attachment list), rather than replacing it: the new entries'
+    "id" is the file's index, matching the "files[n]" part build_multipart_body
+    gives it, while retained attachments keep their own real snowflake id."""
+    existing = data.get("attachments") or []
+    data["attachments"] = existing + [{"id": i, "filename": name} for i, (name, _) in enumerate(files)]
 
 
 def _with_guild_id(data, guild_id):

@@ -398,6 +398,7 @@ class Cordless(RESTMixin):
     async def fetch_webhook_message(self, webhook_id, webhook_token=None, message_id="@original"):
         """Fetch a message previously sent through a webhook. No bot token required."""
         from . import webhook as _webhook
+        from .models import Message
 
         if webhook_token is None:
             webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
@@ -405,24 +406,26 @@ class Cordless(RESTMixin):
         _, body = await asyncio.get_event_loop().run_in_executor(
             None, _webhook.get_message, webhook_id, webhook_token, message_id
         )
-        return json.loads(body)
+        return Message(json.loads(body))
 
     async def fetch_webhook_with_token(self, webhook_id, webhook_token=None):
         """Fetch a webhook using its own token rather than DISCORD_BOT_TOKEN.
         The returned object omits the owning user, unlike `fetch_webhook`."""
         from . import webhook as _webhook
+        from ._rest.models import Webhook
 
         if webhook_token is None:
             webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
 
         _, body = await asyncio.get_event_loop().run_in_executor(None, _webhook.get_webhook, webhook_id, webhook_token)
-        return json.loads(body)
+        return Webhook(json.loads(body))
 
     async def edit_webhook_with_token(self, webhook_id, webhook_token=None, *, name=None, avatar=None):
         """Rename a webhook or change its avatar using its own token rather
         than DISCORD_BOT_TOKEN. Unlike `edit_webhook`, this can't move it to
         a different channel."""
         from . import webhook as _webhook
+        from ._rest.models import Webhook
 
         if webhook_token is None:
             webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
@@ -430,7 +433,7 @@ class Cordless(RESTMixin):
         _, body = await asyncio.get_event_loop().run_in_executor(
             None, _webhook.edit_webhook, webhook_id, webhook_token, name, avatar
         )
-        return json.loads(body)
+        return Webhook(json.loads(body))
 
     async def execute_slack_webhook(self, webhook_id, webhook_token=None, payload=None, *, wait=False, thread_id=None):
         """Post a Slack-formatted payload through a webhook. No bot token required."""
@@ -454,19 +457,19 @@ class Cordless(RESTMixin):
             None, _webhook.execute_github_compatible, webhook_id, webhook_token, payload, wait, thread_id
         )
 
-    async def add_role(self, guild_id, user_id, role_id):
+    async def add_role(self, guild_id, user_id, role_id, *, reason=None):
         """Grant a role to a guild member. Requires `DISCORD_BOT_TOKEN`.
         Same as `add_guild_member_role`, kept under its older name."""
         from ._rest import members
 
-        await members.add_guild_member_role(guild_id, user_id, role_id)
+        await members.add_guild_member_role(guild_id, user_id, role_id, reason=reason)
 
-    async def remove_role(self, guild_id, user_id, role_id):
+    async def remove_role(self, guild_id, user_id, role_id, *, reason=None):
         """Remove a role from a guild member. Requires `DISCORD_BOT_TOKEN`.
         Same as `remove_guild_member_role`, kept under its older name."""
         from ._rest import members
 
-        await members.remove_guild_member_role(guild_id, user_id, role_id)
+        await members.remove_guild_member_role(guild_id, user_id, role_id, reason=reason)
 
     async def create_webhook(self, channel_id, name, avatar=None):
         """Create a webhook in a channel. Requires DISCORD_BOT_TOKEN. Returns the

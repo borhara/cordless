@@ -12,18 +12,14 @@ async def fetch_guild_member(guild_id, user_id, *, token=None):
 
 
 async def fetch_guild_members(guild_id, *, limit=None, after=None, token=None):
-    params = [p for p in (f"limit={limit}" if limit else None, f"after={after}" if after else None) if p]
-    qs = ("?" + "&".join(params)) if params else ""
+    qs = _client.query_string(limit=limit, after=after)
     data = await _client.request("GET", f"/guilds/{guild_id}/members{qs}", token=token)
     assert data is not None, "GET always returns a body"
     return [Member(_with_guild_id(m, guild_id)) for m in data]
 
 
 async def search_guild_members(guild_id, query, *, limit=None, token=None):
-    params = [f"query={query}"]
-    if limit:
-        params.append(f"limit={limit}")
-    qs = "?" + "&".join(params)
+    qs = _client.query_string(query=query, limit=limit)
     data = await _client.request("GET", f"/guilds/{guild_id}/members/search{qs}", token=token)
     assert data is not None, "GET always returns a body"
     return [Member(_with_guild_id(m, guild_id)) for m in data]
@@ -50,6 +46,7 @@ async def edit_guild_member(
     channel_id=UNSET,
     communication_disabled_until=UNSET,
     flags=UNSET,
+    reason=None,
     token=None,
 ):
     """nick, channel_id and communication_disabled_until can all be cleared
@@ -63,7 +60,7 @@ async def edit_guild_member(
         communication_disabled_until=communication_disabled_until,
         flags=flags,
     )
-    data = await _client.request("PATCH", f"/guilds/{guild_id}/members/{user_id}", payload, token=token)
+    data = await _client.request("PATCH", f"/guilds/{guild_id}/members/{user_id}", payload, token=token, reason=reason)
     return Member(_with_guild_id(data, guild_id))
 
 
@@ -73,17 +70,17 @@ async def edit_current_member(guild_id, *, nick=UNSET, banner=UNSET, avatar=UNSE
     return Member(_with_guild_id(data, guild_id))
 
 
-async def add_guild_member_role(guild_id, user_id, role_id, *, token=None):
-    await _client.request("PUT", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}", token=token)
+async def add_guild_member_role(guild_id, user_id, role_id, *, reason=None, token=None):
+    await _client.request("PUT", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}", token=token, reason=reason)
 
 
-async def remove_guild_member_role(guild_id, user_id, role_id, *, token=None):
-    await _client.request("DELETE", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}", token=token)
+async def remove_guild_member_role(guild_id, user_id, role_id, *, reason=None, token=None):
+    await _client.request("DELETE", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}", token=token, reason=reason)
 
 
-async def remove_guild_member(guild_id, user_id, *, token=None):
+async def remove_guild_member(guild_id, user_id, *, reason=None, token=None):
     """Kicks a member."""
-    await _client.request("DELETE", f"/guilds/{guild_id}/members/{user_id}", token=token)
+    await _client.request("DELETE", f"/guilds/{guild_id}/members/{user_id}", token=token, reason=reason)
 
 
 async def fetch_guild_roles(guild_id, *, token=None):
@@ -115,6 +112,7 @@ async def create_guild_role(
     icon=UNSET,
     unicode_emoji=UNSET,
     mentionable=UNSET,
+    reason=None,
     token=None,
 ):
     payload = _client.payload(
@@ -127,12 +125,12 @@ async def create_guild_role(
         unicode_emoji=unicode_emoji,
         mentionable=mentionable,
     )
-    data = await _client.request("POST", f"/guilds/{guild_id}/roles", payload, token=token)
+    data = await _client.request("POST", f"/guilds/{guild_id}/roles", payload, token=token, reason=reason)
     return Role(_with_guild_id(data, guild_id))
 
 
-async def edit_guild_role_positions(guild_id, positions, *, token=None):
-    data = await _client.request("PATCH", f"/guilds/{guild_id}/roles", positions, token=token)
+async def edit_guild_role_positions(guild_id, positions, *, reason=None, token=None):
+    data = await _client.request("PATCH", f"/guilds/{guild_id}/roles", positions, token=token, reason=reason)
     assert data is not None, "PATCH always returns a body here"
     return [Role(_with_guild_id(r, guild_id)) for r in data]
 
@@ -149,6 +147,7 @@ async def edit_guild_role(
     icon=UNSET,
     unicode_emoji=UNSET,
     mentionable=UNSET,
+    reason=None,
     token=None,
 ):
     payload = _client.payload(
@@ -161,9 +160,9 @@ async def edit_guild_role(
         unicode_emoji=unicode_emoji,
         mentionable=mentionable,
     )
-    data = await _client.request("PATCH", f"/guilds/{guild_id}/roles/{role_id}", payload, token=token)
+    data = await _client.request("PATCH", f"/guilds/{guild_id}/roles/{role_id}", payload, token=token, reason=reason)
     return Role(_with_guild_id(data, guild_id))
 
 
-async def delete_guild_role(guild_id, role_id, *, token=None):
-    await _client.request("DELETE", f"/guilds/{guild_id}/roles/{role_id}", token=token)
+async def delete_guild_role(guild_id, role_id, *, reason=None, token=None):
+    await _client.request("DELETE", f"/guilds/{guild_id}/roles/{role_id}", token=token, reason=reason)

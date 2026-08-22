@@ -28,17 +28,7 @@ def _to_dicts(components):
 
 
 async def fetch_channel_messages(channel_id, *, around=None, before=None, after=None, limit=None, token=None):
-    params = [
-        p
-        for p in (
-            f"around={around}" if around else None,
-            f"before={before}" if before else None,
-            f"after={after}" if after else None,
-            f"limit={limit}" if limit else None,
-        )
-        if p
-    ]
-    qs = ("?" + "&".join(params)) if params else ""
+    qs = _client.query_string(around=around, before=before, after=after, limit=limit)
     data = await _client.request("GET", f"/channels/{channel_id}/messages{qs}", token=token)
     assert data is not None, "GET always returns a body"
     return [Message(m) for m in data]
@@ -169,16 +159,7 @@ async def delete_user_reaction(channel_id, message_id, emoji, user_id, *, token=
 
 
 async def fetch_reactions(channel_id, message_id, emoji, *, type=None, after=None, limit=None, token=None):
-    params = [
-        p
-        for p in (
-            f"type={type}" if type is not None else None,
-            f"after={after}" if after else None,
-            f"limit={limit}" if limit else None,
-        )
-        if p
-    ]
-    qs = ("?" + "&".join(params)) if params else ""
+    qs = _client.query_string(type=type, after=after, limit=limit)
     data = await _client.request(
         "GET", f"/channels/{channel_id}/messages/{message_id}/reactions/{_quote_emoji(emoji)}{qs}", token=token
     )
@@ -204,6 +185,8 @@ def _array_qs(**fields):
             continue
         values = value if isinstance(value, (list, tuple)) else [value]
         for v in values:
+            if isinstance(v, bool):
+                v = "true" if v else "false"
             parts.append(f"{key}={urllib.parse.quote(str(v))}")
     return ("?" + "&".join(parts)) if parts else ""
 

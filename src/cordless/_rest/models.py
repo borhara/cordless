@@ -433,10 +433,11 @@ class GuildScheduledEventUser(DiscordObject):
     def member(self):
         """The subscribing `Member`, if included (`with_member=True`),
         else `None`."""
+        from ..context import _with_guild_id
         from ..models import Member
 
         member_data = self._data.get("member")
-        return Member(member_data) if member_data is not None else None
+        return Member(_with_guild_id(member_data, self._data.get("guild_id"))) if member_data is not None else None
 
 
 class StageInstance(DiscordObject):

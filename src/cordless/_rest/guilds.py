@@ -22,7 +22,7 @@ from .models import (
 
 
 async def fetch_guild(guild_id, *, with_counts=False, token=None):
-    qs = "?with_counts=true" if with_counts else ""
+    qs = _client.query_string(with_counts=with_counts)
     data = await _client.request("GET", f"/guilds/{guild_id}{qs}", token=token)
     return Guild(data)
 
@@ -55,6 +55,7 @@ async def edit_guild(
     description=UNSET,
     premium_progress_bar_enabled=UNSET,
     safety_alerts_channel_id=UNSET,
+    reason=None,
     token=None,
 ):
     """Most nullable fields (afk_channel_id, icon, splash, ...) can be
@@ -81,15 +82,12 @@ async def edit_guild(
         premium_progress_bar_enabled=premium_progress_bar_enabled,
         safety_alerts_channel_id=safety_alerts_channel_id,
     )
-    data = await _client.request("PATCH", f"/guilds/{guild_id}", payload, token=token)
+    data = await _client.request("PATCH", f"/guilds/{guild_id}", payload, token=token, reason=reason)
     return Guild(data)
 
 
 async def fetch_guild_bans(guild_id, *, limit=None, before=None, after=None, token=None):
-    params = [p for p in (f"limit={limit}" if limit else None, f"before={before}" if before else None) if p]
-    if after:
-        params.append(f"after={after}")
-    qs = ("?" + "&".join(params)) if params else ""
+    qs = _client.query_string(limit=limit, before=before, after=after)
     data = await _client.request("GET", f"/guilds/{guild_id}/bans{qs}", token=token)
     assert data is not None, "GET always returns a body"
     return [Ban(b) for b in data]
@@ -100,34 +98,35 @@ async def fetch_guild_ban(guild_id, user_id, *, token=None):
     return Ban(data)
 
 
-async def create_guild_ban(guild_id, user_id, *, delete_message_seconds=UNSET, delete_message_days=UNSET, token=None):
+async def create_guild_ban(
+    guild_id, user_id, *, delete_message_seconds=UNSET, delete_message_days=UNSET, reason=None, token=None
+):
     payload = _client.payload(delete_message_seconds=delete_message_seconds, delete_message_days=delete_message_days)
-    await _client.request("PUT", f"/guilds/{guild_id}/bans/{user_id}", payload, token=token)
+    await _client.request("PUT", f"/guilds/{guild_id}/bans/{user_id}", payload, token=token, reason=reason)
 
 
-async def remove_guild_ban(guild_id, user_id, *, token=None):
-    await _client.request("DELETE", f"/guilds/{guild_id}/bans/{user_id}", token=token)
+async def remove_guild_ban(guild_id, user_id, *, reason=None, token=None):
+    await _client.request("DELETE", f"/guilds/{guild_id}/bans/{user_id}", token=token, reason=reason)
 
 
-async def bulk_guild_ban(guild_id, user_ids, *, delete_message_seconds=UNSET, token=None):
+async def bulk_guild_ban(guild_id, user_ids, *, delete_message_seconds=UNSET, reason=None, token=None):
     payload = _client.payload(user_ids=user_ids, delete_message_seconds=delete_message_seconds)
-    data = await _client.request("POST", f"/guilds/{guild_id}/bulk-ban", payload, token=token)
+    data = await _client.request("POST", f"/guilds/{guild_id}/bulk-ban", payload, token=token, reason=reason)
     return BulkBanResult(data)
 
 
 async def fetch_guild_prune_count(guild_id, *, days=None, include_roles=None, token=None):
-    params = [p for p in (f"days={days}" if days else None,) if p]
-    if include_roles:
-        params.append(f"include_roles={','.join(include_roles)}")
-    qs = ("?" + "&".join(params)) if params else ""
+    qs = _client.query_string(days=days, include_roles=",".join(include_roles) if include_roles else None)
     data = await _client.request("GET", f"/guilds/{guild_id}/prune{qs}", token=token)
     assert data is not None, "GET always returns a body"
     return data["pruned"]
 
 
-async def begin_guild_prune(guild_id, *, days=UNSET, compute_prune_count=UNSET, include_roles=UNSET, token=None):
+async def begin_guild_prune(
+    guild_id, *, days=UNSET, compute_prune_count=UNSET, include_roles=UNSET, reason=None, token=None
+):
     payload = _client.payload(days=days, compute_prune_count=compute_prune_count, include_roles=include_roles)
-    data = await _client.request("POST", f"/guilds/{guild_id}/prune", payload, token=token)
+    data = await _client.request("POST", f"/guilds/{guild_id}/prune", payload, token=token, reason=reason)
     assert data is not None, "POST always returns a body here"
     return data["pruned"]
 

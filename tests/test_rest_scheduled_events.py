@@ -113,7 +113,7 @@ def test_fetch_guild_scheduled_event_users_returns_user_list():
         result = run(scheduled_events.fetch_guild_scheduled_event_users("10", "1"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/scheduled-events/1/users"
-    assert result == [GuildScheduledEventUser(_EVENT_USER_PAYLOAD)]
+    assert result == [GuildScheduledEventUser(dict(_EVENT_USER_PAYLOAD, guild_id="10"))]
     assert result[0].user.username == "shiv"
 
 
@@ -166,7 +166,9 @@ def test_bot_delete_guild_scheduled_event_delegates_to_rest_module():
 def test_bot_fetch_guild_scheduled_event_users_delegates_to_rest_module():
     bot = Cordless()
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_EVENT_USER_PAYLOAD])]):
-        assert run(bot.fetch_guild_scheduled_event_users("10", "1")) == [GuildScheduledEventUser(_EVENT_USER_PAYLOAD)]
+        assert run(bot.fetch_guild_scheduled_event_users("10", "1")) == [
+            GuildScheduledEventUser(dict(_EVENT_USER_PAYLOAD, guild_id="10"))
+        ]
 
 
 # --- guild.*() object-method delegation ---
@@ -226,7 +228,7 @@ def test_event_fetch_users_delegates_to_rest_module():
         result = run(event.fetch_users())
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/scheduled-events/1/users"
-    assert result == [GuildScheduledEventUser(_EVENT_USER_PAYLOAD)]
+    assert result == [GuildScheduledEventUser(dict(_EVENT_USER_PAYLOAD, guild_id="10"))]
 
 
 def test_event_creator_is_none_when_absent():
@@ -250,3 +252,12 @@ def test_event_user_member_returns_member_when_present():
     event_user = GuildScheduledEventUser(payload)
     assert isinstance(event_user.member, Member)
     assert event_user.member.nick == "shiv"
+
+
+def test_event_user_member_has_guild_id_stitched_in():
+    """member.add_role()/kick()/etc. read guild_id straight off the member's
+    own data, since Discord's member payload never carries it: fetch_guild_scheduled_event_users
+    must stitch it in the same way fetch_guild_members does."""
+    payload = dict(_EVENT_USER_PAYLOAD, guild_id="10", member={"nick": "shiv"})
+    event_user = GuildScheduledEventUser(payload)
+    assert event_user.member.guild_id == "10"

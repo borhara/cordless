@@ -168,6 +168,19 @@ def test_edit_channel_message_omitted_flags_are_not_sent():
     assert "flags" not in json.loads(urlopen.call_args.args[0].data)
 
 
+def test_edit_channel_message_keeps_retained_attachments_alongside_new_files():
+    """Regression: a new file's attachments metadata used to overwrite the
+    caller's explicit attachments=... (the retained-attachment list), losing
+    the request to keep the existing attachment."""
+    from cordless._multipart import parse_multipart_payload
+
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_MESSAGE_PAYLOAD)]) as urlopen:
+        run(messages.edit_channel_message("20", "1", files=[("new.png", b"data")], attachments=[{"id": "123"}]))
+
+    payload = parse_multipart_payload(urlopen.call_args.args[0].data)
+    assert payload["attachments"] == [{"id": "123"}, {"id": 0, "filename": "new.png"}]
+
+
 def test_delete_channel_message_deletes_message():
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
         run(messages.delete_channel_message("20", "1"))
@@ -271,6 +284,17 @@ def test_search_guild_messages_builds_repeated_array_query_params():
     assert "author_id=1" in url
     assert "author_id=2" in url
     assert "content=shiv" in url
+
+
+def test_search_guild_messages_sends_lowercase_booleans():
+    """Discord's search endpoint expects true/false, not Python's True/False."""
+    payload = {"total_results": 0, "doing_deep_historical_index": False, "messages": []}
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+        run(messages.search_guild_messages("10", pinned=True, mention_everyone=False))
+
+    url = urlopen.call_args.args[0].full_url
+    assert "pinned=true" in url
+    assert "mention_everyone=false" in url
 
 
 def test_search_guild_messages_flattens_nested_message_arrays():

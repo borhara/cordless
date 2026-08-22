@@ -63,6 +63,14 @@ def test_search_guild_members_passes_query_and_limit():
     assert len(result) == 1
 
 
+def test_search_guild_members_url_encodes_query():
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([])]) as urlopen:
+        run(members.search_guild_members("10", "shiv the second"))
+
+    url = urlopen.call_args.args[0].full_url
+    assert "query=shiv%20the%20second" in url
+
+
 # --- add / edit / kick ---
 
 
@@ -140,6 +148,22 @@ def test_remove_guild_member_kicks():
     req = urlopen.call_args.args[0]
     assert req.full_url == "https://discord.com/api/v10/guilds/10/members/55"
     assert req.get_method() == "DELETE"
+
+
+def test_remove_guild_member_sends_audit_log_reason():
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(members.remove_guild_member("10", "55", reason="spamming"))
+
+    req = urlopen.call_args.args[0]
+    assert req.get_header("X-audit-log-reason") == "spamming"
+
+
+def test_remove_guild_member_omits_audit_log_reason_when_not_given():
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(members.remove_guild_member("10", "55"))
+
+    req = urlopen.call_args.args[0]
+    assert req.get_header("X-audit-log-reason") is None
 
 
 # --- roles ---
