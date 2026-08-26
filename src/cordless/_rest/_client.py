@@ -13,10 +13,14 @@ per-outbound-request shape the rest of the codebase already uses.
 import asyncio
 import json
 import os
-import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+# bound directly rather than `import time` - asyncio's own event loop clock
+# is time.monotonic(), so a test monkeypatching that module-level attribute
+# to control this retry loop would also corrupt asyncio's internal timeouts
+from time import monotonic, sleep
 
 from .. import ratelimit
 from .._multipart import build_multipart_body
@@ -59,7 +63,7 @@ def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_bo
     }
 
     url = f"https://discord.com/api/v10{path}"
-    deadline = time.monotonic() + _MAX_RETRY_SECONDS
+    deadline = monotonic() + _MAX_RETRY_SECONDS
     network_retried = False
     while True:
         ratelimit.wait_if_needed(method, path)
@@ -71,13 +75,13 @@ def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_bo
                 return data
         except urllib.error.HTTPError as exc:
             body_out = exc.read()
-            if exc.code == 429 and time.monotonic() < deadline:
+            if exc.code == 429 and monotonic() < deadline:
                 try:
                     retry_after = float(json.loads(body_out).get("retry_after", 1))
                 except (ValueError, AttributeError):
                     retry_after = 1.0
                 ratelimit.note_blocked(method, path, retry_after)
-                time.sleep(ratelimit.jittered_wait(retry_after))
+                sleep(ratelimit.jittered_wait(retry_after))
                 continue
             raise RuntimeError(f"Discord API error {exc.code}: {body_out.decode(errors='replace')}") from exc
         except OSError:

@@ -761,13 +761,13 @@ def test_discord_request_records_response_headers_on_success(monkeypatch):
 
 def test_discord_request_retries_once_on_429_then_succeeds(monkeypatch):
     import os
-    import time
 
     import cordless.ratelimit as ratelimit
+    from cordless._rest import _client
 
     blocked = []
     monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: blocked.append(retry_after))
-    monkeypatch.setattr(time, "sleep", lambda s: None)
+    monkeypatch.setattr(_client, "sleep", lambda s: None)
     responses = [
         make_http_error(429, json.dumps({"retry_after": 0.2}).encode()),
         FakeDiscordResponse({}),
@@ -813,13 +813,13 @@ def test_discord_request_only_retries_network_error_once(monkeypatch):
 
 def test_discord_request_defaults_retry_after_when_429_body_is_not_json(monkeypatch):
     import os
-    import time
 
     import cordless.ratelimit as ratelimit
+    from cordless._rest import _client
 
     blocked = []
     monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: blocked.append(retry_after))
-    monkeypatch.setattr(time, "sleep", lambda s: None)
+    monkeypatch.setattr(_client, "sleep", lambda s: None)
     responses = [
         make_http_error(429, b"not json"),
         FakeDiscordResponse({}),
@@ -837,14 +837,14 @@ def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(monkeypatch):
     """wait_if_needed must run before every attempt, not just the first - otherwise a
     sibling call's note_blocked() from a moment ago is never consulted before retrying."""
     import os
-    import time
 
     import cordless.ratelimit as ratelimit
+    from cordless._rest import _client
 
     waits = []
     monkeypatch.setattr(ratelimit, "wait_if_needed", lambda method, path: waits.append((method, path)))
     monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: None)
-    monkeypatch.setattr(time, "sleep", lambda s: None)
+    monkeypatch.setattr(_client, "sleep", lambda s: None)
     responses = [
         make_http_error(429, json.dumps({"retry_after": 0.1}).encode()),
         FakeDiscordResponse({}),
@@ -859,18 +859,23 @@ def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(monkeypatch):
 
 def test_discord_request_gives_up_after_retry_budget_exhausted(monkeypatch):
     import os
-    import time
 
-    monkeypatch.setattr(time, "sleep", lambda s: None)
+    from cordless._rest import _client
+
+    monkeypatch.setattr(_client, "sleep", lambda s: None)
     # jump straight past _MAX_RETRY_SECONDS on the very first check, so this test
-    # doesn't actually spend 30 real seconds retrying against a mocked 429
+    # doesn't actually spend 30 real seconds retrying against a mocked 429.
+    # patched on _client rather than the global time module - asyncio's own
+    # event loop clock is time.monotonic() too, and a global patch here
+    # previously corrupted asyncio's internal timeouts (it thought its
+    # default-executor shutdown had taken 300+ seconds and warned about it).
     clock = [0.0]
 
     def fake_monotonic():
         clock[0] += 100
         return clock[0]
 
-    monkeypatch.setattr(time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(_client, "monotonic", fake_monotonic)
     responses = [make_http_error(429, b'{"retry_after": 0.1}')] * 5
 
     with (
