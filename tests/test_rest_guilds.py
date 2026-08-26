@@ -80,6 +80,28 @@ def test_edit_guild_only_sends_fields_that_were_set():
     assert isinstance(result, Guild)
 
 
+# --- create_guild / delete_guild ---
+
+
+def test_create_guild_posts_required_and_optional_fields():
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_GUILD_PAYLOAD)]) as urlopen:
+        result = run(guilds.create_guild("shiv's server", verification_level=1))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/guilds"
+    assert json.loads(req.data) == {"name": "shiv's server", "verification_level": 1}
+    assert isinstance(result, Guild)
+
+
+def test_delete_guild_deletes_guild():
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(guilds.delete_guild("10"))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/guilds/10"
+    assert req.get_method() == "DELETE"
+
+
 # --- bans ---
 
 
@@ -310,6 +332,19 @@ def test_edit_guild_incident_actions_puts_fields():
 # --- bot.<verb>() delegation (every mixin method) ---
 
 
+def test_bot_create_guild_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_GUILD_PAYLOAD)]):
+        assert isinstance(run(bot.create_guild("shiv's server")), Guild)
+
+
+def test_bot_delete_guild_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(bot.delete_guild("10"))
+    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10"
+
+
 def test_bot_fetch_guild_delegates_to_rest_module():
     bot = Cordless()
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_GUILD_PAYLOAD)]):
@@ -476,6 +511,16 @@ def test_guild_edit_delegates_to_rest_module():
 
     assert json.loads(urlopen.call_args.args[0].data) == {"name": "renamed"}
     assert isinstance(result, Guild)
+
+
+def test_guild_delete_delegates_to_rest_module():
+    guild = Guild({"id": "10"})
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(guild.delete())
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/guilds/10"
+    assert req.get_method() == "DELETE"
 
 
 def test_guild_fetch_bans_delegates_to_rest_module():

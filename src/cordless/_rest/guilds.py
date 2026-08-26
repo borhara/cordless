@@ -21,6 +21,44 @@ from .models import (
 )
 
 
+async def create_guild(
+    name,
+    *,
+    icon=UNSET,
+    verification_level=UNSET,
+    default_message_notifications=UNSET,
+    explicit_content_filter=UNSET,
+    roles=UNSET,
+    channels=UNSET,
+    afk_channel_id=UNSET,
+    afk_timeout=UNSET,
+    system_channel_id=UNSET,
+    system_channel_flags=UNSET,
+    token=None,
+):
+    """Only works for bots in fewer than 10 guilds."""
+    payload = _client.payload(
+        name=name,
+        icon=icon,
+        verification_level=verification_level,
+        default_message_notifications=default_message_notifications,
+        explicit_content_filter=explicit_content_filter,
+        roles=roles,
+        channels=channels,
+        afk_channel_id=afk_channel_id,
+        afk_timeout=afk_timeout,
+        system_channel_id=system_channel_id,
+        system_channel_flags=system_channel_flags,
+    )
+    data = await _client.request("POST", "/guilds", payload, token=token)
+    return Guild(data)
+
+
+async def delete_guild(guild_id, *, token=None):
+    """Bot must be the guild's owner."""
+    await _client.request("DELETE", f"/guilds/{guild_id}", token=token)
+
+
 async def fetch_guild(guild_id, *, with_counts=False, token=None):
     qs = _client.query_string(with_counts=with_counts)
     data = await _client.request("GET", f"/guilds/{guild_id}{qs}", token=token)

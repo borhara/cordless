@@ -363,6 +363,12 @@ class RESTMixin:
         return await members.delete_guild_role(guild_id, role_id, **kwargs)
 
     # -- guilds --
+    async def create_guild(self, name, **kwargs):
+        return await guilds.create_guild(name, **kwargs)
+
+    async def delete_guild(self, guild_id, **kwargs):
+        await guilds.delete_guild(guild_id, **kwargs)
+
     async def fetch_guild(self, guild_id, **kwargs):
         return await guilds.fetch_guild(guild_id, **kwargs)
 
