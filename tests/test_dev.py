@@ -5,6 +5,7 @@ import os
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
 
@@ -12,6 +13,7 @@ import pytest
 
 import cordless.dev as dev
 from cordless.dev import Reloader, _load_env, _local_invoke_worker, _make_handler, _start_tunnel
+from cordless.router import APPLICATION_COMMAND_AUTOCOMPLETE, MESSAGE_COMPONENT, MODAL_SUBMIT
 
 
 @pytest.fixture
@@ -273,3 +275,75 @@ def test_load_env_missing_environment_file_falls_back_to_dot_env(tmp_path, monke
     _load_env(str(tmp_path), "staging")
 
     assert os.environ.pop("KEY") == "dev"
+
+
+# --- interaction description ---
+
+
+def test_describe_interaction_invalid_json_returns_placeholder():
+    assert dev._describe_interaction("not json") == "?"
+
+
+def test_describe_interaction_autocomplete():
+    body = json.dumps({"type": APPLICATION_COMMAND_AUTOCOMPLETE, "data": {"name": "ping"}})
+    assert dev._describe_interaction(body) == "/ping (autocomplete)"
+
+
+def test_describe_interaction_button():
+    body = json.dumps({"type": MESSAGE_COMPONENT, "data": {"component_type": 2, "custom_id": "confirm"}})
+    assert dev._describe_interaction(body) == "button confirm"
+
+
+def test_describe_interaction_select():
+    body = json.dumps({"type": MESSAGE_COMPONENT, "data": {"component_type": 3, "custom_id": "pick"}})
+    assert dev._describe_interaction(body) == "select pick"
+
+
+def test_describe_interaction_modal_submit():
+    body = json.dumps({"type": MODAL_SUBMIT, "data": {"custom_id": "feedback"}})
+    assert dev._describe_interaction(body) == "modal feedback"
+
+
+def test_describe_interaction_unknown_type_falls_back_to_number():
+    body = json.dumps({"type": 99})
+    assert dev._describe_interaction(body) == "type 99"
+
+
+# --- status colour and body formatting ---
+
+
+def test_status_color_success_is_green():
+    assert dev._status_color(200) == dev._GREEN
+
+
+def test_status_color_client_error_is_yellow():
+    assert dev._status_color(404) == dev._YELLOW
+
+
+def test_status_color_server_error_is_red():
+    assert dev._status_color(500) == dev._RED
+
+
+def test_pretty_body_empty_returns_empty_string():
+    assert dev._pretty_body("") == ""
+
+
+def test_pretty_body_formats_json():
+    assert dev._pretty_body('{"a":1}') == json.dumps({"a": 1}, indent=2)
+
+
+def test_pretty_body_passes_through_non_json():
+    assert dev._pretty_body("not json") == "not json"
+
+
+def test_pretty_body_truncates_long_output():
+    body = json.dumps({"text": "x" * dev._MAX_LOGGED_BODY * 3})
+    full_pretty = json.dumps(json.loads(body), indent=2)
+    pretty = dev._pretty_body(body)
+    assert pretty.endswith("more chars)")
+    assert len(pretty) < len(full_pretty)
+
+
+def test_log_request_verbose_prints_indented_body(capsys):
+    dev._log_request("ping", 200, 12.3, json.dumps({"a": 1}), verbose=True)
+    assert '"a": 1' in capsys.readouterr().out
