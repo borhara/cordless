@@ -23,6 +23,7 @@ from . import (
     messages,
     scheduled_events,
     skus,
+    soundboard,
     stage_instances,
     stickers,
     templates,
@@ -228,6 +229,28 @@ class RESTMixin:
 
     async def delete_application_emoji(self, application_id, emoji_id, **kwargs):
         return await emojis.delete_application_emoji(application_id, emoji_id, **kwargs)
+
+    # -- soundboard --
+    async def send_soundboard_sound(self, channel_id, sound_id, **kwargs):
+        await soundboard.send_soundboard_sound(channel_id, sound_id, **kwargs)
+
+    async def fetch_default_soundboard_sounds(self, **kwargs):
+        return await soundboard.fetch_default_soundboard_sounds(**kwargs)
+
+    async def fetch_guild_soundboard_sounds(self, guild_id, **kwargs):
+        return await soundboard.fetch_guild_soundboard_sounds(guild_id, **kwargs)
+
+    async def fetch_guild_soundboard_sound(self, guild_id, sound_id, **kwargs):
+        return await soundboard.fetch_guild_soundboard_sound(guild_id, sound_id, **kwargs)
+
+    async def create_guild_soundboard_sound(self, guild_id, name, sound, **kwargs):
+        return await soundboard.create_guild_soundboard_sound(guild_id, name, sound, **kwargs)
+
+    async def edit_guild_soundboard_sound(self, guild_id, sound_id, **kwargs):
+        return await soundboard.edit_guild_soundboard_sound(guild_id, sound_id, **kwargs)
+
+    async def delete_guild_soundboard_sound(self, guild_id, sound_id, **kwargs):
+        await soundboard.delete_guild_soundboard_sound(guild_id, sound_id, **kwargs)
 
     # -- stickers --
     async def fetch_sticker(self, sticker_id, **kwargs):

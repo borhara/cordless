@@ -361,6 +361,29 @@ class Sticker(DiscordObject):
         await stickers.delete_guild_sticker(self._data["guild_id"], self.id, **kwargs)
 
 
+class SoundboardSound(DiscordObject):
+    """A soundboard sound, from `guild.fetch_soundboard_sounds()` or
+    `bot.fetch_default_soundboard_sounds()`. Keyed by `.sound_id`, not
+    `.id`. `.name`, `.volume`, `.emoji_id`, `.emoji_name`. `.guild_id` is
+    only present on guild sounds, not default ones."""
+
+    async def edit(self, **kwargs):
+        """Update this guild soundboard sound. Requires
+        `DISCORD_BOT_TOKEN` and `CREATE_GUILD_EXPRESSIONS`/
+        `MANAGE_GUILD_EXPRESSIONS`."""
+        from . import soundboard
+
+        return await soundboard.edit_guild_soundboard_sound(self._data["guild_id"], self.sound_id, **kwargs)
+
+    async def delete(self, **kwargs):
+        """Delete this guild soundboard sound. Requires
+        `DISCORD_BOT_TOKEN` and `CREATE_GUILD_EXPRESSIONS`/
+        `MANAGE_GUILD_EXPRESSIONS`."""
+        from . import soundboard
+
+        await soundboard.delete_guild_soundboard_sound(self._data["guild_id"], self.sound_id, **kwargs)
+
+
 class StickerPack(DiscordObject):
     """One of Discord's official sticker packs, from `bot.fetch_sticker_packs()`.
     `.id`, `.name`, `.description`, `.sku_id`, `.cover_sticker_id`,

@@ -561,6 +561,14 @@ class Channel(DiscordObject):
 
         return await stage_instances.fetch_stage_instance(self.id, **kwargs)
 
+    async def send_soundboard_sound(self, sound_id, **kwargs):
+        """Play a soundboard sound in this channel's voice channel. Bot
+        must already be connected to it. Requires `DISCORD_BOT_TOKEN`,
+        `SPEAK` and `USE_SOUNDBOARD`."""
+        from ._rest import soundboard
+
+        await soundboard.send_soundboard_sound(self.id, sound_id, **kwargs)
+
 
 class Attachment(DiscordObject):
     """A file attached to a command's `attachment` option, e.g.
@@ -1037,6 +1045,29 @@ class Guild(DiscordObject):
         from ._rest import stickers
 
         return await stickers.create_guild_sticker(self.id, name, description, tags, filename, file_bytes, **kwargs)
+
+    async def fetch_soundboard_sounds(self, **kwargs):
+        """List this guild's soundboard sounds, as a list of
+        `SoundboardSound`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import soundboard
+
+        return await soundboard.fetch_guild_soundboard_sounds(self.id, **kwargs)
+
+    async def fetch_soundboard_sound(self, sound_id, **kwargs):
+        """Fetch a single soundboard sound from this guild. Requires
+        `DISCORD_BOT_TOKEN`."""
+        from ._rest import soundboard
+
+        return await soundboard.fetch_guild_soundboard_sound(self.id, sound_id, **kwargs)
+
+    async def create_soundboard_sound(self, name, sound, **kwargs):
+        """Add a soundboard sound to this guild. `sound` is a base64 data
+        URI, same convention as `create_emoji`'s `image`. Returns the new
+        `SoundboardSound`. Requires `DISCORD_BOT_TOKEN` and
+        `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS`."""
+        from ._rest import soundboard
+
+        return await soundboard.create_guild_soundboard_sound(self.id, name, sound, **kwargs)
 
     async def fetch_scheduled_events(self, **kwargs):
         """List this guild's scheduled events, as a list of
