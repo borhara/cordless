@@ -607,6 +607,20 @@ class SKU(DiscordObject):
     `.slug`, `.flags`."""
 
 
+class Application(DiscordObject):
+    """The bot's own application, from `bot.fetch_application()`/
+    `bot.edit_application()`. `.id`, `.name`, `.icon`, `.description`,
+    `.bot_public`, `.flags`, `.tags`, `.install_params`,
+    `.integration_types_config`, and any other field Discord sends."""
+
+    async def edit(self, **kwargs):
+        """Update the application's settings. Returns the updated
+        `Application`. Requires `DISCORD_BOT_TOKEN`."""
+        from . import application
+
+        return await application.edit_current_application(**kwargs)
+
+
 class ApplicationCommand(DiscordObject):
     """From `bot.fetch_global_commands()`/`bot.fetch_guild_commands()`.
     `.id`, `.application_id`, `.guild_id` (only for guild-scoped commands),

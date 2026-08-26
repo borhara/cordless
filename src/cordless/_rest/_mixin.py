@@ -11,6 +11,7 @@ Every method is async, matching the rest of Cordless's public REST surface
 """
 
 from . import (
+    application,
     application_commands,
     audit_log,
     auto_moderation,
@@ -35,6 +36,13 @@ from . import (
 
 
 class RESTMixin:
+    # -- application --
+    async def fetch_application(self, **kwargs):
+        return await application.fetch_current_application(**kwargs)
+
+    async def edit_application(self, **kwargs):
+        return await application.edit_current_application(**kwargs)
+
     # -- application commands --
     async def fetch_global_commands(self, application_id, **kwargs):
         return await application_commands.fetch_global_commands(application_id, **kwargs)
