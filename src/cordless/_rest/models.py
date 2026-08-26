@@ -168,6 +168,13 @@ class VoiceRegion(DiscordObject):
     `.optimal`, `.deprecated`, `.custom`."""
 
 
+class VoiceState(DiscordObject):
+    """From `guild.fetch_voice_state()`/`guild.fetch_member_voice_state()`.
+    `.channel_id`, `.session_id`, `.deaf`, `.mute`, `.self_deaf`,
+    `.self_mute`, `.self_stream`, `.self_video`, `.suppress`,
+    `.request_to_speak_timestamp`."""
+
+
 class GuildWidgetSettings(DiscordObject):
     """From `guild.fetch_widget_settings()`/`guild.edit_widget()`.
     `.enabled`, `.channel_id`."""

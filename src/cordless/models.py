@@ -748,6 +748,36 @@ class Guild(DiscordObject):
 
         return await guilds.fetch_guild_voice_regions(self.id, **kwargs)
 
+    async def fetch_voice_state(self, **kwargs):
+        """Fetch the bot's own voice state in this guild, as a
+        `VoiceState`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import voice
+
+        return await voice.fetch_current_user_voice_state(self.id, **kwargs)
+
+    async def fetch_member_voice_state(self, user_id, **kwargs):
+        """Fetch a member's voice state in this guild, as a `VoiceState`.
+        Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import voice
+
+        return await voice.fetch_user_voice_state(self.id, user_id, **kwargs)
+
+    async def edit_voice_state(self, **kwargs):
+        """Update the bot's own voice state - move it with `channel_id`,
+        or request/cancel a Stage speaker request with
+        `request_to_speak_timestamp`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import voice
+
+        await voice.edit_current_user_voice_state(self.id, **kwargs)
+
+    async def edit_member_voice_state(self, user_id, **kwargs):
+        """Move a member on a Stage channel - `suppress=False` invites them
+        to speak, `suppress=True` moves them back to the audience.
+        Requires `DISCORD_BOT_TOKEN` and `MUTE_MEMBERS`."""
+        from ._rest import voice
+
+        await voice.edit_user_voice_state(self.id, user_id, **kwargs)
+
     async def fetch_invites(self, **kwargs):
         """List every invite across this guild, as a list of `Invite`.
         Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD` or `VIEW_AUDIT_LOG`."""
