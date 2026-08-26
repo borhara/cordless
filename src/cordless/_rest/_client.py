@@ -147,24 +147,41 @@ async def request(method, path, payload=None, files=None, token=None, raw_body=N
     return json.loads(data) if data else None
 
 
-def query_string(**params):
-    """Shared query-string builder for GET endpoints' optional scalar
-    filters (limit/before/after/..., and boolean flags like with_counts).
+def join_query_parts(parts):
+    """Shared '?'-or-'&' joiner for a list of already-formatted key=value
+    query string parts, so a future fix to how they get combined only has
+    to happen in one place - query_string, messages._array_qs, and
+    entitlements' tri-state exclude_ended/exclude_deleted filters all end
+    up here rather than each hand-rolling their own join."""
+    return ("?" + "&".join(parts)) if parts else ""
+
+
+def query_parts(**params):
+    """Builds the key=value parts query_string() joins. Split out so a
+    caller with one extra formatting quirk (entitlements' tri-state
+    booleans) can add its own part to the same list before joining once,
+    instead of building two separate query strings and splicing them.
 
     None and False are omitted: a flag defaulting to False reads the same
     as not sending it at all, which is what every existing caller wants.
-    True becomes Discord's lowercase "true". Values are URL-encoded.
-    Doesn't handle list values: Discord's array-style query params
-    (author_id=1&author_id=2) need the repeated-key shape messages.py's
-    _array_qs builds instead, and comma-joined ones (include_roles) join
-    before being passed in here."""
+    True becomes Discord's lowercase "true". Values are URL-encoded."""
     parts = []
     for key, value in params.items():
         if value is None or value is False:
             continue
         v = "true" if value is True else value
         parts.append(f"{key}={urllib.parse.quote(str(v))}")
-    return ("?" + "&".join(parts)) if parts else ""
+    return parts
+
+
+def query_string(**params):
+    """Shared query-string builder for GET endpoints' optional scalar
+    filters (limit/before/after/..., and boolean flags like with_counts).
+    Doesn't handle list values: Discord's array-style query params
+    (author_id=1&author_id=2) need the repeated-key shape messages.py's
+    _array_qs builds instead, and comma-joined ones (include_roles) join
+    before being passed in here."""
+    return join_query_parts(query_parts(**params))
 
 
 def pagination_qs(*, before=None, limit=None):

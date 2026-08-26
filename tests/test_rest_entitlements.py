@@ -74,6 +74,18 @@ def test_fetch_entitlements_omits_bool_params_when_unset():
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/applications/3/entitlements"
 
 
+def test_fetch_entitlements_bool_param_alone_still_gets_a_leading_question_mark():
+    """With no scalar filters set, exclude_ended is the very first (and
+    only) query part - regression coverage for the old two-query-strings-
+    spliced-together implementation getting the ?/& choice wrong here."""
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([])]) as urlopen:
+        run(entitlements.fetch_entitlements("3", exclude_ended=True))
+
+    assert urlopen.call_args.args[0].full_url == (
+        "https://discord.com/api/v10/applications/3/entitlements?exclude_ended=true"
+    )
+
+
 def test_fetch_entitlement_returns_single_entitlement():
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_ENTITLEMENT_PAYLOAD)]) as urlopen:
         result = run(entitlements.fetch_entitlement("3", "1"))

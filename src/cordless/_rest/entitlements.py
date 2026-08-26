@@ -4,15 +4,6 @@ from . import _client
 from .models import Entitlement
 
 
-def _bool_qs(name, value):
-    """Unlike _client.query_string's flag convention, exclude_ended/exclude_deleted
-    are tri-state: None omits the filter entirely, but an explicit False is
-    sent as-is rather than treated the same as not filtering."""
-    if value is None:
-        return None
-    return f"{name}={'true' if value else 'false'}"
-
-
 async def fetch_entitlements(
     application_id,
     *,
@@ -26,7 +17,7 @@ async def fetch_entitlements(
     exclude_deleted=None,
     token=None,
 ):
-    qs = _client.query_string(
+    parts = _client.query_parts(
         user_id=user_id,
         sku_ids=",".join(sku_ids) if sku_ids else None,
         before=before,
@@ -34,9 +25,14 @@ async def fetch_entitlements(
         limit=limit,
         guild_id=guild_id,
     )
-    extra = [p for p in (_bool_qs("exclude_ended", exclude_ended), _bool_qs("exclude_deleted", exclude_deleted)) if p]
-    if extra:
-        qs += ("&" if qs else "?") + "&".join(extra)
+    # exclude_ended/exclude_deleted are tri-state, unlike query_parts's own
+    # flag convention: None omits the filter entirely, but an explicit
+    # False is sent as-is rather than treated the same as not filtering.
+    if exclude_ended is not None:
+        parts.append(f"exclude_ended={'true' if exclude_ended else 'false'}")
+    if exclude_deleted is not None:
+        parts.append(f"exclude_deleted={'true' if exclude_deleted else 'false'}")
+    qs = _client.join_query_parts(parts)
     data = await _client.request("GET", f"/applications/{application_id}/entitlements{qs}", token=token)
     assert data is not None, "GET always returns a body"
     return [Entitlement(e) for e in data]

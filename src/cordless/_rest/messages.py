@@ -202,7 +202,7 @@ def _array_qs(**fields):
             if isinstance(v, bool):
                 v = "true" if v else "false"
             parts.append(f"{key}={urllib.parse.quote(str(v))}")
-    return ("?" + "&".join(parts)) if parts else ""
+    return _client.join_query_parts(parts)
 
 
 async def search_guild_messages(
