@@ -316,6 +316,12 @@ class RESTMixin:
     async def search_guild_messages(self, guild_id, **kwargs):
         return await messages.search_guild_messages(guild_id, **kwargs)
 
+    async def fetch_poll_answer_voters(self, channel_id, message_id, answer_id, **kwargs):
+        return await messages.fetch_poll_answer_voters(channel_id, message_id, answer_id, **kwargs)
+
+    async def expire_poll(self, channel_id, message_id, **kwargs):
+        return await messages.expire_poll(channel_id, message_id, **kwargs)
+
     # -- members and roles --
     async def fetch_guild_member(self, guild_id, user_id, **kwargs):
         return await members.fetch_guild_member(guild_id, user_id, **kwargs)

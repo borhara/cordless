@@ -340,6 +340,21 @@ class Message(DiscordObject):
         else:
             await messages.delete_all_reactions_for_emoji(self._data["channel_id"], self.id, emoji, **kwargs)
 
+    async def fetch_poll_answer_voters(self, answer_id, **kwargs):
+        """List the users who voted for one answer on this message's poll,
+        as a list of `User`. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import messages
+
+        return await messages.fetch_poll_answer_voters(self._data["channel_id"], self.id, answer_id, **kwargs)
+
+    async def expire_poll(self, **kwargs):
+        """End this message's poll now, instead of waiting for its normal
+        expiry. Returns the updated `Message`. Requires
+        `DISCORD_BOT_TOKEN`."""
+        from ._rest import messages
+
+        return await messages.expire_poll(self._data["channel_id"], self.id, **kwargs)
+
 
 class Channel(DiscordObject):
     """A partial Discord channel, e.g. `ctx.channel`. `.id`, `.name`,

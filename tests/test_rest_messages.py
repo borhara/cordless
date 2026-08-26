@@ -315,6 +315,36 @@ def test_search_guild_messages_flattens_nested_message_arrays():
     assert result.members == []
 
 
+# --- polls ---
+
+
+def test_fetch_poll_answer_voters_returns_user_list():
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse({"users": [_USER_PAYLOAD]})]) as urlopen:
+        result = run(messages.fetch_poll_answer_voters("20", "1", "3"))
+
+    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/polls/1/answers/3"
+    assert result == [User(_USER_PAYLOAD)]
+
+
+def test_fetch_poll_answer_voters_passes_after_and_limit():
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse({"users": []})]) as urlopen:
+        run(messages.fetch_poll_answer_voters("20", "1", "3", after="90", limit=10))
+
+    url = urlopen.call_args.args[0].full_url
+    assert "after=90" in url
+    assert "limit=10" in url
+
+
+def test_expire_poll_returns_updated_message():
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_MESSAGE_PAYLOAD)]) as urlopen:
+        result = run(messages.expire_poll("20", "1"))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/channels/20/polls/1/expire"
+    assert req.get_method() == "POST"
+    assert isinstance(result, Message)
+
+
 # --- bot.send_message()/edit_message() still work, now returning the Message ---
 
 
@@ -431,6 +461,19 @@ def test_bot_search_guild_messages_delegates_to_rest_module():
     payload = {"total_results": 0, "doing_deep_historical_index": False, "messages": []}
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
         assert isinstance(run(bot.search_guild_messages("10")), MessageSearchResult)
+
+
+def test_bot_fetch_poll_answer_voters_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse({"users": [_USER_PAYLOAD]})]):
+        assert run(bot.fetch_poll_answer_voters("20", "1", "3")) == [User(_USER_PAYLOAD)]
+
+
+def test_bot_expire_poll_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_MESSAGE_PAYLOAD)]) as urlopen:
+        run(bot.expire_poll("20", "1"))
+    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/polls/1/expire"
 
 
 # --- channel.*()/guild.*() object-method delegation ---
@@ -582,3 +625,21 @@ def test_message_clear_reactions_with_emoji_clears_just_that_one():
         run(message.clear_reactions("🎉"))
 
     assert "%F0%9F%8E%89" in urlopen.call_args.args[0].full_url
+
+
+def test_message_fetch_poll_answer_voters_delegates_to_rest_module():
+    message = Message(_MESSAGE_PAYLOAD)
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse({"users": [_USER_PAYLOAD]})]) as urlopen:
+        result = run(message.fetch_poll_answer_voters("3"))
+
+    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/polls/1/answers/3"
+    assert result == [User(_USER_PAYLOAD)]
+
+
+def test_message_expire_poll_delegates_to_rest_module():
+    message = Message(_MESSAGE_PAYLOAD)
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_MESSAGE_PAYLOAD)]) as urlopen:
+        result = run(message.expire_poll())
+
+    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/polls/1/expire"
+    assert isinstance(result, Message)

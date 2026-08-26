@@ -176,6 +176,20 @@ async def delete_all_reactions_for_emoji(channel_id, message_id, emoji, *, token
     await _client.request("DELETE", path, token=token)
 
 
+async def fetch_poll_answer_voters(channel_id, message_id, answer_id, *, after=None, limit=None, token=None):
+    qs = _client.query_string(after=after, limit=limit)
+    path = f"/channels/{channel_id}/polls/{message_id}/answers/{answer_id}{qs}"
+    data = await _client.request("GET", path, token=token)
+    assert data is not None, "GET always returns a body"
+    return [User(u) for u in data["users"]]
+
+
+async def expire_poll(channel_id, message_id, *, token=None):
+    """Ends the poll early, instead of waiting for its normal expiry."""
+    data = await _client.request("POST", f"/channels/{channel_id}/polls/{message_id}/expire", token=token)
+    return Message(data)
+
+
 def _array_qs(**fields):
     """Discord's array query params repeat the key per value
     (author_id=1&author_id=2), not a single comma-joined value."""
