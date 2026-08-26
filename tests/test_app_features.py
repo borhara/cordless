@@ -833,6 +833,31 @@ def test_discord_request_defaults_retry_after_when_429_body_is_not_json(monkeypa
     assert blocked == [1.0]
 
 
+def test_discord_request_defaults_retry_after_when_body_has_explicit_null(monkeypatch):
+    """{"retry_after": null} isn't a missing key, so .get(..., 1)'s default
+    never kicks in - float(None) must be caught too, not just a missing or
+    unparseable body."""
+    import os
+
+    import cordless.ratelimit as ratelimit
+    from cordless._rest import _client
+
+    blocked = []
+    monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: blocked.append(retry_after))
+    monkeypatch.setattr(_client, "sleep", lambda s: None)
+    responses = [
+        make_http_error(429, json.dumps({"retry_after": None}).encode()),
+        FakeDiscordResponse({}),
+    ]
+
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
+        bot = Cordless()
+        result = asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
+
+    assert result == b"{}"
+    assert blocked == [1.0]
+
+
 def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(monkeypatch):
     """wait_if_needed must run before every attempt, not just the first - otherwise a
     sibling call's note_blocked() from a moment ago is never consulted before retrying."""

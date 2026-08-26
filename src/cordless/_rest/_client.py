@@ -77,8 +77,11 @@ def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_bo
             body_out = exc.read()
             if exc.code == 429 and monotonic() < deadline:
                 try:
+                    # .get(..., 1) only covers a missing key - an explicit
+                    # {"retry_after": null} body still reaches float(None),
+                    # hence TypeError alongside the parsing failure modes
                     retry_after = float(json.loads(body_out).get("retry_after", 1))
-                except (ValueError, AttributeError):
+                except (TypeError, ValueError, AttributeError):
                     retry_after = 1.0
                 ratelimit.note_blocked(method, path, retry_after)
                 sleep(ratelimit.jittered_wait(retry_after))
