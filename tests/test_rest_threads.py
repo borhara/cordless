@@ -88,7 +88,7 @@ def test_start_thread_from_forum_posts_expected_path_and_payload():
     req = urlopen.call_args.args[0]
     assert req.full_url == "https://discord.com/api/v10/channels/20/threads"
     assert req.get_method() == "POST"
-    assert req.data == b'{"name": "discussion", "rate_limit_per_user": 0, "message": {"content": "first post"}}'
+    assert req.data == b'{"name": "discussion", "message": {"content": "first post"}}'
     # regression check: this used to be declared async without awaiting
     # anything, so calling it synchronously (as the bot.* wrapper did back
     # then) handed back an unawaited coroutine instead of a Thread
@@ -106,6 +106,22 @@ def test_start_thread_from_forum_passes_applied_tags_and_auto_archive_duration()
     body = json.loads(urlopen.call_args.args[0].data)
     assert body["applied_tags"] == ["tag1"]
     assert body["auto_archive_duration"] == 1440
+
+
+def test_start_thread_from_forum_omits_rate_limit_per_user_when_unset():
+    """Leaving it unset should fall back to the forum channel's own
+    default_thread_rate_limit_per_user, not silently send 0 (no slowmode)."""
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
+        run(threads.start_thread_from_forum("20", "discussion", message="first post"))
+
+    assert "rate_limit_per_user" not in json.loads(urlopen.call_args.args[0].data)
+
+
+def test_start_thread_from_forum_passes_explicit_zero_rate_limit_per_user():
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
+        run(threads.start_thread_from_forum("20", "discussion", message="first post", rate_limit_per_user=0))
+
+    assert json.loads(urlopen.call_args.args[0].data)["rate_limit_per_user"] == 0
 
 
 def test_bot_start_thread_from_forum_delegates_to_rest_module():

@@ -27,17 +27,23 @@ async def start_thread_from_forum(
     message,
     applied_tags=None,
     auto_archive_duration=None,
-    rate_limit_per_user=0,
+    rate_limit_per_user=None,
     token=None,
     files=None,
 ):
-    payload = {"name": name, "rate_limit_per_user": rate_limit_per_user, "message": {"content": message}}
+    payload = {"name": name, "message": {"content": message}}
 
     if applied_tags:
         payload["applied_tags"] = applied_tags
 
     if auto_archive_duration:
         payload["auto_archive_duration"] = auto_archive_duration
+
+    # 0 is a meaningful explicit value (no slowmode), unlike the fields
+    # above - only leaving it unset should fall back to the forum channel's
+    # own default_thread_rate_limit_per_user.
+    if rate_limit_per_user is not None:
+        payload["rate_limit_per_user"] = rate_limit_per_user
 
     data = await _client.request("POST", f"/channels/{channel_id}/threads", payload, files=files, token=token)
     return Thread.from_dict(data)
