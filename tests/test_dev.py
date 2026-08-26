@@ -320,6 +320,142 @@ def test_load_env_missing_environment_file_falls_back_to_dot_env(tmp_path, monke
     assert os.environ.pop("KEY") == "dev"
 
 
+# --- run_dev ---
+
+
+class _FakeServer:
+    """Stands in for ThreadingHTTPServer so run_dev never binds a real socket."""
+
+    def __init__(self, address):
+        self.server_address = address
+        self.shutdown_called = False
+        self.close_called = False
+
+    def serve_forever(self):
+        return
+
+    def shutdown(self):
+        self.shutdown_called = True
+
+    def server_close(self):
+        self.close_called = True
+
+
+class _FakeThread:
+    """Runs its target synchronously on start(), so the thread looks finished right away."""
+
+    def __init__(self, target=None, daemon=None):
+        self._target = target
+        self._alive = True
+
+    def start(self):
+        self._target()
+        self._alive = False
+
+    def is_alive(self):
+        return self._alive
+
+    def join(self, timeout=None):
+        return
+
+
+class _InterruptingThread(_FakeThread):
+    """Stays alive until joined, then raises like a real ctrl-c would mid-loop."""
+
+    def is_alive(self):
+        return True
+
+    def join(self, timeout=None):
+        raise KeyboardInterrupt
+
+
+def _patch_fake_server(monkeypatch, thread_cls):
+    holder = {}
+
+    def factory(address, handler_cls):
+        holder["server"] = _FakeServer(address)
+        return holder["server"]
+
+    monkeypatch.setattr(dev, "ThreadingHTTPServer", factory)
+    monkeypatch.setattr(dev.threading, "Thread", thread_cls)
+    return holder
+
+
+@pytest.fixture
+def run_dev_env(bot_project, monkeypatch):
+    """run_dev leaves source_dir on sys.path and repoints defer.invoke_worker globally;
+    restore both so it can't leak into other tests."""
+    import cordless.defer as defer_mod
+
+    monkeypatch.setattr(defer_mod, "invoke_worker", defer_mod.invoke_worker, raising=False)
+    yield bot_project
+    sys.path.remove(str(bot_project))
+
+
+def test_run_dev_starts_and_shuts_down_cleanly(run_dev_env, monkeypatch, capsys):
+    server_holder = _patch_fake_server(monkeypatch, _FakeThread)
+
+    dev.run_dev("mybot:bot", port=0, tunnel=False, source_dir=str(run_dev_env))
+
+    assert "watching for changes" in capsys.readouterr().out
+    assert server_holder["server"].shutdown_called
+    assert server_holder["server"].close_called
+
+
+def test_run_dev_shuts_down_cleanly_on_keyboard_interrupt(run_dev_env, monkeypatch):
+    server_holder = _patch_fake_server(monkeypatch, _InterruptingThread)
+
+    dev.run_dev("mybot:bot", port=0, tunnel=False, source_dir=str(run_dev_env))
+
+    assert server_holder["server"].shutdown_called
+    assert server_holder["server"].close_called
+
+
+def test_run_dev_prints_registered_crons(run_dev_env, monkeypatch, capsys):
+    (run_dev_env / "mybot.py").write_text(
+        "from cordless import Cordless\n"
+        "bot = Cordless()\n"
+        "@bot.cron('rate(1 day)')\n"
+        "async def nightly():\n"
+        "    pass\n"
+    )
+    _patch_fake_server(monkeypatch, _FakeThread)
+
+    dev.run_dev("mybot:bot", port=0, tunnel=False, source_dir=str(run_dev_env))
+
+    assert "cordless cron nightly" in capsys.readouterr().out
+
+
+def test_run_dev_prints_public_tunnel_url(run_dev_env, monkeypatch, capsys):
+    _patch_fake_server(monkeypatch, _FakeThread)
+    monkeypatch.setattr(dev, "_start_tunnel", lambda port: (_FakeProc([]), "https://my-tunnel.trycloudflare.com"))
+
+    dev.run_dev("mybot:bot", port=0, tunnel=True, source_dir=str(run_dev_env))
+
+    assert "https://my-tunnel.trycloudflare.com" in capsys.readouterr().out
+
+
+def test_run_dev_reports_tunnel_failure(run_dev_env, monkeypatch, capsys):
+    _patch_fake_server(monkeypatch, _FakeThread)
+    fake_proc = _FakeProc([])
+    monkeypatch.setattr(dev, "_start_tunnel", lambda port: (fake_proc, None))
+
+    dev.run_dev("mybot:bot", port=0, tunnel=True, source_dir=str(run_dev_env))
+
+    assert "tunnel failed to start" in capsys.readouterr().out
+    assert fake_proc.terminated
+
+
+def test_run_dev_hints_cloudflared_install_when_missing(run_dev_env, monkeypatch, capsys):
+    _patch_fake_server(monkeypatch, _FakeThread)
+    monkeypatch.setattr(dev, "_start_tunnel", lambda port: (None, None))
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
+
+    dev.run_dev("mybot:bot", port=0, tunnel=True, source_dir=str(run_dev_env))
+
+    assert "brew install cloudflared" in capsys.readouterr().out
+
+
 # --- interaction description ---
 
 
