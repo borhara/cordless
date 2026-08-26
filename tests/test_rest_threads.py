@@ -189,6 +189,15 @@ def test_fetch_thread_members_with_member_flag_adds_query_string():
     assert urlopen.call_args.args[0].full_url.endswith("?with_member=true")
 
 
+def test_fetch_thread_members_passes_after_and_limit():
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([])]) as urlopen:
+        run(threads.fetch_thread_members("20", with_member=True, after="90", limit=50))
+
+    url = urlopen.call_args.args[0].full_url
+    assert "after=90" in url
+    assert "limit=50" in url
+
+
 # --- fetch_public_archived_threads ---
 
 
@@ -320,6 +329,16 @@ def test_thread_fetch_members_delegates_to_rest_module():
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/1/thread-members"
     assert result == [ThreadMember(id="1", user_id="55", join_timestamp="t", flags=0)]
+
+
+def test_thread_fetch_members_passes_after_and_limit():
+    thread = Thread.from_dict(_THREAD_PAYLOAD)
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([])]) as urlopen:
+        run(thread.fetch_members(with_member=True, after="90", limit=50))
+
+    url = urlopen.call_args.args[0].full_url
+    assert "after=90" in url
+    assert "limit=50" in url
 
 
 # --- fetch_thread_member (single) ---

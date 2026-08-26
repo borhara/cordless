@@ -72,8 +72,10 @@ async def fetch_thread_member(channel_id, user_id, *, with_member=False, token=N
     return ThreadMember.from_dict(data)
 
 
-async def fetch_thread_members(channel_id, *, with_member=False, token=None):
-    qs = "?with_member=true" if with_member else ""
+async def fetch_thread_members(channel_id, *, with_member=False, after=None, limit=None, token=None):
+    """after/limit only take effect when with_member=True - Discord ignores
+    them otherwise and always returns every member in one page."""
+    qs = _client.query_string(with_member=with_member, after=after, limit=limit)
     data = await _client.request("GET", f"/channels/{channel_id}/thread-members{qs}", token=token)
     assert data is not None, "GET always returns a body"
     return [ThreadMember.from_dict(m) for m in data]

@@ -95,12 +95,14 @@ class Thread(_FromDict):
 
         return await threads.fetch_thread_member(self.id, user_id, with_member=with_member, token=token)
 
-    async def fetch_members(self, *, with_member=False, token=None):
+    async def fetch_members(self, *, with_member=False, after=None, limit=None, token=None):
         """List this thread's members, as a list of `ThreadMember`. Requires
         `DISCORD_BOT_TOKEN`."""
         from . import threads
 
-        return await threads.fetch_thread_members(self.id, with_member=with_member, token=token)
+        return await threads.fetch_thread_members(
+            self.id, with_member=with_member, after=after, limit=limit, token=token
+        )
 
 
 class Invite(DiscordObject):
