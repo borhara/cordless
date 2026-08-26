@@ -596,6 +596,18 @@ def test_create_webhook_posts_to_channel_webhooks_endpoint(monkeypatch):
     assert json.loads(req.data) == {"name": "Alerts"}
 
 
+def test_create_webhook_sends_audit_log_reason(monkeypatch):
+    import asyncio
+
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "bot-tok")
+
+    with _urlopen([FakeDiscordResponse({"id": "wh-1", "token": "wh-tok"})]) as urlopen:
+        bot = Cordless()
+        asyncio.run(bot.create_webhook("chan-1", "Alerts", reason="rebranding"))
+
+    assert urlopen.call_args.args[0].get_header("X-audit-log-reason") == "rebranding"
+
+
 def test_get_channel_webhooks_lists_channel_webhooks(monkeypatch):
     import asyncio
 
@@ -621,3 +633,15 @@ def test_delete_webhook_without_token_uses_bot_auth(monkeypatch):
     req = urlopen.call_args.args[0]
     assert req.full_url == "https://discord.com/api/v10/webhooks/wh-1"
     assert req.get_header("Authorization") == "Bot bot-tok"
+
+
+def test_delete_webhook_without_token_sends_audit_log_reason(monkeypatch):
+    import asyncio
+
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "bot-tok")
+
+    with _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        bot = Cordless()
+        asyncio.run(bot.delete_webhook("wh-1", reason="compromised"))
+
+    assert urlopen.call_args.args[0].get_header("X-audit-log-reason") == "compromised"

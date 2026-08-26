@@ -61,6 +61,13 @@ def test_create_webhook_only_sends_fields_that_were_set():
     assert isinstance(result, Webhook)
 
 
+def test_create_webhook_sends_audit_log_reason():
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
+        run(webhooks.create_webhook("20", "shiv's alerts", reason="rebranding"))
+
+    assert urlopen.call_args.args[0].get_header("X-audit-log-reason") == "rebranding"
+
+
 def test_edit_webhook_only_sends_fields_that_were_set():
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
         result = run(webhooks.edit_webhook("99", name="renamed"))
@@ -78,6 +85,13 @@ def test_edit_webhook_can_move_channel():
     assert json.loads(urlopen.call_args.args[0].data) == {"channel_id": "30"}
 
 
+def test_edit_webhook_sends_audit_log_reason():
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
+        run(webhooks.edit_webhook("99", name="renamed", reason="rebranding"))
+
+    assert urlopen.call_args.args[0].get_header("X-audit-log-reason") == "rebranding"
+
+
 def test_delete_webhook_deletes_webhook():
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
         run(webhooks.delete_webhook("99"))
@@ -85,6 +99,13 @@ def test_delete_webhook_deletes_webhook():
     req = urlopen.call_args.args[0]
     assert req.full_url == "https://discord.com/api/v10/webhooks/99"
     assert req.get_method() == "DELETE"
+
+
+def test_delete_webhook_sends_audit_log_reason():
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+        run(webhooks.delete_webhook("99", reason="compromised"))
+
+    assert urlopen.call_args.args[0].get_header("X-audit-log-reason") == "compromised"
 
 
 # --- bot.<verb>() delegation ---

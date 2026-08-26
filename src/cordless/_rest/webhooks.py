@@ -29,17 +29,17 @@ async def fetch_webhook(webhook_id, *, token=None):
     return Webhook(data)
 
 
-async def create_webhook(channel_id, name, *, avatar=UNSET, token=None):
+async def create_webhook(channel_id, name, *, avatar=UNSET, reason=None, token=None):
     payload = _client.payload(name=name, avatar=avatar)
-    data = await _client.request("POST", f"/channels/{channel_id}/webhooks", payload, token=token)
+    data = await _client.request("POST", f"/channels/{channel_id}/webhooks", payload, token=token, reason=reason)
     return Webhook(data)
 
 
-async def edit_webhook(webhook_id, *, name=UNSET, avatar=UNSET, channel_id=UNSET, token=None):
+async def edit_webhook(webhook_id, *, name=UNSET, avatar=UNSET, channel_id=UNSET, reason=None, token=None):
     payload = _client.payload(name=name, avatar=avatar, channel_id=channel_id)
-    data = await _client.request("PATCH", f"/webhooks/{webhook_id}", payload, token=token)
+    data = await _client.request("PATCH", f"/webhooks/{webhook_id}", payload, token=token, reason=reason)
     return Webhook(data)
 
 
-async def delete_webhook(webhook_id, *, token=None):
-    await _client.request("DELETE", f"/webhooks/{webhook_id}", token=token)
+async def delete_webhook(webhook_id, *, reason=None, token=None):
+    await _client.request("DELETE", f"/webhooks/{webhook_id}", token=token, reason=reason)

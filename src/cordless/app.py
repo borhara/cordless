@@ -480,13 +480,15 @@ class Cordless(RESTMixin):
 
         await members.remove_guild_member_role(guild_id, user_id, role_id, reason=reason)
 
-    async def create_webhook(self, channel_id, name, avatar=None):
+    async def create_webhook(self, channel_id, name, avatar=None, *, reason=None):
         """Create a webhook in a channel. Requires DISCORD_BOT_TOKEN. Returns the
         webhook object, including the id/token pair execute_webhook needs."""
         from ._rest import webhooks
         from ._rest._client import UNSET
 
-        webhook = await webhooks.create_webhook(channel_id, name, avatar=avatar if avatar is not None else UNSET)
+        webhook = await webhooks.create_webhook(
+            channel_id, name, avatar=avatar if avatar is not None else UNSET, reason=reason
+        )
         return webhook._data
 
     async def get_channel_webhooks(self, channel_id):
@@ -496,9 +498,11 @@ class Cordless(RESTMixin):
         result = await webhooks.fetch_channel_webhooks(channel_id)
         return [webhook._data for webhook in result]
 
-    async def delete_webhook(self, webhook_id, webhook_token=None):
+    async def delete_webhook(self, webhook_id, webhook_token=None, *, reason=None):
         """Delete a webhook. With webhook_token, authenticates with the webhook's
-        own token (no bot token needed); otherwise uses DISCORD_BOT_TOKEN."""
+        own token (no bot token needed); otherwise uses DISCORD_BOT_TOKEN.
+        reason only takes effect on the bot-token path - webhook.py's
+        token-authenticated request helper doesn't send that header at all."""
         if webhook_token is not None:
             from . import webhook as _webhook
 
@@ -507,7 +511,7 @@ class Cordless(RESTMixin):
 
         from ._rest import webhooks
 
-        await webhooks.delete_webhook(webhook_id)
+        await webhooks.delete_webhook(webhook_id, reason=reason)
 
     @property
     def worker_handler(self):
