@@ -316,6 +316,16 @@ class Emoji(DiscordObject):
             await emojis.delete_application_emoji(self._data["application_id"], self.id, **kwargs)
 
 
+def _guild_id_or_raise(data, message):
+    """Shared guard for resources with a non-guild variant that can't be
+    edited or deleted (pack stickers, default soundboard sounds, ...) -
+    guild_id is only present on the guild-scoped kind."""
+    try:
+        return data["guild_id"]
+    except KeyError:
+        raise ValueError(message) from None
+
+
 class Sticker(DiscordObject):
     """A sticker, from `guild.fetch_stickers()` or a message's
     `sticker_items`. `.id`, `.name`, `.description`, `.tags`, `.type`,
@@ -327,18 +337,16 @@ class Sticker(DiscordObject):
         `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS`."""
         from . import stickers
 
-        if "guild_id" not in self._data:
-            raise ValueError("can't edit a sticker pack sticker, only guild stickers")
-        return await stickers.edit_guild_sticker(self._data["guild_id"], self.id, **kwargs)
+        guild_id = _guild_id_or_raise(self._data, "can't edit a sticker pack sticker, only guild stickers")
+        return await stickers.edit_guild_sticker(guild_id, self.id, **kwargs)
 
     async def delete(self, **kwargs):
         """Delete this guild sticker. Requires `DISCORD_BOT_TOKEN`, and
         `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS`."""
         from . import stickers
 
-        if "guild_id" not in self._data:
-            raise ValueError("can't delete a sticker pack sticker, only guild stickers")
-        await stickers.delete_guild_sticker(self._data["guild_id"], self.id, **kwargs)
+        guild_id = _guild_id_or_raise(self._data, "can't delete a sticker pack sticker, only guild stickers")
+        await stickers.delete_guild_sticker(guild_id, self.id, **kwargs)
 
 
 class SoundboardSound(DiscordObject):
@@ -353,9 +361,8 @@ class SoundboardSound(DiscordObject):
         `MANAGE_GUILD_EXPRESSIONS`."""
         from . import soundboard
 
-        if "guild_id" not in self._data:
-            raise ValueError("can't edit a default soundboard sound, only guild sounds")
-        return await soundboard.edit_guild_soundboard_sound(self._data["guild_id"], self.sound_id, **kwargs)
+        guild_id = _guild_id_or_raise(self._data, "can't edit a default soundboard sound, only guild sounds")
+        return await soundboard.edit_guild_soundboard_sound(guild_id, self.sound_id, **kwargs)
 
     async def delete(self, **kwargs):
         """Delete this guild soundboard sound. Requires
@@ -363,9 +370,8 @@ class SoundboardSound(DiscordObject):
         `MANAGE_GUILD_EXPRESSIONS`."""
         from . import soundboard
 
-        if "guild_id" not in self._data:
-            raise ValueError("can't delete a default soundboard sound, only guild sounds")
-        await soundboard.delete_guild_soundboard_sound(self._data["guild_id"], self.sound_id, **kwargs)
+        guild_id = _guild_id_or_raise(self._data, "can't delete a default soundboard sound, only guild sounds")
+        await soundboard.delete_guild_soundboard_sound(guild_id, self.sound_id, **kwargs)
 
 
 class StickerPack(DiscordObject):
