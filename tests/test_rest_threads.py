@@ -33,6 +33,22 @@ def _urlopen(responses):
     return patch("cordless._rest._client._send", side_effect=responses)
 
 
+# --- Thread/ThreadMember expose unknown fields ---
+
+
+def test_thread_exposes_a_field_not_declared_anywhere_in_cordless():
+    """Thread used to filter to a fixed dataclass field set, silently
+    dropping anything Discord added later. It should behave like every
+    other resource and expose whatever the API actually sends."""
+    thread = Thread({**_THREAD_PAYLOAD, "total_message_sent": 42})
+    assert thread.total_message_sent == 42
+
+
+def test_thread_member_exposes_a_field_not_declared_anywhere_in_cordless():
+    member = ThreadMember({"id": "1", "user_id": "55", "member": {"nick": "shiv"}})
+    assert member.member == {"nick": "shiv"}
+
+
 # --- start_thread_from_message ---
 
 
@@ -179,7 +195,7 @@ def test_fetch_thread_members_returns_thread_member_list():
         result = run(threads.fetch_thread_members("20"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/thread-members"
-    assert result == [ThreadMember(id="1", user_id="55", join_timestamp="t", flags=0)]
+    assert result == [ThreadMember({"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0})]
 
 
 def test_fetch_thread_members_with_member_flag_adds_query_string():
@@ -207,7 +223,7 @@ def test_fetch_public_archived_threads_returns_thread_list():
         result = run(threads.fetch_public_archived_threads("20"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/threads/archived/public"
-    assert result == [Thread.from_dict(_THREAD_PAYLOAD)]
+    assert result == [Thread(_THREAD_PAYLOAD)]
 
 
 def test_fetch_public_archived_threads_passes_before_and_limit():
@@ -238,7 +254,7 @@ def test_bot_fetch_public_archived_threads_delegates_to_rest_module():
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
         result = run(bot.fetch_public_archived_threads("20"))
 
-    assert result == [Thread.from_dict(_THREAD_PAYLOAD)]
+    assert result == [Thread(_THREAD_PAYLOAD)]
 
 
 # --- channel.*/thread.* object-method delegation ---
@@ -278,11 +294,11 @@ def test_channel_fetch_public_archived_threads_delegates_to_rest_module():
         result = run(channel.fetch_public_archived_threads())
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/threads/archived/public"
-    assert result == [Thread.from_dict(_THREAD_PAYLOAD)]
+    assert result == [Thread(_THREAD_PAYLOAD)]
 
 
 def test_thread_join_delegates_to_rest_module():
-    thread = Thread.from_dict(_THREAD_PAYLOAD)
+    thread = Thread(_THREAD_PAYLOAD)
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
         run(thread.join())
 
@@ -292,7 +308,7 @@ def test_thread_join_delegates_to_rest_module():
 
 
 def test_thread_leave_delegates_to_rest_module():
-    thread = Thread.from_dict(_THREAD_PAYLOAD)
+    thread = Thread(_THREAD_PAYLOAD)
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
         run(thread.leave())
 
@@ -302,7 +318,7 @@ def test_thread_leave_delegates_to_rest_module():
 
 
 def test_thread_add_member_delegates_to_rest_module():
-    thread = Thread.from_dict(_THREAD_PAYLOAD)
+    thread = Thread(_THREAD_PAYLOAD)
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
         run(thread.add_member("55"))
 
@@ -312,7 +328,7 @@ def test_thread_add_member_delegates_to_rest_module():
 
 
 def test_thread_remove_member_delegates_to_rest_module():
-    thread = Thread.from_dict(_THREAD_PAYLOAD)
+    thread = Thread(_THREAD_PAYLOAD)
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
         run(thread.remove_member("55"))
 
@@ -322,17 +338,17 @@ def test_thread_remove_member_delegates_to_rest_module():
 
 
 def test_thread_fetch_members_delegates_to_rest_module():
-    thread = Thread.from_dict(_THREAD_PAYLOAD)
+    thread = Thread(_THREAD_PAYLOAD)
     payload = [{"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0}]
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
         result = run(thread.fetch_members())
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/1/thread-members"
-    assert result == [ThreadMember(id="1", user_id="55", join_timestamp="t", flags=0)]
+    assert result == [ThreadMember({"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0})]
 
 
 def test_thread_fetch_members_passes_after_and_limit():
-    thread = Thread.from_dict(_THREAD_PAYLOAD)
+    thread = Thread(_THREAD_PAYLOAD)
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([])]) as urlopen:
         run(thread.fetch_members(with_member=True, after="90", limit=50))
 
@@ -350,7 +366,7 @@ def test_fetch_thread_member_returns_single_member():
         result = run(threads.fetch_thread_member("20", "55"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/thread-members/55"
-    assert result == ThreadMember(id="1", user_id="55", join_timestamp="t", flags=0)
+    assert result == ThreadMember({"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0})
 
 
 def test_fetch_thread_member_with_member_flag_adds_query_string():
@@ -362,13 +378,13 @@ def test_fetch_thread_member_with_member_flag_adds_query_string():
 
 
 def test_thread_fetch_member_delegates_to_rest_module():
-    thread = Thread.from_dict(_THREAD_PAYLOAD)
+    thread = Thread(_THREAD_PAYLOAD)
     payload = {"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0}
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
         result = run(thread.fetch_member("55"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/1/thread-members/55"
-    assert result == ThreadMember(id="1", user_id="55", join_timestamp="t", flags=0)
+    assert result == ThreadMember({"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0})
 
 
 # --- fetch_private_archived_threads / fetch_joined_private_archived_threads ---
@@ -380,7 +396,7 @@ def test_fetch_private_archived_threads_returns_thread_list():
         result = run(threads.fetch_private_archived_threads("20"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/threads/archived/private"
-    assert result == [Thread.from_dict(_THREAD_PAYLOAD)]
+    assert result == [Thread(_THREAD_PAYLOAD)]
 
 
 def test_fetch_joined_private_archived_threads_returns_thread_list():
@@ -390,7 +406,7 @@ def test_fetch_joined_private_archived_threads_returns_thread_list():
 
     url = urlopen.call_args.args[0].full_url
     assert url == "https://discord.com/api/v10/channels/20/users/@me/threads/archived/private"
-    assert result == [Thread.from_dict(_THREAD_PAYLOAD)]
+    assert result == [Thread(_THREAD_PAYLOAD)]
 
 
 def test_channel_fetch_private_archived_threads_delegates_to_rest_module():
@@ -399,7 +415,7 @@ def test_channel_fetch_private_archived_threads_delegates_to_rest_module():
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
         result = run(channel.fetch_private_archived_threads())
 
-    assert result == [Thread.from_dict(_THREAD_PAYLOAD)]
+    assert result == [Thread(_THREAD_PAYLOAD)]
 
 
 def test_channel_fetch_joined_private_archived_threads_delegates_to_rest_module():
@@ -408,7 +424,7 @@ def test_channel_fetch_joined_private_archived_threads_delegates_to_rest_module(
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
         result = run(channel.fetch_joined_private_archived_threads())
 
-    assert result == [Thread.from_dict(_THREAD_PAYLOAD)]
+    assert result == [Thread(_THREAD_PAYLOAD)]
 
 
 # --- fetch_active_guild_threads ---
@@ -420,7 +436,7 @@ def test_fetch_active_guild_threads_returns_thread_list():
         result = run(threads.fetch_active_guild_threads("10"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/threads/active"
-    assert result == [Thread.from_dict(_THREAD_PAYLOAD)]
+    assert result == [Thread(_THREAD_PAYLOAD)]
 
 
 def test_guild_fetch_active_threads_delegates_to_rest_module():
@@ -429,7 +445,7 @@ def test_guild_fetch_active_threads_delegates_to_rest_module():
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
         result = run(guild.fetch_active_threads())
 
-    assert result == [Thread.from_dict(_THREAD_PAYLOAD)]
+    assert result == [Thread(_THREAD_PAYLOAD)]
 
 
 def test_bot_fetch_active_guild_threads_delegates_to_rest_module():
@@ -438,7 +454,7 @@ def test_bot_fetch_active_guild_threads_delegates_to_rest_module():
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
         result = run(bot.fetch_active_guild_threads("10"))
 
-    assert result == [Thread.from_dict(_THREAD_PAYLOAD)]
+    assert result == [Thread(_THREAD_PAYLOAD)]
 
 
 # --- remaining bot.<verb>_thread() delegation (one per mixin method not already exercised above) ---
@@ -494,7 +510,7 @@ def test_bot_fetch_thread_member_delegates_to_rest_module():
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
         result = run(bot.fetch_thread_member("20", "55"))
 
-    assert result == ThreadMember(id="1", user_id="55", join_timestamp="t", flags=0)
+    assert result == ThreadMember({"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0})
 
 
 def test_bot_fetch_thread_members_delegates_to_rest_module():
@@ -503,7 +519,7 @@ def test_bot_fetch_thread_members_delegates_to_rest_module():
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
         result = run(bot.fetch_thread_members("20"))
 
-    assert result == [ThreadMember(id="1", user_id="55", join_timestamp="t", flags=0)]
+    assert result == [ThreadMember({"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0})]
 
 
 def test_bot_fetch_private_archived_threads_delegates_to_rest_module():
@@ -513,7 +529,7 @@ def test_bot_fetch_private_archived_threads_delegates_to_rest_module():
         result = run(bot.fetch_private_archived_threads("20"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/threads/archived/private"
-    assert result == [Thread.from_dict(_THREAD_PAYLOAD)]
+    assert result == [Thread(_THREAD_PAYLOAD)]
 
 
 def test_bot_fetch_joined_private_archived_threads_delegates_to_rest_module():
@@ -524,4 +540,4 @@ def test_bot_fetch_joined_private_archived_threads_delegates_to_rest_module():
 
     url = urlopen.call_args.args[0].full_url
     assert url == "https://discord.com/api/v10/channels/20/users/@me/threads/archived/private"
-    assert result == [Thread.from_dict(_THREAD_PAYLOAD)]
+    assert result == [Thread(_THREAD_PAYLOAD)]

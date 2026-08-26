@@ -116,7 +116,7 @@ def test_audit_log_integrations_wraps_integrations():
 
 def test_audit_log_threads_wraps_threads():
     log = AuditLog(_AUDIT_LOG_PAYLOAD)
-    assert log.threads == [Thread.from_dict(_AUDIT_LOG_PAYLOAD["threads"][0])]
+    assert log.threads == [Thread(_AUDIT_LOG_PAYLOAD["threads"][0])]
 
 
 def test_audit_log_auto_moderation_rules_wraps_rules():

@@ -9,7 +9,7 @@ async def start_thread_from_message(channel_id, message_id, name, *, auto_archiv
     if auto_archive_duration is not None:
         payload["auto_archive_duration"] = auto_archive_duration
     data = await _client.request("POST", f"/channels/{channel_id}/messages/{message_id}/threads", payload, token=token)
-    return Thread.from_dict(data)
+    return Thread(data)
 
 
 async def start_thread_without_message(channel_id, name, *, thread_type=11, invitable=None, token=None):
@@ -17,7 +17,7 @@ async def start_thread_without_message(channel_id, name, *, thread_type=11, invi
     if invitable is not None:
         payload["invitable"] = invitable
     data = await _client.request("POST", f"/channels/{channel_id}/threads", payload, token=token)
-    return Thread.from_dict(data)
+    return Thread(data)
 
 
 async def start_thread_from_forum(
@@ -46,7 +46,7 @@ async def start_thread_from_forum(
         payload["rate_limit_per_user"] = rate_limit_per_user
 
     data = await _client.request("POST", f"/channels/{channel_id}/threads", payload, files=files, token=token)
-    return Thread.from_dict(data)
+    return Thread(data)
 
 
 async def join_thread(channel_id, token=None):
@@ -69,7 +69,7 @@ async def fetch_thread_member(channel_id, user_id, *, with_member=False, token=N
     qs = "?with_member=true" if with_member else ""
     data = await _client.request("GET", f"/channels/{channel_id}/thread-members/{user_id}{qs}", token=token)
     assert data is not None, "GET always returns a body"
-    return ThreadMember.from_dict(data)
+    return ThreadMember(data)
 
 
 async def fetch_thread_members(channel_id, *, with_member=False, after=None, limit=None, token=None):
@@ -78,31 +78,31 @@ async def fetch_thread_members(channel_id, *, with_member=False, after=None, lim
     qs = _client.query_string(with_member=with_member, after=after, limit=limit)
     data = await _client.request("GET", f"/channels/{channel_id}/thread-members{qs}", token=token)
     assert data is not None, "GET always returns a body"
-    return [ThreadMember.from_dict(m) for m in data]
+    return [ThreadMember(m) for m in data]
 
 
 async def fetch_public_archived_threads(channel_id, *, before=None, limit=None, token=None):
     qs = _client.pagination_qs(before=before, limit=limit)
     data = await _client.request("GET", f"/channels/{channel_id}/threads/archived/public{qs}", token=token)
     assert data is not None, "GET always returns a body"
-    return [Thread.from_dict(t) for t in data["threads"]]
+    return [Thread(t) for t in data["threads"]]
 
 
 async def fetch_private_archived_threads(channel_id, *, before=None, limit=None, token=None):
     qs = _client.pagination_qs(before=before, limit=limit)
     data = await _client.request("GET", f"/channels/{channel_id}/threads/archived/private{qs}", token=token)
     assert data is not None, "GET always returns a body"
-    return [Thread.from_dict(t) for t in data["threads"]]
+    return [Thread(t) for t in data["threads"]]
 
 
 async def fetch_joined_private_archived_threads(channel_id, *, before=None, limit=None, token=None):
     qs = _client.pagination_qs(before=before, limit=limit)
     data = await _client.request("GET", f"/channels/{channel_id}/users/@me/threads/archived/private{qs}", token=token)
     assert data is not None, "GET always returns a body"
-    return [Thread.from_dict(t) for t in data["threads"]]
+    return [Thread(t) for t in data["threads"]]
 
 
 async def fetch_active_guild_threads(guild_id, *, token=None):
     data = await _client.request("GET", f"/guilds/{guild_id}/threads/active", token=token)
     assert data is not None, "GET always returns a body"
-    return [Thread.from_dict(t) for t in data["threads"]]
+    return [Thread(t) for t in data["threads"]]

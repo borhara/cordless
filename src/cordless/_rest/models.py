@@ -10,59 +10,33 @@ same code path, so there is no request logic duplicated between them.
 
 import asyncio
 import json
-from dataclasses import Field, dataclass, field
-from typing import ClassVar
 
 from ..models import DiscordObject
 
 
-class _FromDict:
-    """Parses only known fields; ignores whatever new keys Discord adds later
-    instead of raising, so a schema addition doesn't break existing bots."""
-
-    # Declares the contract every subclass must satisfy (being an actual
-    # @dataclass) so pyright can see __dataclass_fields__ below, since
-    # _FromDict itself isn't decorated with @dataclass.
-    __dataclass_fields__: ClassVar[dict[str, Field]]
-
-    @classmethod
-    def from_dict(cls, data):
-        known = {f.name for f in cls.__dataclass_fields__.values()}
-        return cls(**{k: v for k, v in data.items() if k in known})
+class ThreadMember(DiscordObject):
+    """One entry from `thread.fetch_members()`/`thread.fetch_member()`.
+    `.id`, `.user_id`, `.join_timestamp`, `.flags`, and any other field
+    Discord sends."""
 
 
-@dataclass
-class ThreadMember(_FromDict):
-    id: str | None = None
-    user_id: str | None = None
-    join_timestamp: str | None = None
-    flags: int = 0
-
-
-@dataclass
-class Thread(_FromDict):
-    id: str
-    guild_id: str | None
-    parent_id: str | None
-    owner_id: str | None
-    name: str
-    type: int
-    message_count: int = 0
-    member_count: int = 0
-    thread_metadata: dict = field(default_factory=dict)
-    rate_limit_per_user: int = 0
+class Thread(DiscordObject):
+    """A Discord thread, from `channel.start_thread_from_message()` and
+    friends. `.id`, `.guild_id`, `.parent_id`, `.owner_id`, `.name`,
+    `.type`, `.message_count`, `.member_count`, `.thread_metadata`,
+    `.rate_limit_per_user`, and any other field Discord sends."""
 
     @property
     def archived(self):
-        return self.thread_metadata.get("archived", False)
+        return self._data.get("thread_metadata", {}).get("archived", False)
 
     @property
     def locked(self):
-        return self.thread_metadata.get("locked", False)
+        return self._data.get("thread_metadata", {}).get("locked", False)
 
     @property
     def mention(self):
-        return f"<#{self.id}>"
+        return f"<#{self._data['id']}>"
 
     async def join(self, *, token=None):
         """Join this thread as the bot. Requires `DISCORD_BOT_TOKEN`."""
@@ -230,7 +204,7 @@ class MessageSearchResult(DiscordObject):
     @property
     def members(self):
         """A `ThreadMember` per thread in `.threads` the bot has joined."""
-        return [ThreadMember.from_dict(m) for m in self._data.get("members", [])]
+        return [ThreadMember(m) for m in self._data.get("members", [])]
 
 
 class Webhook(DiscordObject):
@@ -574,7 +548,7 @@ class AuditLog(DiscordObject):
 
     @property
     def threads(self):
-        return [Thread.from_dict(t) for t in self._data.get("threads", [])]
+        return [Thread(t) for t in self._data.get("threads", [])]
 
     @property
     def auto_moderation_rules(self):
