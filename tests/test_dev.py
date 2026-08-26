@@ -413,11 +413,7 @@ def test_run_dev_shuts_down_cleanly_on_keyboard_interrupt(run_dev_env, monkeypat
 
 def test_run_dev_prints_registered_crons(run_dev_env, monkeypatch, capsys):
     (run_dev_env / "mybot.py").write_text(
-        "from cordless import Cordless\n"
-        "bot = Cordless()\n"
-        "@bot.cron('rate(1 day)')\n"
-        "async def nightly():\n"
-        "    pass\n"
+        "from cordless import Cordless\nbot = Cordless()\n@bot.cron('rate(1 day)')\nasync def nightly():\n    pass\n"
     )
     _patch_fake_server(monkeypatch, _FakeThread)
 
