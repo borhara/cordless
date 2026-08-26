@@ -442,9 +442,11 @@ class Cordless(RESTMixin):
         if webhook_token is None:
             webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
 
-        await asyncio.get_event_loop().run_in_executor(
+        _, body = await asyncio.get_event_loop().run_in_executor(
             None, _webhook.execute_slack_compatible, webhook_id, webhook_token, payload, wait, thread_id
         )
+        if wait and body:
+            return json.loads(body)
 
     async def execute_github_webhook(self, webhook_id, webhook_token=None, payload=None, *, wait=False, thread_id=None):
         """Post a GitHub-formatted payload through a webhook. No bot token required."""
@@ -453,9 +455,11 @@ class Cordless(RESTMixin):
         if webhook_token is None:
             webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
 
-        await asyncio.get_event_loop().run_in_executor(
+        _, body = await asyncio.get_event_loop().run_in_executor(
             None, _webhook.execute_github_compatible, webhook_id, webhook_token, payload, wait, thread_id
         )
+        if wait and body:
+            return json.loads(body)
 
     async def add_role(self, guild_id, user_id, role_id, *, reason=None):
         """Grant a role to a guild member. Requires `DISCORD_BOT_TOKEN`.

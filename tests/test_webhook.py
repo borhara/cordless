@@ -414,6 +414,32 @@ def test_execute_webhook_returns_none_without_wait(monkeypatch):
     assert result is None
 
 
+def test_execute_slack_webhook_returns_message_when_wait(monkeypatch):
+    import asyncio
+
+    monkeypatch.setattr(
+        cordless.webhook, "execute_slack_compatible", lambda *a: (200, json.dumps({"id": "msg-1"}).encode())
+    )
+
+    bot = Cordless()
+    result = asyncio.run(bot.execute_slack_webhook("123", "abc", payload={"text": "hi"}, wait=True))
+
+    assert result == {"id": "msg-1"}
+
+
+def test_execute_github_webhook_returns_message_when_wait(monkeypatch):
+    import asyncio
+
+    monkeypatch.setattr(
+        cordless.webhook, "execute_github_compatible", lambda *a: (200, json.dumps({"id": "msg-1"}).encode())
+    )
+
+    bot = Cordless()
+    result = asyncio.run(bot.execute_github_webhook("123", "abc", {"action": "opened"}, wait=True))
+
+    assert result == {"id": "msg-1"}
+
+
 # --- Cordless.fetch_webhook_message / fetch_webhook_with_token / edit_webhook_with_token ---
 # --- Cordless.execute_slack_webhook / execute_github_webhook ---
 
