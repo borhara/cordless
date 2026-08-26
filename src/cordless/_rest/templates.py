@@ -1,5 +1,6 @@
 """Guild template REST endpoints (Discord API v10)."""
 
+from ..models import Guild
 from . import _client
 from ._client import UNSET
 from .models import GuildTemplate
@@ -8,6 +9,14 @@ from .models import GuildTemplate
 async def fetch_template(code, *, token=None):
     data = await _client.request("GET", f"/guilds/templates/{code}", token=token)
     return GuildTemplate(data)
+
+
+async def create_guild_from_template(code, name, *, icon=UNSET, token=None):
+    """Only works for bots in fewer than 10 guilds. Returns a `Guild`, not
+    a `GuildTemplate`."""
+    payload = _client.payload(name=name, icon=icon)
+    data = await _client.request("POST", f"/guilds/templates/{code}", payload, token=token)
+    return Guild(data)
 
 
 async def fetch_guild_templates(guild_id, *, token=None):

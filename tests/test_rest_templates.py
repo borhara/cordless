@@ -26,6 +26,7 @@ _TEMPLATE_PAYLOAD = {
     "serialized_source_guild": {"name": "shiv's guild"},
     "is_dirty": None,
 }
+_GUILD_FROM_TEMPLATE_PAYLOAD = {"id": "20", "name": "shiv's new server"}
 
 
 def _urlopen(responses):
@@ -41,6 +42,16 @@ def test_fetch_template_returns_template():
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/templates/abc123"
     assert isinstance(result, GuildTemplate)
+
+
+def test_create_guild_from_template_posts_required_and_optional_fields():
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_GUILD_FROM_TEMPLATE_PAYLOAD)]) as urlopen:
+        result = run(templates.create_guild_from_template("abc123", "shiv's new server"))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/guilds/templates/abc123"
+    assert json.loads(req.data) == {"name": "shiv's new server"}
+    assert isinstance(result, Guild)
 
 
 def test_fetch_guild_templates_returns_template_list():
@@ -96,6 +107,12 @@ def test_bot_fetch_template_delegates_to_rest_module():
     bot = Cordless()
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_TEMPLATE_PAYLOAD)]):
         assert isinstance(run(bot.fetch_template("abc123")), GuildTemplate)
+
+
+def test_bot_create_guild_from_template_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_GUILD_FROM_TEMPLATE_PAYLOAD)]):
+        assert isinstance(run(bot.create_guild_from_template("abc123", "shiv's new server")), Guild)
 
 
 def test_bot_fetch_guild_templates_delegates_to_rest_module():
@@ -158,6 +175,16 @@ def test_template_creator_returns_user():
     template = GuildTemplate(_TEMPLATE_PAYLOAD)
     assert isinstance(template.creator, User)
     assert template.creator.username == "shiv"
+
+
+def test_template_create_guild_delegates_to_rest_module():
+    template = GuildTemplate(_TEMPLATE_PAYLOAD)
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_GUILD_FROM_TEMPLATE_PAYLOAD)]) as urlopen:
+        result = run(template.create_guild("shiv's new server"))
+
+    req = urlopen.call_args.args[0]
+    assert req.full_url == "https://discord.com/api/v10/guilds/templates/abc123"
+    assert isinstance(result, Guild)
 
 
 def test_template_sync_delegates_to_rest_module():

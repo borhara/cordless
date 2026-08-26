@@ -126,6 +126,9 @@ class RESTMixin:
     async def fetch_template(self, code, **kwargs):
         return await templates.fetch_template(code, **kwargs)
 
+    async def create_guild_from_template(self, code, name, **kwargs):
+        return await templates.create_guild_from_template(code, name, **kwargs)
+
     async def fetch_guild_templates(self, guild_id, **kwargs):
         return await templates.fetch_guild_templates(guild_id, **kwargs)
 
