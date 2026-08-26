@@ -18,6 +18,18 @@ from .context import _FLAG_UI_KIT, _attach_files, _contains_uikit
 
 _TIMEOUT = 10
 
+
+class _Unset:
+    __slots__ = ()
+
+    def __repr__(self):
+        return "UNSET"
+
+
+# a local sentinel rather than importing _rest._client's - this module stays
+# dependency-free on purpose (see module docstring)
+UNSET = _Unset()
+
 _URL_RE = re.compile(r"discord(?:app)?\.com/api(?:/v\d+)?/webhooks/(\d+)/([\w-]+)")
 
 # Kept open across invocations in a warm Lambda container, so most requests
@@ -145,14 +157,14 @@ def get_webhook(webhook_id, webhook_token):
     return _request("GET", f"/api/v10/webhooks/{webhook_id}/{webhook_token}")
 
 
-def edit_webhook(webhook_id, webhook_token, name=None, avatar=None):
+def edit_webhook(webhook_id, webhook_token, name=UNSET, avatar=UNSET):
     """PATCH the webhook's own name/avatar, authenticated with its own
     token. Unlike the bot-token equivalent, this can't move it to a
-    different channel_id."""
+    different channel_id. avatar can be cleared by passing None."""
     payload = {}
-    if name is not None:
+    if name is not UNSET:
         payload["name"] = name
-    if avatar is not None:
+    if avatar is not UNSET:
         payload["avatar"] = avatar
     body = json.dumps(payload).encode()
     return _request("PATCH", f"/api/v10/webhooks/{webhook_id}/{webhook_token}", body, "application/json")

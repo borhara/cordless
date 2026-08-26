@@ -420,10 +420,10 @@ class Cordless(RESTMixin):
         _, body = await asyncio.get_event_loop().run_in_executor(None, _webhook.get_webhook, webhook_id, webhook_token)
         return Webhook(json.loads(body))
 
-    async def edit_webhook_with_token(self, webhook_id, webhook_token=None, *, name=None, avatar=None):
+    async def edit_webhook_with_token(self, webhook_id, webhook_token=None, *, name=..., avatar=...):
         """Rename a webhook or change its avatar using its own token rather
         than DISCORD_BOT_TOKEN. Unlike `edit_webhook`, this can't move it to
-        a different channel."""
+        a different channel. avatar can be cleared by passing None."""
         from . import webhook as _webhook
         from ._rest.models import Webhook
 
@@ -431,7 +431,12 @@ class Cordless(RESTMixin):
             webhook_id, webhook_token = _webhook.parse_webhook_url(webhook_id)
 
         _, body = await asyncio.get_event_loop().run_in_executor(
-            None, _webhook.edit_webhook, webhook_id, webhook_token, name, avatar
+            None,
+            _webhook.edit_webhook,
+            webhook_id,
+            webhook_token,
+            _webhook.UNSET if name is ... else name,
+            _webhook.UNSET if avatar is ... else avatar,
         )
         return Webhook(json.loads(body))
 

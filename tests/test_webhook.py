@@ -215,6 +215,11 @@ def test_edit_webhook_name_only_omits_avatar(fake_conn):
     assert json.loads(fake_conn.requests[0]["body"]) == {"name": "shiv"}
 
 
+def test_edit_webhook_avatar_none_clears_it(fake_conn):
+    cordless.webhook.edit_webhook("123", "abc", avatar=None)
+    assert json.loads(fake_conn.requests[0]["body"]) == {"avatar": None}
+
+
 def test_get_message_gets_message_path(fake_conn):
     cordless.webhook.get_message("123", "abc", "999")
     req = fake_conn.requests[0]
@@ -506,6 +511,29 @@ def test_edit_webhook_with_token_parses_full_url(webhook_calls):
 
     webhook_id, webhook_token, name, avatar = webhook_calls["edit_webhook"][0]
     assert (webhook_id, webhook_token) == ("123", "abc")
+
+
+def test_edit_webhook_with_token_avatar_none_clears_it(webhook_calls):
+    """avatar=None must reach webhook.edit_webhook() as a real None, not
+    silently get skipped the way an un-passed argument would."""
+    import asyncio
+
+    bot = Cordless()
+    asyncio.run(bot.edit_webhook_with_token("123", "abc", avatar=None))
+
+    webhook_id, webhook_token, name, avatar = webhook_calls["edit_webhook"][0]
+    assert avatar is None
+    assert name is cordless.webhook.UNSET
+
+
+def test_edit_webhook_with_token_leaves_avatar_untouched_when_not_passed(webhook_calls):
+    import asyncio
+
+    bot = Cordless()
+    asyncio.run(bot.edit_webhook_with_token("123", "abc", name="shiv"))
+
+    webhook_id, webhook_token, name, avatar = webhook_calls["edit_webhook"][0]
+    assert avatar is cordless.webhook.UNSET
 
 
 def test_execute_slack_webhook_parses_full_url(webhook_calls):
