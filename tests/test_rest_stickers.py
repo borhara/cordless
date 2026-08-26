@@ -6,6 +6,7 @@ import os
 from asyncio import run
 from unittest.mock import patch
 
+import pytest
 from conftest import FakeDiscordResponse
 
 from cordless._rest import stickers
@@ -205,3 +206,15 @@ def test_sticker_delete_delegates_to_rest_module():
     req = urlopen.call_args.args[0]
     assert req.full_url == "https://discord.com/api/v10/guilds/10/stickers/1"
     assert req.get_method() == "DELETE"
+
+
+def test_sticker_edit_on_pack_sticker_raises_value_error():
+    sticker = Sticker({"id": "1", "name": "official_wave"})
+    with pytest.raises(ValueError, match="sticker pack"):
+        run(sticker.edit(name="renamed"))
+
+
+def test_sticker_delete_on_pack_sticker_raises_value_error():
+    sticker = Sticker({"id": "1", "name": "official_wave"})
+    with pytest.raises(ValueError, match="sticker pack"):
+        run(sticker.delete())

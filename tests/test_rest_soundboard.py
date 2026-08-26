@@ -6,6 +6,7 @@ import os
 from asyncio import run
 from unittest.mock import patch
 
+import pytest
 from conftest import FakeDiscordResponse
 
 from cordless._rest import soundboard
@@ -198,3 +199,15 @@ def test_soundboard_sound_delete_delegates_to_rest_module():
     req = urlopen.call_args.args[0]
     assert req.full_url == "https://discord.com/api/v10/guilds/10/soundboard-sounds/1"
     assert req.get_method() == "DELETE"
+
+
+def test_soundboard_sound_edit_on_default_sound_raises_value_error():
+    sound = SoundboardSound({"sound_id": "1", "name": "default_horn"})
+    with pytest.raises(ValueError, match="default soundboard sound"):
+        run(sound.edit(name="renamed"))
+
+
+def test_soundboard_sound_delete_on_default_sound_raises_value_error():
+    sound = SoundboardSound({"sound_id": "1", "name": "default_horn"})
+    with pytest.raises(ValueError, match="default soundboard sound"):
+        run(sound.delete())

@@ -351,6 +351,8 @@ class Sticker(DiscordObject):
         `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS`."""
         from . import stickers
 
+        if "guild_id" not in self._data:
+            raise ValueError("can't edit a sticker pack sticker, only guild stickers")
         return await stickers.edit_guild_sticker(self._data["guild_id"], self.id, **kwargs)
 
     async def delete(self, **kwargs):
@@ -358,6 +360,8 @@ class Sticker(DiscordObject):
         `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS`."""
         from . import stickers
 
+        if "guild_id" not in self._data:
+            raise ValueError("can't delete a sticker pack sticker, only guild stickers")
         await stickers.delete_guild_sticker(self._data["guild_id"], self.id, **kwargs)
 
 
@@ -373,6 +377,8 @@ class SoundboardSound(DiscordObject):
         `MANAGE_GUILD_EXPRESSIONS`."""
         from . import soundboard
 
+        if "guild_id" not in self._data:
+            raise ValueError("can't edit a default soundboard sound, only guild sounds")
         return await soundboard.edit_guild_soundboard_sound(self._data["guild_id"], self.sound_id, **kwargs)
 
     async def delete(self, **kwargs):
@@ -381,6 +387,8 @@ class SoundboardSound(DiscordObject):
         `MANAGE_GUILD_EXPRESSIONS`."""
         from . import soundboard
 
+        if "guild_id" not in self._data:
+            raise ValueError("can't delete a default soundboard sound, only guild sounds")
         await soundboard.delete_guild_soundboard_sound(self._data["guild_id"], self.sound_id, **kwargs)
 
 
