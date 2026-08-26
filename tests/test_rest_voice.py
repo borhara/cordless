@@ -87,10 +87,10 @@ def test_bot_fetch_voice_regions_delegates_to_rest_module():
         assert run(bot.fetch_voice_regions()) == [VoiceRegion(_REGION_PAYLOAD)]
 
 
-def test_bot_fetch_guild_voice_state_delegates_to_rest_module():
+def test_bot_fetch_guild_current_voice_state_delegates_to_rest_module():
     bot = Cordless()
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_VOICE_STATE_PAYLOAD)]):
-        assert isinstance(run(bot.fetch_guild_voice_state("10")), VoiceState)
+        assert isinstance(run(bot.fetch_guild_current_voice_state("10")), VoiceState)
 
 
 def test_bot_fetch_guild_member_voice_state_delegates_to_rest_module():
@@ -99,10 +99,10 @@ def test_bot_fetch_guild_member_voice_state_delegates_to_rest_module():
         assert isinstance(run(bot.fetch_guild_member_voice_state("10", "55")), VoiceState)
 
 
-def test_bot_edit_guild_voice_state_delegates_to_rest_module():
+def test_bot_edit_guild_current_voice_state_delegates_to_rest_module():
     bot = Cordless()
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
-        run(bot.edit_guild_voice_state("10", channel_id="20"))
+        run(bot.edit_guild_current_voice_state("10", channel_id="20"))
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/voice-states/@me"
 
 

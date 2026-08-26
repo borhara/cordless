@@ -569,13 +569,13 @@ class RESTMixin:
     async def fetch_voice_regions(self, **kwargs):
         return await voice.fetch_voice_regions(**kwargs)
 
-    async def fetch_guild_voice_state(self, guild_id, **kwargs):
+    async def fetch_guild_current_voice_state(self, guild_id, **kwargs):
         return await voice.fetch_current_user_voice_state(guild_id, **kwargs)
 
     async def fetch_guild_member_voice_state(self, guild_id, user_id, **kwargs):
         return await voice.fetch_user_voice_state(guild_id, user_id, **kwargs)
 
-    async def edit_guild_voice_state(self, guild_id, **kwargs):
+    async def edit_guild_current_voice_state(self, guild_id, **kwargs):
         await voice.edit_current_user_voice_state(guild_id, **kwargs)
 
     async def edit_guild_member_voice_state(self, guild_id, user_id, **kwargs):
