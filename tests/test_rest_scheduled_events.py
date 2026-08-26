@@ -28,7 +28,7 @@ _EVENT_USER_PAYLOAD = {"guild_scheduled_event_id": "1", "user": {"id": "55", "us
 
 
 def _urlopen(responses):
-    return patch("cordless._rest._client.urllib.request.urlopen", side_effect=responses)
+    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 # --- _rest/scheduled_events.py ---

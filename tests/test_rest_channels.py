@@ -33,7 +33,7 @@ _PIN_PAYLOAD = {"pinned_at": "2024-01-01T00:00:00Z", "message": _MESSAGE_PAYLOAD
 
 
 def _urlopen(responses):
-    return patch("cordless._rest._client.urllib.request.urlopen", side_effect=responses)
+    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 # --- fetch_channel / edit_channel / delete_channel ---

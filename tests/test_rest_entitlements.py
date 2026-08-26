@@ -26,7 +26,7 @@ _SKU_PAYLOAD = {"id": "2", "type": 5, "application_id": "3", "name": "shiv's pre
 
 
 def _urlopen(responses):
-    return patch("cordless._rest._client.urllib.request.urlopen", side_effect=responses)
+    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 # --- _rest/entitlements.py ---

@@ -26,7 +26,7 @@ _PERMISSIONS_PAYLOAD = {"id": "2", "application_id": "3", "guild_id": "10", "per
 
 
 def _urlopen(responses):
-    return patch("cordless._rest._client.urllib.request.urlopen", side_effect=responses)
+    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 # --- global commands ---

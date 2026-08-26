@@ -20,7 +20,7 @@ _USER_PAYLOAD = {"id": "55", "username": "shiv"}
 
 
 def _urlopen(responses):
-    return patch("cordless._rest._client.urllib.request.urlopen", side_effect=responses)
+    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 # --- fetch_channel_messages / fetch_message ---

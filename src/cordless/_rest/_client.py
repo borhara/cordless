@@ -11,8 +11,10 @@ per-outbound-request shape the rest of the codebase already uses.
 """
 
 import asyncio
+import http.client
 import json
 import os
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -32,6 +34,41 @@ from ..context import _attach_files
 # main function's default 10s timeout should raise `timeout` in
 # cordless.toml or move the work behind defer_worker.
 _MAX_RETRY_SECONDS = 30.0
+
+_TIMEOUT = 10
+
+# Kept open across invocations in a warm Lambda container, so most requests
+# skip the TLS handshake instead of paying for it every time - same pattern
+# as webhook.py/defer.py's own kept-alive connections.
+_conn = None
+_conn_lock = threading.Lock()
+
+
+def _send(req):
+    """Send a urllib.request.Request over a persistent HTTPSConnection to
+    discord.com instead of urllib.request.urlopen(), which always opens a
+    fresh connection per call with no way to keep it warm. A drop-in
+    replacement for urlopen() as far as callers can tell: a context manager
+    with .read()/.headers on 2xx, raises urllib.error.HTTPError otherwise.
+    """
+    global _conn
+    headers = dict(req.header_items())
+    with _conn_lock:
+        if _conn is None:
+            _conn = http.client.HTTPSConnection(req.host, timeout=_TIMEOUT)
+        try:
+            _conn.request(req.get_method(), req.selector, req.data, headers)
+            resp = _conn.getresponse()
+        except (http.client.HTTPException, OSError):
+            # the other end closed the kept-alive connection, reconnect once
+            _conn.close()
+            _conn = http.client.HTTPSConnection(req.host, timeout=_TIMEOUT)
+            _conn.request(req.get_method(), req.selector, req.data, headers)
+            resp = _conn.getresponse()
+
+    if resp.status >= 300:
+        raise urllib.error.HTTPError(req.full_url, resp.status, resp.reason, resp.headers, resp)
+    return resp
 
 
 def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_body=None, reason=None):
@@ -69,7 +106,7 @@ def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_bo
         ratelimit.wait_if_needed(method, path)
         req = urllib.request.Request(url, data=body, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(req) as resp:
+            with _send(req) as resp:
                 data = resp.read()
                 ratelimit.record_response(method, path, resp.headers)
                 return data

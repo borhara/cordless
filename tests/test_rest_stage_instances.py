@@ -25,7 +25,7 @@ _STAGE_PAYLOAD = {
 
 
 def _urlopen(responses):
-    return patch("cordless._rest._client.urllib.request.urlopen", side_effect=responses)
+    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 # --- _rest/stage_instances.py ---

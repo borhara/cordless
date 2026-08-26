@@ -20,7 +20,7 @@ _SOUND_PAYLOAD = {"sound_id": "1", "name": "shiv_horn", "volume": 1.0, "guild_id
 
 
 def _urlopen(responses):
-    return patch("cordless._rest._client.urllib.request.urlopen", side_effect=responses)
+    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 # --- _rest/soundboard.py ---

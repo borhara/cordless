@@ -21,7 +21,7 @@ _PACK_PAYLOAD = {"id": "99", "name": "Official Pack", "stickers": [_STICKER_PAYL
 
 
 def _urlopen(responses):
-    return patch("cordless._rest._client.urllib.request.urlopen", side_effect=responses)
+    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 def test_fetch_sticker_returns_single_sticker():

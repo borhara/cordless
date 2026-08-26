@@ -30,7 +30,7 @@ _GUILD_FROM_TEMPLATE_PAYLOAD = {"id": "20", "name": "shiv's new server"}
 
 
 def _urlopen(responses):
-    return patch("cordless._rest._client.urllib.request.urlopen", side_effect=responses)
+    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 # --- _rest/templates.py ---

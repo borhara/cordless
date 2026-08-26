@@ -21,7 +21,7 @@ _WEBHOOK_PAYLOAD = {"id": "99", "name": "shiv's alerts", "channel_id": "20", "to
 
 
 def _urlopen(responses):
-    return patch("cordless._rest._client.urllib.request.urlopen", side_effect=responses)
+    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 # --- _rest/webhooks.py (bot token) ---

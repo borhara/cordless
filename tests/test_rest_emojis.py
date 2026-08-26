@@ -19,7 +19,7 @@ _EMOJI_PAYLOAD = {"id": "1", "name": "shiv_dance", "animated": True}
 
 
 def _urlopen(responses):
-    return patch("cordless._rest._client.urllib.request.urlopen", side_effect=responses)
+    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 # --- guild emojis ---

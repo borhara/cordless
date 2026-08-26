@@ -40,7 +40,7 @@ _BULK_BAN_PAYLOAD = {"banned_users": ["1", "2"], "failed_users": []}
 
 
 def _urlopen(responses):
-    return patch("cordless._rest._client.urllib.request.urlopen", side_effect=responses)
+    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 # --- fetch_guild / fetch_guild_preview / edit_guild ---

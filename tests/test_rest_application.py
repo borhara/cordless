@@ -18,7 +18,7 @@ _APPLICATION_PAYLOAD = {"id": "3", "name": "shiv's bot", "bot_public": True, "fl
 
 
 def _urlopen(responses):
-    return patch("cordless._rest._client.urllib.request.urlopen", side_effect=responses)
+    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 # --- _rest/application.py ---

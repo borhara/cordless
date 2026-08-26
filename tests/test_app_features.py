@@ -702,7 +702,7 @@ def test_edit_message_over_content_limit_raises_without_request():
 
 
 def _urlopen(responses):
-    return patch("cordless._rest._client.urllib.request.urlopen", side_effect=responses)
+    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 def test_unset_repr_is_readable():
