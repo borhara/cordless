@@ -75,6 +75,22 @@ def test_reloader_reloads_on_change(bot_project):
     assert second is not first
 
 
+def test_scan_skips_a_file_that_vanishes_between_walk_and_stat(bot_project, monkeypatch):
+    reloader = Reloader("mybot:bot", str(bot_project))
+    real_stat = os.stat
+
+    def flaky_stat(path, *args, **kwargs):
+        if str(path).endswith("mybot.py"):
+            raise OSError("vanished")
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(dev.os, "stat", flaky_stat)
+
+    snapshot = reloader._scan()
+
+    assert str(bot_project / "mybot.py") not in snapshot
+
+
 # --- cloudflared tunnel ---
 
 
@@ -188,6 +204,33 @@ def test_post_interaction_with_files_round_trips_raw_bytes(bot_project):
     finally:
         server.shutdown()
         server.server_close()
+
+
+class _RaisingBot:
+    def handle(self, event):
+        raise RuntimeError("boom")
+
+
+class _RaisingReloader:
+    def get(self):
+        return _RaisingBot()
+
+
+def test_post_interaction_handler_exception_returns_500(capsys):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _make_handler(_RaisingReloader()))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f"http://127.0.0.1:{server.server_address[1]}"
+        req = urllib.request.Request(url, data=b"{}", method="POST")
+        with pytest.raises(urllib.error.HTTPError) as excinfo:
+            urllib.request.urlopen(req)
+        assert excinfo.value.code == 500
+        assert "RuntimeError" in json.loads(excinfo.value.read())["error"]
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert "RuntimeError" in capsys.readouterr().err
 
 
 # --- in-process defer ---
