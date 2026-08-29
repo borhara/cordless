@@ -1,15 +1,14 @@
 """User REST endpoints (Discord API v10).
 
 Only the endpoints a bot token can actually call. Create Group DM, Get
-Current User Connections, and the application role connection endpoints all
-require an OAuth2 user access token with a scope a bot token doesn't carry -
-this client only ever sends `Authorization: Bot <token>`, so those would
-just 401 - and are left out rather than shipped as REST calls that can never
-succeed.
+Current User Connections, Get Current User Guild Member, and the
+application role connection endpoints all require an OAuth2 user access
+token with a scope a bot token doesn't carry - this client only ever sends
+`Authorization: Bot <token>`, so those would just 401/403 - and are left out
+rather than shipped as REST calls that can never succeed.
 """
 
-from ..context import _with_guild_id
-from ..models import Channel, Guild, Member, User
+from ..models import Channel, Guild, User
 from . import _client
 from ._client import UNSET
 
@@ -45,11 +44,6 @@ async def fetch_current_user_guilds(*, before=None, after=None, limit=None, with
     data = await _client.request("GET", f"/users/@me/guilds{qs}", token=token)
     assert data is not None, "GET always returns a body"
     return [Guild(g) for g in data]
-
-
-async def fetch_current_user_guild_member(guild_id, *, token=None):
-    data = await _client.request("GET", f"/users/@me/guilds/{guild_id}/member", token=token)
-    return Member(_with_guild_id(data, guild_id))
 
 
 async def leave_guild(guild_id, *, token=None):

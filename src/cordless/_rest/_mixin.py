@@ -118,9 +118,6 @@ class RESTMixin:
     async def fetch_current_user_guilds(self, **kwargs):
         return await users.fetch_current_user_guilds(**kwargs)
 
-    async def fetch_current_user_guild_member(self, guild_id, **kwargs):
-        return await users.fetch_current_user_guild_member(guild_id, **kwargs)
-
     async def leave_guild(self, guild_id, **kwargs):
         return await users.leave_guild(guild_id, **kwargs)
 

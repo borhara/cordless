@@ -1137,13 +1137,6 @@ class Guild(DiscordObject):
 
         return await audit_log.fetch_audit_log(self.id, **kwargs)
 
-    async def fetch_current_member(self, **kwargs):
-        """Fetch the bot's own `Member` object in this guild. Requires
-        `DISCORD_BOT_TOKEN`."""
-        from ._rest import users
-
-        return await users.fetch_current_user_guild_member(self.id, **kwargs)
-
     async def leave(self, **kwargs):
         """Leave this guild. Requires `DISCORD_BOT_TOKEN`."""
         from ._rest import users
