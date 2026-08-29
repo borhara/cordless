@@ -4,10 +4,13 @@ Members and roles live in members.py, not here, despite technically sharing
 the /guilds/{guild.id}/... path prefix - they are big enough resources on
 their own to warrant a separate module and a separate rollout phase.
 
-Create Guild is left out on purpose: Discord blocked bot tokens from this
-endpoint outright in 2025 (existing bot-owned guilds even had ownership
-transferred away), so it can no longer succeed for any bot regardless of
-guild count, despite what Discord's own docs still say."""
+Create Guild and Delete Guild are both left out on purpose. Discord blocked
+bot tokens from Create Guild outright in 2025 (existing bot-owned guilds
+even had ownership transferred away), so it can no longer succeed for any
+bot regardless of guild count, despite what Discord's own docs still say.
+Delete Guild only works for the guild's owner, and with Create Guild gone
+there's no remaining way for a bot to become one - Modify Guild's owner_id
+transfer field silently no-ops when the target is a bot account too."""
 
 from ..models import Guild
 from . import _client
@@ -24,11 +27,6 @@ from .models import (
     VoiceRegion,
     WelcomeScreen,
 )
-
-
-async def delete_guild(guild_id, *, token=None):
-    """Bot must be the guild's owner."""
-    await _client.request("DELETE", f"/guilds/{guild_id}", token=token)
 
 
 async def fetch_guild(guild_id, *, with_counts=False, token=None):

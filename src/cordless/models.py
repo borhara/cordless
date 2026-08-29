@@ -713,13 +713,6 @@ class Guild(DiscordObject):
 
         return await guilds.edit_guild(self.id, **kwargs)
 
-    async def delete(self, **kwargs):
-        """Delete this guild. Bot must be the guild's owner. Requires
-        `DISCORD_BOT_TOKEN`."""
-        from ._rest import guilds
-
-        await guilds.delete_guild(self.id, **kwargs)
-
     async def fetch_bans(self, **kwargs):
         """List this guild's bans, as a list of `Ban`. Requires
         `DISCORD_BOT_TOKEN` and `BAN_MEMBERS`."""
