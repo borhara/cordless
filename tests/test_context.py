@@ -343,7 +343,7 @@ def test_target_user_from_user_command():
                 "target_id": "999",
                 "resolved": {
                     "users": {"999": {"id": "999", "username": "shiv"}},
-                    "members": {"999": {"nick": "Alice"}},
+                    "members": {"999": {"nick": "cap"}},
                 },
             },
             "id": "4",
@@ -352,7 +352,7 @@ def test_target_user_from_user_command():
     )
     assert ctx.target_user == {"id": "999", "username": "shiv"}
     assert ctx.target_user.username == "shiv"
-    assert ctx.target_member.nick == "Alice"
+    assert ctx.target_member.nick == "cap"
     # resolved.members omits the nested user object; Context stitches it back in
     assert ctx.target_member.user.username == "shiv"
     assert ctx.target_message is None

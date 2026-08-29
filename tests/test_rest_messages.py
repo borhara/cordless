@@ -101,11 +101,11 @@ def test_create_message_passes_embeds_nonce_allowed_mentions_enforce_nonce():
 
 def test_create_message_passes_sticker_ids_and_poll():
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_MESSAGE_PAYLOAD)]) as urlopen:
-        run(messages.create_message("20", sticker_ids=["1"], poll={"question": {"text": "shiv or bob?"}}))
+        run(messages.create_message("20", sticker_ids=["1"], poll={"question": {"text": "tabs or spaces?"}}))
 
     body = json.loads(urlopen.call_args.args[0].data)
     assert body["sticker_ids"] == ["1"]
-    assert body["poll"] == {"question": {"text": "shiv or bob?"}}
+    assert body["poll"] == {"question": {"text": "tabs or spaces?"}}
 
 
 # --- crosspost / edit / delete / bulk delete ---
