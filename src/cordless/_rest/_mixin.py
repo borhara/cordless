@@ -132,9 +132,6 @@ class RESTMixin:
     async def fetch_template(self, code, **kwargs):
         return await templates.fetch_template(code, **kwargs)
 
-    async def create_guild_from_template(self, code, name, **kwargs):
-        return await templates.create_guild_from_template(code, name, **kwargs)
-
     async def fetch_guild_templates(self, guild_id, **kwargs):
         return await templates.fetch_guild_templates(guild_id, **kwargs)
 
@@ -400,9 +397,6 @@ class RESTMixin:
         return await members.delete_guild_role(guild_id, role_id, **kwargs)
 
     # -- guilds --
-    async def create_guild(self, name, **kwargs):
-        return await guilds.create_guild(name, **kwargs)
-
     async def delete_guild(self, guild_id, **kwargs):
         await guilds.delete_guild(guild_id, **kwargs)
 

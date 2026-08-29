@@ -501,14 +501,6 @@ class GuildTemplate(DiscordObject):
 
         return await templates.sync_guild_template(self.source_guild_id, self.code, **kwargs)
 
-    async def create_guild(self, name, **kwargs):
-        """Create a new guild from this template. Only works for bots in
-        fewer than 10 guilds. Returns the new `Guild`, not a
-        `GuildTemplate`. Requires `DISCORD_BOT_TOKEN`."""
-        from . import templates
-
-        return await templates.create_guild_from_template(self.code, name, **kwargs)
-
     async def edit(self, **kwargs):
         """Update this template's name/description. Returns the updated
         `GuildTemplate`. Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""

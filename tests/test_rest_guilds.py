@@ -80,17 +80,7 @@ def test_edit_guild_only_sends_fields_that_were_set():
     assert isinstance(result, Guild)
 
 
-# --- create_guild / delete_guild ---
-
-
-def test_create_guild_posts_required_and_optional_fields():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_GUILD_PAYLOAD)]) as urlopen:
-        result = run(guilds.create_guild("shiv's server", verification_level=1))
-
-    req = urlopen.call_args.args[0]
-    assert req.full_url == "https://discord.com/api/v10/guilds"
-    assert json.loads(req.data) == {"name": "shiv's server", "verification_level": 1}
-    assert isinstance(result, Guild)
+# --- delete_guild ---
 
 
 def test_delete_guild_deletes_guild():
@@ -330,12 +320,6 @@ def test_edit_guild_incident_actions_puts_fields():
 
 
 # --- bot.<verb>() delegation (every mixin method) ---
-
-
-def test_bot_create_guild_delegates_to_rest_module():
-    bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_GUILD_PAYLOAD)]):
-        assert isinstance(run(bot.create_guild("shiv's server")), Guild)
 
 
 def test_bot_delete_guild_delegates_to_rest_module():

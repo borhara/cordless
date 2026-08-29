@@ -2,7 +2,12 @@
 
 Members and roles live in members.py, not here, despite technically sharing
 the /guilds/{guild.id}/... path prefix - they are big enough resources on
-their own to warrant a separate module and a separate rollout phase."""
+their own to warrant a separate module and a separate rollout phase.
+
+Create Guild is left out on purpose: Discord blocked bot tokens from this
+endpoint outright in 2025 (existing bot-owned guilds even had ownership
+transferred away), so it can no longer succeed for any bot regardless of
+guild count, despite what Discord's own docs still say."""
 
 from ..models import Guild
 from . import _client
@@ -19,39 +24,6 @@ from .models import (
     VoiceRegion,
     WelcomeScreen,
 )
-
-
-async def create_guild(
-    name,
-    *,
-    icon=UNSET,
-    verification_level=UNSET,
-    default_message_notifications=UNSET,
-    explicit_content_filter=UNSET,
-    roles=UNSET,
-    channels=UNSET,
-    afk_channel_id=UNSET,
-    afk_timeout=UNSET,
-    system_channel_id=UNSET,
-    system_channel_flags=UNSET,
-    token=None,
-):
-    """Only works for bots in fewer than 10 guilds."""
-    payload = _client.payload(
-        name=name,
-        icon=icon,
-        verification_level=verification_level,
-        default_message_notifications=default_message_notifications,
-        explicit_content_filter=explicit_content_filter,
-        roles=roles,
-        channels=channels,
-        afk_channel_id=afk_channel_id,
-        afk_timeout=afk_timeout,
-        system_channel_id=system_channel_id,
-        system_channel_flags=system_channel_flags,
-    )
-    data = await _client.request("POST", "/guilds", payload, token=token)
-    return Guild(data)
 
 
 async def delete_guild(guild_id, *, token=None):
