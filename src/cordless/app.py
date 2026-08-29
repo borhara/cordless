@@ -441,7 +441,10 @@ class Cordless(RESTMixin):
         return Webhook(json.loads(body))
 
     async def execute_slack_webhook(self, webhook_id, webhook_token=None, payload=None, *, wait=False, thread_id=None):
-        """Post a Slack-formatted payload through a webhook. No bot token required."""
+        """Post a Slack-formatted payload through a webhook. No bot token
+        required. Discord's Slack-compatible endpoint replies with the plain
+        text "ok" rather than a message body, so unlike execute_webhook this
+        returns that raw text with wait=True, not a parsed message."""
         from . import webhook as _webhook
 
         if webhook_token is None:
@@ -451,7 +454,10 @@ class Cordless(RESTMixin):
             None, _webhook.execute_slack_compatible, webhook_id, webhook_token, payload, wait, thread_id
         )
         if wait and body:
-            return json.loads(body)
+            try:
+                return json.loads(body)
+            except json.JSONDecodeError:
+                return body.decode()
 
     async def execute_github_webhook(self, webhook_id, webhook_token=None, payload=None, *, wait=False, thread_id=None):
         """Post a GitHub-formatted payload through a webhook. No bot token required."""

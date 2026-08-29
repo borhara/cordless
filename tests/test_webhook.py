@@ -432,6 +432,17 @@ def test_execute_slack_webhook_returns_message_when_wait(monkeypatch):
     assert result == {"id": "msg-1"}
 
 
+def test_execute_slack_webhook_returns_raw_text_when_not_json(monkeypatch):
+    import asyncio
+
+    monkeypatch.setattr(cordless.webhook, "execute_slack_compatible", lambda *a: (200, b"ok"))
+
+    bot = Cordless()
+    result = asyncio.run(bot.execute_slack_webhook("123", "abc", payload={"text": "hi"}, wait=True))
+
+    assert result == "ok"
+
+
 def test_execute_github_webhook_returns_message_when_wait(monkeypatch):
     import asyncio
 
