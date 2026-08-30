@@ -619,6 +619,9 @@ class RESTMixin:
     async def fetch_active_guild_threads(self, guild_id, **kwargs):
         return await threads.fetch_active_guild_threads(guild_id, **kwargs)
 
+    async def search_channel_threads(self, channel_id, **kwargs):
+        return await threads.search_channel_threads(channel_id, **kwargs)
+
     # -- voice --
     async def fetch_voice_regions(self, **kwargs):
         return await voice.fetch_voice_regions(**kwargs)

@@ -106,3 +106,41 @@ async def fetch_active_guild_threads(guild_id, *, token=None):
     data = await _client.request("GET", f"/guilds/{guild_id}/threads/active", token=token)
     assert data is not None, "GET always returns a body"
     return [Thread(t) for t in data["threads"]]
+
+
+async def search_channel_threads(
+    channel_id,
+    *,
+    name=None,
+    slop=None,
+    min_id=None,
+    max_id=None,
+    tag=None,
+    tag_setting=None,
+    archived=None,
+    sort_by=None,
+    sort_order=None,
+    limit=None,
+    offset=None,
+    token=None,
+):
+    """Forum/media channels only. tag takes a single tag id or a list of up
+    to 20, matching Discord's repeated-key array query param shape."""
+    parts = _client.query_parts(
+        name=name,
+        slop=slop,
+        min_id=min_id,
+        max_id=max_id,
+        tag_setting=tag_setting,
+        archived=archived,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        limit=limit,
+        offset=offset,
+    )
+    if tag is not None:
+        parts += [f"tag={t}" for t in (tag if isinstance(tag, (list, tuple)) else [tag])]
+    qs = _client.join_query_parts(parts)
+    data = await _client.request("GET", f"/channels/{channel_id}/threads/search{qs}", token=token)
+    assert data is not None, "GET always returns a body"
+    return [Thread(t) for t in data["threads"]]

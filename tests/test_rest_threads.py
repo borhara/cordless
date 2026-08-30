@@ -457,6 +457,54 @@ def test_bot_fetch_active_guild_threads_delegates_to_rest_module():
     assert result == [Thread(_THREAD_PAYLOAD)]
 
 
+# --- search_channel_threads ---
+
+
+def test_search_channel_threads_returns_thread_list():
+    payload = {"threads": [_THREAD_PAYLOAD], "members": [], "has_more": False, "total_results": 1}
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+        result = run(threads.search_channel_threads("20"))
+
+    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/threads/search"
+    assert result == [Thread(_THREAD_PAYLOAD)]
+
+
+def test_search_channel_threads_passes_scalar_query_params():
+    payload = {"threads": [], "members": [], "has_more": False, "total_results": 0}
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+        run(threads.search_channel_threads("20", name="shiv", archived=True, limit=5))
+
+    url = urlopen.call_args.args[0].full_url
+    assert "name=shiv" in url
+    assert "archived=true" in url
+    assert "limit=5" in url
+
+
+def test_search_channel_threads_repeats_tag_key_for_a_list():
+    payload = {"threads": [], "members": [], "has_more": False, "total_results": 0}
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+        run(threads.search_channel_threads("20", tag=["1", "2"]))
+
+    url = urlopen.call_args.args[0].full_url
+    assert "tag=1" in url
+    assert "tag=2" in url
+
+
+def test_search_channel_threads_accepts_a_single_tag():
+    payload = {"threads": [], "members": [], "has_more": False, "total_results": 0}
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+        run(threads.search_channel_threads("20", tag="1"))
+
+    assert "tag=1" in urlopen.call_args.args[0].full_url
+
+
+def test_bot_search_channel_threads_delegates_to_rest_module():
+    bot = Cordless()
+    payload = {"threads": [_THREAD_PAYLOAD], "members": [], "has_more": False, "total_results": 1}
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
+        assert run(bot.search_channel_threads("20")) == [Thread(_THREAD_PAYLOAD)]
+
+
 # --- remaining bot.<verb>_thread() delegation (one per mixin method not already exercised above) ---
 
 
