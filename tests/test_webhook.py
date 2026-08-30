@@ -42,6 +42,19 @@ def test_invalid_url_raises():
         cordless.webhook.parse_webhook_url("https://example.com/not-a-webhook")
 
 
+def test_invalid_url_error_does_not_echo_the_input():
+    """A near-miss URL is typically a real webhook URL with its token
+    (trailing slash, wrong host casing, ...), so the error must not repeat
+    it back, since that token would otherwise end up in whatever logs the
+    exception surfaces to."""
+    live_looking_url = "https://discordd.com/api/webhooks/123/super-secret-token"
+    with pytest.raises(ValueError) as exc_info:
+        cordless.webhook.parse_webhook_url(live_looking_url)
+
+    assert "super-secret-token" not in str(exc_info.value)
+    assert live_looking_url not in str(exc_info.value)
+
+
 # --- build_payload ---
 
 
@@ -121,7 +134,7 @@ def fake_conn(monkeypatch):
 
 def test_send_reconnects_when_kept_alive_connection_is_dropped(fake_conn, monkeypatch):
     """A warm connection reused across invocations can get closed by Discord's
-    end between requests - _send must close it, open a fresh one, and retry
+    end between requests. _send must close it, open a fresh one, and retry
     the same request once rather than blowing up."""
     monkeypatch.setattr(cordless.webhook, "_conn", fake_conn("discord.com"))
     fake_conn.raise_once = OSError("connection reset by peer")

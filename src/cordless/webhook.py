@@ -26,8 +26,8 @@ class _Unset:
         return "UNSET"
 
 
-# a local sentinel rather than importing _rest._client's - this module stays
-# dependency-free on purpose (see module docstring)
+# a local sentinel rather than importing _rest._client's, since this module
+# stays dependency-free on purpose (see module docstring)
 UNSET = _Unset()
 
 _URL_RE = re.compile(r"discord(?:app)?\.com/api(?:/v\d+)?/webhooks/(\d+)/([\w-]+)")
@@ -60,7 +60,16 @@ def parse_webhook_url(url):
     """Extract (webhook_id, webhook_token) from a full Discord webhook URL."""
     match = _URL_RE.search(url)
     if not match:
-        raise ValueError(f"Not a Discord webhook URL: {url!r}")
+        # url is typically a real webhook URL passed in specifically to
+        # extract its token, so it must never be echoed back. A caller
+        # passing in a subtly malformed one (trailing slash, wrong host
+        # casing) would otherwise land its live token in whatever logs
+        # this exception surfaces to (e.g. Lambda's default unhandled
+        # exception logging, since this isn't a CordlessError app.py catches).
+        raise ValueError(
+            "Not a Discord webhook URL: expected something matching "
+            "discord.com/api/webhooks/<id>/<token>"
+        )
     return match.group(1), match.group(2)
 
 
