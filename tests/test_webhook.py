@@ -136,15 +136,31 @@ def fake_conn(monkeypatch):
 def test_send_reconnects_when_kept_alive_connection_is_dropped(fake_conn, monkeypatch):
     """A warm connection reused across invocations can get closed by Discord's
     end between requests. _send must close it, open a fresh one, and retry
-    the same request once rather than blowing up."""
+    the same request once rather than blowing up, for an idempotent method
+    (GET) where repeating the request can't duplicate a side effect."""
     monkeypatch.setattr(cordless.webhook, "_conn", fake_conn("discord.com"))
     fake_conn.raise_once = OSError("connection reset by peer")
     fake_conn.responses = [(200, b"{}")]
 
-    cordless.webhook.execute("123", "abc", {"content": "hi"})
+    cordless.webhook.get_webhook("123", "abc")
 
     assert fake_conn.close_calls == 1
     assert len(fake_conn.requests) == 1  # only the retried request actually went through
+
+
+def test_send_does_not_resend_a_post_when_connection_is_dropped(fake_conn, monkeypatch):
+    """Regression test: unlike GET above, a POST must not be resent after a
+    dropped connection. Discord may have already received and processed
+    the first attempt before the connection died, so resending it risks a
+    duplicate side effect (e.g. sending the same message twice)."""
+    monkeypatch.setattr(cordless.webhook, "_conn", fake_conn("discord.com"))
+    fake_conn.raise_once = OSError("connection reset by peer")
+
+    with pytest.raises(OSError):
+        cordless.webhook.execute("123", "abc", {"content": "hi"})
+
+    assert fake_conn.close_calls == 1  # the broken connection is still dropped
+    assert len(fake_conn.requests) == 0  # but the POST itself is never resent
 
 
 def test_execute_posts_to_webhook_url(fake_conn):
@@ -281,8 +297,22 @@ def test_execute_retries_on_429_with_retry_after(fake_conn, monkeypatch):
     status, _ = cordless.webhook.execute("123", "abc", {"content": "hi"})
 
     assert status == 200
-    assert sleeps == [0.4]
+    assert sleeps and sleeps[0] >= 0.4  # retry_after_wait adds jitter on top, never less
     assert len(fake_conn.requests) == 2
+
+
+def test_execute_does_not_cap_a_large_retry_after(fake_conn, monkeypatch):
+    """Regression test: this used to sleep min(retry_after, 5) regardless of
+    what Discord actually asked for. Retrying before retry_after just turns
+    one 429 into a stream of further ones."""
+    sleeps = []
+    monkeypatch.setattr(cordless.webhook.time, "sleep", lambda s: sleeps.append(s))
+    fake_conn.responses = [(429, json.dumps({"retry_after": 30}).encode()), (200, b"{}")]
+
+    status, _ = cordless.webhook.execute("123", "abc", {"content": "hi"})
+
+    assert status == 200
+    assert sleeps and sleeps[0] >= 30
 
 
 def test_execute_gives_up_after_retries(fake_conn, monkeypatch):

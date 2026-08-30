@@ -16,8 +16,17 @@ from ._multipart import build_multipart_body
 from ._useragent import USER_AGENT
 from .context import _FLAG_UI_KIT, _attach_files, _contains_uikit
 from .errors import discord_http_error
+from .ratelimit import retry_after_wait
 
 _TIMEOUT = 10
+
+# Same rationale, and same values, as _rest/_client.py's _IDEMPOTENT_METHODS:
+# duplicated rather than imported for the same reason UNSET is below, since
+# this module stays dependency-free from _rest/_client.py on purpose (see
+# docstring). POST/PATCH aren't included, since Discord gives no guarantee
+# that resending one is safe if the first attempt actually reached Discord
+# and was processed before the connection dropped.
+_IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "PUT", "DELETE"})
 
 
 class _Unset:
@@ -49,9 +58,16 @@ def _send(method, path, body, headers):
             resp = _conn.getresponse()
             return resp.status, resp.read()
         except (HTTPException, OSError):
-            # the other end closed the kept-alive connection, reconnect once
+            # the other end closed the kept-alive connection. Always drop it
+            # and open a fresh one so the next call doesn't inherit a dead
+            # socket, but only actually resend this request for idempotent
+            # methods: if Discord already received and processed it before
+            # the connection died, resending a POST/PATCH would duplicate
+            # whatever it did (e.g. sending the same message twice)
             _conn.close()
             _conn = HTTPSConnection("discord.com", timeout=_TIMEOUT)
+            if method not in _IDEMPOTENT_METHODS:
+                raise
             _conn.request(method, path, body, headers)
             resp = _conn.getresponse()
             return resp.status, resp.read()
@@ -112,7 +128,7 @@ def _request(method, path, body=None, content_type=None):
                 retry_after = float(json.loads(data).get("retry_after", 1))
             except (ValueError, AttributeError):
                 retry_after = 1.0
-            time.sleep(min(retry_after, 5))
+            time.sleep(retry_after_wait(retry_after))
             continue
         break
 
