@@ -5,6 +5,7 @@ import os
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
 
@@ -12,6 +13,7 @@ import pytest
 
 import cordless.dev as dev
 from cordless.dev import Reloader, _load_env, _local_invoke_worker, _make_handler, _start_tunnel
+from cordless.router import APPLICATION_COMMAND_AUTOCOMPLETE, MESSAGE_COMPONENT, MODAL_SUBMIT
 
 
 @pytest.fixture
@@ -71,6 +73,22 @@ def test_reloader_reloads_on_change(bot_project):
 
     second = reloader.get()
     assert second is not first
+
+
+def test_scan_skips_a_file_that_vanishes_between_walk_and_stat(bot_project, monkeypatch):
+    reloader = Reloader("mybot:bot", str(bot_project))
+    real_stat = os.stat
+
+    def flaky_stat(path, *args, **kwargs):
+        if str(path).endswith("mybot.py"):
+            raise OSError("vanished")
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(dev.os, "stat", flaky_stat)
+
+    snapshot = reloader._scan()
+
+    assert str(bot_project / "mybot.py") not in snapshot
 
 
 # --- cloudflared tunnel ---
@@ -188,6 +206,33 @@ def test_post_interaction_with_files_round_trips_raw_bytes(bot_project):
         server.server_close()
 
 
+class _RaisingBot:
+    def handle(self, event):
+        raise RuntimeError("boom")
+
+
+class _RaisingReloader:
+    def get(self):
+        return _RaisingBot()
+
+
+def test_post_interaction_handler_exception_returns_500(capsys):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _make_handler(_RaisingReloader()))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f"http://127.0.0.1:{server.server_address[1]}"
+        req = urllib.request.Request(url, data=b"{}", method="POST")
+        with pytest.raises(urllib.error.HTTPError) as excinfo:
+            urllib.request.urlopen(req)
+        assert excinfo.value.code == 500
+        assert "RuntimeError" in json.loads(excinfo.value.read())["error"]
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert "RuntimeError" in capsys.readouterr().err
+
+
 # --- in-process defer ---
 
 
@@ -273,3 +318,207 @@ def test_load_env_missing_environment_file_falls_back_to_dot_env(tmp_path, monke
     _load_env(str(tmp_path), "staging")
 
     assert os.environ.pop("KEY") == "dev"
+
+
+# --- run_dev ---
+
+
+class _FakeServer:
+    """Stands in for ThreadingHTTPServer so run_dev never binds a real socket."""
+
+    def __init__(self, address):
+        self.server_address = address
+        self.shutdown_called = False
+        self.close_called = False
+
+    def serve_forever(self):
+        return
+
+    def shutdown(self):
+        self.shutdown_called = True
+
+    def server_close(self):
+        self.close_called = True
+
+
+class _FakeThread:
+    """Runs its target synchronously on start(), so the thread looks finished right away."""
+
+    def __init__(self, target=None, daemon=None):
+        self._target = target
+        self._alive = True
+
+    def start(self):
+        self._target()
+        self._alive = False
+
+    def is_alive(self):
+        return self._alive
+
+    def join(self, timeout=None):
+        return
+
+
+class _InterruptingThread(_FakeThread):
+    """Stays alive until joined, then raises like a real ctrl-c would mid-loop."""
+
+    def is_alive(self):
+        return True
+
+    def join(self, timeout=None):
+        raise KeyboardInterrupt
+
+
+def _patch_fake_server(monkeypatch, thread_cls):
+    holder = {}
+
+    def factory(address, handler_cls):
+        holder["server"] = _FakeServer(address)
+        return holder["server"]
+
+    monkeypatch.setattr(dev, "ThreadingHTTPServer", factory)
+    monkeypatch.setattr(dev.threading, "Thread", thread_cls)
+    return holder
+
+
+@pytest.fixture
+def run_dev_env(bot_project, monkeypatch):
+    """run_dev leaves source_dir on sys.path and repoints defer.invoke_worker globally;
+    restore both so it can't leak into other tests."""
+    import cordless.defer as defer_mod
+
+    monkeypatch.setattr(defer_mod, "invoke_worker", defer_mod.invoke_worker, raising=False)
+    yield bot_project
+    sys.path.remove(str(bot_project))
+
+
+def test_run_dev_starts_and_shuts_down_cleanly(run_dev_env, monkeypatch, capsys):
+    server_holder = _patch_fake_server(monkeypatch, _FakeThread)
+
+    dev.run_dev("mybot:bot", port=0, tunnel=False, source_dir=str(run_dev_env))
+
+    assert "watching for changes" in capsys.readouterr().out
+    assert server_holder["server"].shutdown_called
+    assert server_holder["server"].close_called
+
+
+def test_run_dev_shuts_down_cleanly_on_keyboard_interrupt(run_dev_env, monkeypatch):
+    server_holder = _patch_fake_server(monkeypatch, _InterruptingThread)
+
+    dev.run_dev("mybot:bot", port=0, tunnel=False, source_dir=str(run_dev_env))
+
+    assert server_holder["server"].shutdown_called
+    assert server_holder["server"].close_called
+
+
+def test_run_dev_prints_registered_crons(run_dev_env, monkeypatch, capsys):
+    (run_dev_env / "mybot.py").write_text(
+        "from cordless import Cordless\nbot = Cordless()\n@bot.cron('rate(1 day)')\nasync def nightly():\n    pass\n"
+    )
+    _patch_fake_server(monkeypatch, _FakeThread)
+
+    dev.run_dev("mybot:bot", port=0, tunnel=False, source_dir=str(run_dev_env))
+
+    assert "cordless cron nightly" in capsys.readouterr().out
+
+
+def test_run_dev_prints_public_tunnel_url(run_dev_env, monkeypatch, capsys):
+    _patch_fake_server(monkeypatch, _FakeThread)
+    monkeypatch.setattr(dev, "_start_tunnel", lambda port: (_FakeProc([]), "https://my-tunnel.trycloudflare.com"))
+
+    dev.run_dev("mybot:bot", port=0, tunnel=True, source_dir=str(run_dev_env))
+
+    assert "https://my-tunnel.trycloudflare.com" in capsys.readouterr().out
+
+
+def test_run_dev_reports_tunnel_failure(run_dev_env, monkeypatch, capsys):
+    _patch_fake_server(monkeypatch, _FakeThread)
+    fake_proc = _FakeProc([])
+    monkeypatch.setattr(dev, "_start_tunnel", lambda port: (fake_proc, None))
+
+    dev.run_dev("mybot:bot", port=0, tunnel=True, source_dir=str(run_dev_env))
+
+    assert "tunnel failed to start" in capsys.readouterr().out
+    assert fake_proc.terminated
+
+
+def test_run_dev_hints_cloudflared_install_when_missing(run_dev_env, monkeypatch, capsys):
+    _patch_fake_server(monkeypatch, _FakeThread)
+    monkeypatch.setattr(dev, "_start_tunnel", lambda port: (None, None))
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
+
+    dev.run_dev("mybot:bot", port=0, tunnel=True, source_dir=str(run_dev_env))
+
+    assert "brew install cloudflared" in capsys.readouterr().out
+
+
+# --- interaction description ---
+
+
+def test_describe_interaction_invalid_json_returns_placeholder():
+    assert dev._describe_interaction("not json") == "?"
+
+
+def test_describe_interaction_autocomplete():
+    body = json.dumps({"type": APPLICATION_COMMAND_AUTOCOMPLETE, "data": {"name": "ping"}})
+    assert dev._describe_interaction(body) == "/ping (autocomplete)"
+
+
+def test_describe_interaction_button():
+    body = json.dumps({"type": MESSAGE_COMPONENT, "data": {"component_type": 2, "custom_id": "confirm"}})
+    assert dev._describe_interaction(body) == "button confirm"
+
+
+def test_describe_interaction_select():
+    body = json.dumps({"type": MESSAGE_COMPONENT, "data": {"component_type": 3, "custom_id": "pick"}})
+    assert dev._describe_interaction(body) == "select pick"
+
+
+def test_describe_interaction_modal_submit():
+    body = json.dumps({"type": MODAL_SUBMIT, "data": {"custom_id": "feedback"}})
+    assert dev._describe_interaction(body) == "modal feedback"
+
+
+def test_describe_interaction_unknown_type_falls_back_to_number():
+    body = json.dumps({"type": 99})
+    assert dev._describe_interaction(body) == "type 99"
+
+
+# --- status colour and body formatting ---
+
+
+def test_status_color_success_is_green():
+    assert dev._status_color(200) == dev._GREEN
+
+
+def test_status_color_client_error_is_yellow():
+    assert dev._status_color(404) == dev._YELLOW
+
+
+def test_status_color_server_error_is_red():
+    assert dev._status_color(500) == dev._RED
+
+
+def test_pretty_body_empty_returns_empty_string():
+    assert dev._pretty_body("") == ""
+
+
+def test_pretty_body_formats_json():
+    assert dev._pretty_body('{"a":1}') == json.dumps({"a": 1}, indent=2)
+
+
+def test_pretty_body_passes_through_non_json():
+    assert dev._pretty_body("not json") == "not json"
+
+
+def test_pretty_body_truncates_long_output():
+    body = json.dumps({"text": "x" * dev._MAX_LOGGED_BODY * 3})
+    full_pretty = json.dumps(json.loads(body), indent=2)
+    pretty = dev._pretty_body(body)
+    assert pretty.endswith("more chars)")
+    assert len(pretty) < len(full_pretty)
+
+
+def test_log_request_verbose_prints_indented_body(capsys):
+    dev._log_request("ping", 200, 12.3, json.dumps({"a": 1}), verbose=True)
+    assert '"a": 1' in capsys.readouterr().out

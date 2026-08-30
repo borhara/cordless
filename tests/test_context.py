@@ -46,6 +46,42 @@ def test_interaction_id_and_token_exposed():
     assert captured["token"] == "abc"
 
 
+def test_entitlements_exposed():
+    bot = Cordless()
+    captured = {}
+
+    @bot.command("ping")
+    async def ping(ctx):
+        captured["entitlements"] = ctx.entitlements
+        return await ctx.send("pong")
+
+    bot.handle(
+        {
+            "body": json.dumps(
+                {
+                    "type": 2,
+                    "data": {"name": "ping"},
+                    "entitlements": [{"id": "1", "sku_id": "2", "type": 8}],
+                }
+            )
+        }
+    )
+    assert captured["entitlements"] == [{"id": "1", "sku_id": "2", "type": 8}]
+
+
+def test_entitlements_default_to_empty_list():
+    bot = Cordless()
+    captured = {}
+
+    @bot.command("ping")
+    async def ping(ctx):
+        captured["entitlements"] = ctx.entitlements
+        return await ctx.send("pong")
+
+    bot.handle({"body": json.dumps({"type": 2, "data": {"name": "ping"}})})
+    assert captured["entitlements"] == []
+
+
 # --- send flags ---
 
 

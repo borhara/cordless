@@ -218,6 +218,7 @@ class Context:
     | `ctx.target_user` / `ctx.target_member` | Target `User` / `Member` of a user context menu command |
     | `ctx.target_message` | Target `Message` of a message context menu command |
     | `ctx.interaction_id` / `ctx.token` | The interaction's id and token |
+    | `ctx.entitlements` | List of entitlement dicts the invoking user/guild holds, for gating premium features |
     | `ctx.interaction` | The full raw interaction payload, for anything not surfaced above |
 
     `User`, `Member`, `Message`, `Channel`, and `Attachment` are thin
@@ -249,6 +250,7 @@ class Context:
         self.channel_id = interaction.get("channel_id")
         self.interaction_id = interaction.get("id")
         self.token = interaction.get("token")
+        self.entitlements = interaction.get("entitlements", [])
 
         # Select menu resolved values
         self.values = data.get("values", [])
