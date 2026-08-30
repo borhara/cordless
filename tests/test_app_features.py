@@ -783,6 +783,29 @@ def test_discord_request_retries_once_on_429_then_succeeds(monkeypatch):
     assert blocked == [0.2]
 
 
+def test_discord_request_sleeps_at_least_retry_after_on_429(monkeypatch):
+    """Regression test: retrying before Discord's own retry_after just
+    turns one 429 into a stream of further ones. _client used to cap this
+    wait at 5 seconds via jittered_wait regardless of retry_after; it must
+    use retry_after_wait instead, which never sleeps less than retry_after."""
+    import os
+
+    from cordless._rest import _client
+
+    slept = []
+    monkeypatch.setattr(_client, "sleep", lambda s: slept.append(s))
+    responses = [
+        make_http_error(429, json.dumps({"retry_after": 12.0}).encode()),
+        FakeDiscordResponse({}),
+    ]
+
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
+        bot = Cordless()
+        asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
+
+    assert slept and slept[0] >= 12.0
+
+
 def test_discord_request_passes_the_429_response_headers_to_note_blocked(monkeypatch):
     """note_blocked needs the 429's own headers, not just its body, to learn
     the bucket id a shared-bucket sibling route should also back off on."""

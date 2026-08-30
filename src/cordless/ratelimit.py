@@ -25,6 +25,7 @@ import time
 _TABLE_ENV_VAR = "CORDLESS_RATELIMIT_TABLE"
 _LOW_REMAINING = 1
 _MAX_WAIT = 5.0
+_RETRY_JITTER_CAP = 2.0
 
 _local = {}
 
@@ -48,6 +49,21 @@ def jittered_wait(seconds):
     """
     capped = min(seconds, _MAX_WAIT)
     return capped / 2 + random.uniform(0, capped / 2)
+
+
+def retry_after_wait(retry_after):
+    """How long to sleep before retrying a request Discord just 429'd,
+    given the response's own retry_after. Unlike jittered_wait above, this
+    must never sleep less than retry_after: retrying early just turns one
+    429 into a stream of further ones, which is why jittered_wait's cap
+    isn't reused here. It's meant for proactively avoiding a bucket that
+    isn't confirmed exhausted yet, where a short cap is the right call so
+    a warm container doesn't block its whole request on a guess.
+
+    Jitter is only ever added on top of retry_after, capped so it can't
+    dominate a short one, mainly to spread out concurrent callers that all
+    just got the same retry_after rather than to shorten anyone's wait."""
+    return retry_after + random.uniform(0, min(retry_after, _RETRY_JITTER_CAP))
 
 
 def _key(method, path):

@@ -38,6 +38,27 @@ def test_jittered_wait_caps_at_max_wait_before_jittering():
         assert ratelimit._MAX_WAIT / 2 <= result <= ratelimit._MAX_WAIT
 
 
+def test_retry_after_wait_never_sleeps_less_than_retry_after():
+    """The whole point of this function: retrying before Discord's own
+    retry_after just turns one 429 into a stream of further ones, so unlike
+    jittered_wait, nothing here may cap the result below the input."""
+    for _ in range(200):
+        result = ratelimit.retry_after_wait(60.0)
+        assert result >= 60.0
+
+
+def test_retry_after_wait_adds_bounded_jitter_on_top():
+    for _ in range(200):
+        result = ratelimit.retry_after_wait(60.0)
+        assert 60.0 <= result <= 60.0 + ratelimit._RETRY_JITTER_CAP
+
+
+def test_retry_after_wait_jitter_does_not_dominate_a_short_retry_after():
+    for _ in range(200):
+        result = ratelimit.retry_after_wait(0.5)
+        assert 0.5 <= result <= 1.0
+
+
 def test_disabled_without_table_env_var(monkeypatch):
     monkeypatch.delenv(ratelimit._TABLE_ENV_VAR, raising=False)
     assert ratelimit.enabled() is False
