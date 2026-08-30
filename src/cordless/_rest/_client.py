@@ -120,7 +120,7 @@ def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_bo
                     retry_after = float(json.loads(body_out).get("retry_after", 1))
                 except (TypeError, ValueError, AttributeError):
                     retry_after = 1.0
-                ratelimit.note_blocked(method, path, retry_after)
+                ratelimit.note_blocked(method, path, retry_after, headers=exc.headers)
                 sleep(ratelimit.jittered_wait(retry_after))
                 continue
             raise RuntimeError(f"Discord API error {exc.code}: {body_out.decode(errors='replace')}") from exc

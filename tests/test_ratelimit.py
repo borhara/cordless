@@ -20,8 +20,10 @@ os.environ.setdefault("AWS_DEFAULT_REGION", REGION)
 @pytest.fixture(autouse=True)
 def _reset_local_cache():
     ratelimit._local.clear()
+    ratelimit._route_buckets.clear()
     yield
     ratelimit._local.clear()
+    ratelimit._route_buckets.clear()
 
 
 def test_jittered_wait_stays_within_half_to_full_of_the_capped_value():
@@ -95,6 +97,36 @@ def test_record_response_ignores_missing_headers(monkeypatch):
     monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
     ratelimit.record_response("POST", "/channels/1/messages", {})
     assert ratelimit._local == {}
+
+
+def test_record_response_learns_the_bucket_id(monkeypatch):
+    monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
+    ratelimit.record_response(
+        "PUT",
+        "/channels/1/messages/2/reactions/x/@me",
+        {"X-RateLimit-Remaining": "3", "X-RateLimit-Reset-After": "2", "X-RateLimit-Bucket": "shared-bucket"},
+    )
+    assert ratelimit._route_buckets["PUT /channels/1/messages/2/reactions/x/@me"] == "shared-bucket"
+    assert "shared-bucket" in ratelimit._local
+    assert "PUT /channels/1/messages/2/reactions/x/@me" not in ratelimit._local
+
+
+def test_record_response_shares_state_across_two_routes_reporting_the_same_bucket(monkeypatch):
+    """Discord documents that different routes can share one bucket, e.g. the
+    reaction endpoints. Two routes reporting the same X-RateLimit-Bucket must
+    collapse onto one cached entry, not be tracked as independent quota."""
+    monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
+    ratelimit.record_response(
+        "PUT", "/routeA", {"X-RateLimit-Remaining": "5", "X-RateLimit-Reset-After": "2", "X-RateLimit-Bucket": "shared"}
+    )
+    ratelimit.record_response(
+        "DELETE",
+        "/routeB",
+        {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset-After": "5", "X-RateLimit-Bucket": "shared"},
+    )
+
+    assert list(k for k in ratelimit._local if k == "shared") == ["shared"]
+    assert ratelimit._local["shared"][0] == 0  # routeB's response is the one that stuck
 
 
 def test_wait_if_needed_skips_dynamo_when_locally_clear(monkeypatch):
@@ -193,6 +225,58 @@ def test_wait_if_needed_sleeps_until_shared_block_clears(monkeypatch):
     monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
     ratelimit.wait_if_needed("POST", "/channels/1/messages")
     assert slept and slept[0] <= ratelimit._MAX_WAIT
+
+
+def test_wait_if_needed_waits_on_a_bucket_learned_from_a_different_route(monkeypatch):
+    """Once both routes have each independently revealed they share a bucket,
+    a wait recorded against one of them must be honoured for the other too."""
+    monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
+    import time
+
+    # both routes get introduced to the shared bucket
+    ratelimit.record_response(
+        "GET", "/routeA", {"X-RateLimit-Remaining": "5", "X-RateLimit-Reset-After": "2", "X-RateLimit-Bucket": "shared"}
+    )
+    ratelimit.record_response(
+        "POST",
+        "/routeB",
+        {"X-RateLimit-Remaining": "5", "X-RateLimit-Reset-After": "2", "X-RateLimit-Bucket": "shared"},
+    )
+    # routeA alone then reports the shared bucket is exhausted
+    ratelimit.record_response(
+        "GET", "/routeA", {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset-After": "5", "X-RateLimit-Bucket": "shared"}
+    )
+
+    slept = []
+    monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
+    ratelimit.wait_if_needed("POST", "/routeB")  # never itself saw the exhausted response
+
+    assert slept
+
+
+def test_note_blocked_learns_the_bucket_and_blocks_a_sibling_route(monkeypatch):
+    monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
+    import time
+
+    ratelimit.record_response(
+        "POST",
+        "/routeB",
+        {"X-RateLimit-Remaining": "5", "X-RateLimit-Reset-After": "2", "X-RateLimit-Bucket": "shared"},
+    )
+    ratelimit.note_blocked("GET", "/routeA", 2.0, headers={"X-RateLimit-Bucket": "shared"})
+
+    assert ratelimit._route_buckets["GET /routeA"] == "shared"
+    slept = []
+    monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
+    ratelimit.wait_if_needed("POST", "/routeB")
+    assert slept
+
+
+def test_note_blocked_without_headers_falls_back_to_route_keying(monkeypatch):
+    monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
+    ratelimit.note_blocked("POST", "/channels/1/messages", 2.0)
+    assert ratelimit._local["POST /channels/1/messages"][0] == 0
+    assert ratelimit._route_buckets == {}
 
 
 def test_note_blocked_writes_local_and_shared_state(monkeypatch):

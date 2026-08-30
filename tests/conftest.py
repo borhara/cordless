@@ -20,6 +20,8 @@ class FakeDiscordResponse:
         return False
 
 
-def make_http_error(code, body=b""):
+def make_http_error(code, body=b"", headers=None):
     """A real urllib.error.HTTPError, for simulating a non-2xx urlopen() response."""
-    return urllib.error.HTTPError(url="https://discord.com/api/v10", code=code, msg="", hdrs=None, fp=io.BytesIO(body))
+    return urllib.error.HTTPError(
+        url="https://discord.com/api/v10", code=code, msg="", hdrs=headers, fp=io.BytesIO(body)
+    )

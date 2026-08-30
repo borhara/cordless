@@ -8,6 +8,14 @@ re-requesting a bucket already known to be exhausted. DynamoDB is only
 consulted when that local state is missing (cold start) or already close to
 the limit - not before every request, since most concurrent Lambda
 invocations never touch the same bucket at the same time.
+
+State is keyed by Discord's own X-RateLimit-Bucket id, not by method+path.
+Discord can and does share one bucket across multiple routes (the reaction
+endpoints are a documented example), so two different routes reporting the
+same bucket id collapse onto the same cached state instead of being tracked
+as if they had independent quota. Which bucket a route belongs to is only
+known once a response reveals it, so route_key stays the fallback identity
+for any route this warm container hasn't seen a response for yet.
 """
 
 import os
@@ -19,6 +27,11 @@ _LOW_REMAINING = 1
 _MAX_WAIT = 5.0
 
 _local = {}
+
+# route_key -> bucket id, learned from X-RateLimit-Bucket as responses come in.
+# In-memory only: a fresh route this warm container hasn't seen yet just falls
+# back to being keyed by its own route_key until a response teaches it otherwise.
+_route_buckets = {}
 
 
 def enabled():
@@ -41,6 +54,18 @@ def _key(method, path):
     return f"{method} {path}"
 
 
+def _learn_bucket(route, headers):
+    """Record route's bucket id from a response's X-RateLimit-Bucket, if present."""
+    bucket = headers.get("X-RateLimit-Bucket") if headers else None
+    if bucket:
+        _route_buckets[route] = bucket
+
+
+def _effective_key(route):
+    """route's bucket id if this warm container has learned one, else route itself."""
+    return _route_buckets.get(route, route)
+
+
 def record_response(method, path, headers):
     """Cache the bucket state Discord returned, for next time this route is called."""
     if not enabled():
@@ -51,7 +76,9 @@ def record_response(method, path, headers):
         return
     remaining = int(float(remaining))
     reset_at = time.time() + float(reset_after)
-    key = _key(method, path)
+    route = _key(method, path)
+    _learn_bucket(route, headers)
+    key = _effective_key(route)
     _local[key] = (remaining, reset_at)
     if remaining <= _LOW_REMAINING:
         # publish proactively, so a concurrent invocation can back off before
@@ -63,7 +90,7 @@ def wait_if_needed(method, path):
     """Block until a bucket is clear, if local or shared state says it isn't."""
     if not enabled():
         return
-    key = _key(method, path)
+    key = _effective_key(_key(method, path))
     cached = _local.get(key)
     if cached and cached[0] > _LOW_REMAINING and cached[1] > time.time():
         return  # comfortably clear locally, no need to ask anyone
@@ -77,11 +104,18 @@ def wait_if_needed(method, path):
         time.sleep(wait)
 
 
-def note_blocked(method, path, retry_after):
-    """Record a 429 so other concurrent invocations see the same bucket is blocked."""
+def note_blocked(method, path, retry_after, headers=None):
+    """Record a 429 so other concurrent invocations see the same bucket is blocked.
+
+    headers is the 429 response's own headers, not just its parsed body: a 429
+    is exactly when a shared bucket's siblings most need to learn about it, so
+    this is as much a bucket-learning opportunity as record_response is.
+    """
     if not enabled():
         return
-    key = _key(method, path)
+    route = _key(method, path)
+    _learn_bucket(route, headers)
+    key = _effective_key(route)
     blocked_until = time.time() + retry_after
     _local[key] = (0, blocked_until)
     _put_shared(key, blocked_until)

@@ -766,7 +766,9 @@ def test_discord_request_retries_once_on_429_then_succeeds(monkeypatch):
     from cordless._rest import _client
 
     blocked = []
-    monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: blocked.append(retry_after))
+    monkeypatch.setattr(
+        ratelimit, "note_blocked", lambda method, path, retry_after, headers=None: blocked.append(retry_after)
+    )
     monkeypatch.setattr(_client, "sleep", lambda s: None)
     responses = [
         make_http_error(429, json.dumps({"retry_after": 0.2}).encode()),
@@ -779,6 +781,31 @@ def test_discord_request_retries_once_on_429_then_succeeds(monkeypatch):
 
     assert result == b"{}"
     assert blocked == [0.2]
+
+
+def test_discord_request_passes_the_429_response_headers_to_note_blocked(monkeypatch):
+    """note_blocked needs the 429's own headers, not just its body, to learn
+    the bucket id a shared-bucket sibling route should also back off on."""
+    import os
+
+    import cordless.ratelimit as ratelimit
+    from cordless._rest import _client
+
+    seen_headers = []
+    monkeypatch.setattr(
+        ratelimit, "note_blocked", lambda method, path, retry_after, headers=None: seen_headers.append(headers)
+    )
+    monkeypatch.setattr(_client, "sleep", lambda s: None)
+    responses = [
+        make_http_error(429, json.dumps({"retry_after": 0.2}).encode(), headers={"X-RateLimit-Bucket": "shared"}),
+        FakeDiscordResponse({}),
+    ]
+
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
+        bot = Cordless()
+        asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
+
+    assert seen_headers and seen_headers[0].get("X-RateLimit-Bucket") == "shared"
 
 
 def test_discord_request_retries_once_on_transient_network_error(monkeypatch):
@@ -818,7 +845,9 @@ def test_discord_request_defaults_retry_after_when_429_body_is_not_json(monkeypa
     from cordless._rest import _client
 
     blocked = []
-    monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: blocked.append(retry_after))
+    monkeypatch.setattr(
+        ratelimit, "note_blocked", lambda method, path, retry_after, headers=None: blocked.append(retry_after)
+    )
     monkeypatch.setattr(_client, "sleep", lambda s: None)
     responses = [
         make_http_error(429, b"not json"),
@@ -843,7 +872,9 @@ def test_discord_request_defaults_retry_after_when_body_has_explicit_null(monkey
     from cordless._rest import _client
 
     blocked = []
-    monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: blocked.append(retry_after))
+    monkeypatch.setattr(
+        ratelimit, "note_blocked", lambda method, path, retry_after, headers=None: blocked.append(retry_after)
+    )
     monkeypatch.setattr(_client, "sleep", lambda s: None)
     responses = [
         make_http_error(429, json.dumps({"retry_after": None}).encode()),
@@ -868,7 +899,7 @@ def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(monkeypatch):
 
     waits = []
     monkeypatch.setattr(ratelimit, "wait_if_needed", lambda method, path: waits.append((method, path)))
-    monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: None)
+    monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after, headers=None: None)
     monkeypatch.setattr(_client, "sleep", lambda s: None)
     responses = [
         make_http_error(429, json.dumps({"retry_after": 0.1}).encode()),
