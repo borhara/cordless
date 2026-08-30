@@ -38,6 +38,7 @@ cordless flips this. Your bot is a Lambda function: it only runs when Discord se
 - **One command to ship:** `cordless deploy` handles all the AWS wiring
 - **Local dev:** `cordless dev` runs your bot on localhost with a live public tunnel
 - **Slow commands:** deferred interactions hand off to a worker Lambda so Discord's 3-second limit is never a problem
+- **Full REST API:** every Discord endpoint, typed, reachable as `bot.<verb>()` or directly on the objects you already have (`guild.create_channel()`, `message.reply()`)
 
 ---
 
@@ -86,7 +87,7 @@ Paste the URL into your Discord app's **Interactions Endpoint URL** and your bot
 
 ## Documentation
 
-Full docs at **[cordless.dev](https://cordless.dev)**: commands, options, buttons, modals, deferred interactions, Components v2, scheduled handlers, and the full deploy reference.
+Full docs at **[cordless.dev](https://cordless.dev)**: commands, options, buttons, modals, deferred interactions, Components v2, scheduled handlers, the REST API, and the full deploy reference.
 
 
 > Please note that this is a work in progress, I have found genuine interest in serverless development and wanted an easy way to provision AWS.
