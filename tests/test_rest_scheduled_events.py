@@ -187,7 +187,10 @@ def test_fetch_guild_scheduled_event_exception_users_returns_user_list():
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_EVENT_USER_PAYLOAD])]) as urlopen:
         result = run(scheduled_events.fetch_guild_scheduled_event_exception_users("10", "1", "2"))
 
-    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/scheduled-events/1/2/users"
+    assert (
+        urlopen.call_args.args[0].full_url
+        == "https://discord.com/api/v10/guilds/10/scheduled-events/1/exceptions/2/users"
+    )
     assert result == [GuildScheduledEventUser(dict(_EVENT_USER_PAYLOAD, guild_id="10"))]
 
 
@@ -414,5 +417,8 @@ def test_exception_fetch_users_delegates_to_rest_module():
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_EVENT_USER_PAYLOAD])]) as urlopen:
         result = run(exception.fetch_users())
 
-    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/scheduled-events/1/2/users"
+    assert (
+        urlopen.call_args.args[0].full_url
+        == "https://discord.com/api/v10/guilds/10/scheduled-events/1/exceptions/2/users"
+    )
     assert result == [GuildScheduledEventUser(dict(_EVENT_USER_PAYLOAD, guild_id="10"))]

@@ -174,6 +174,7 @@ async def fetch_guild_scheduled_event_exception_users(
 ):
     qs = _client.query_string(with_member=with_member, limit=limit, before=before, after=after)
     data = await _client.request(
-        "GET", f"/guilds/{guild_id}/scheduled-events/{event_id}/{exception_id}/users{qs}", token=token
+        "GET", f"/guilds/{guild_id}/scheduled-events/{event_id}/exceptions/{exception_id}/users{qs}", token=token
     )
-    return [GuildScheduledEventUser(_with_guild_id(u, guild_id)) for u in data or []]
+    assert data is not None, "GET always returns a body"
+    return [GuildScheduledEventUser(_with_guild_id(u, guild_id)) for u in data]
