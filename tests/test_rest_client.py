@@ -75,9 +75,11 @@ def _request(method="GET", path="/api/v10/gateway", body=None, headers=None):
 
 
 def test_send_reuses_the_same_connection_across_calls(fake_conn):
-    _client._send(_request())
+    with _client._send(_request()) as resp:
+        resp.read()
     first_conn = _client._conn
-    _client._send(_request())
+    with _client._send(_request()) as resp:
+        resp.read()
 
     assert _client._conn is first_conn
     assert len(fake_conn.requests) == 2
@@ -85,7 +87,7 @@ def test_send_reuses_the_same_connection_across_calls(fake_conn):
 
 def test_send_reconnects_when_kept_alive_connection_is_dropped(fake_conn, monkeypatch):
     """A warm connection reused across invocations can get closed by Discord's
-    end between requests - _send must close it, open a fresh one, and retry
+    end between requests. _send must close it, open a fresh one, and retry
     the same request once rather than blowing up."""
     monkeypatch.setattr(_client, "_conn", fake_conn("discord.com"))
     fake_conn.raise_once = OSError("connection reset by peer")
@@ -116,8 +118,38 @@ def test_send_raises_http_error_on_non_2xx(fake_conn):
     assert exc_info.value.read() == b'{"message": "Not Found"}'
 
 
+def test_send_holds_conn_lock_until_response_is_read(fake_conn):
+    """The point of the fix: releasing _conn_lock right after getresponse(),
+    before the body is read, would let a second concurrent _send() send a
+    new request on the same connection while this one's body is still
+    unread, which http.client refuses, corrupting the shared connection."""
+    fake_conn.responses = [(200, b"{}")]
+
+    with _client._send(_request()) as resp:
+        assert _client._conn_lock.locked()
+        resp.read()
+
+    assert not _client._conn_lock.locked()
+
+
+def test_send_holds_conn_lock_until_error_body_is_read(fake_conn):
+    """Same rationale as test_send_holds_conn_lock_until_response_is_read,
+    for the non-2xx path: the caller drains exc.read() outside of any
+    `with` block, so the lock must stay held until that happens too."""
+    fake_conn.responses = [(404, b'{"message": "Not Found"}')]
+
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        _client._send(_request())
+
+    assert _client._conn_lock.locked()
+    exc_info.value.read()
+    assert not _client._conn_lock.locked()
+
+
 def test_send_forwards_method_path_body_and_headers(fake_conn):
-    _client._send(_request(method="POST", path="/api/v10/channels/20/messages", body=b'{"content": "hi"}'))
+    req_obj = _request(method="POST", path="/api/v10/channels/20/messages", body=b'{"content": "hi"}')
+    with _client._send(req_obj) as resp:
+        resp.read()
 
     req = fake_conn.requests[0]
     assert req["method"] == "POST"

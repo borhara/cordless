@@ -44,16 +44,94 @@ _conn = None
 _conn_lock = threading.Lock()
 
 
+class _LockedResponse:
+    """Proxies a 2xx http.client.HTTPResponse but keeps _conn_lock held
+    until the caller is done reading it (released in __exit__). Releasing
+    the lock right after getresponse(), before the body is read, lets a
+    second concurrent caller send a new request on the same shared
+    connection while this response is still unread; http.client refuses
+    that (CannotSendRequest), and the reconnect-on-error path then closes
+    the very socket this response's unread body still depends on."""
+
+    def __init__(self, resp, lock):
+        self._resp = resp
+        self._lock = lock
+
+    @property
+    def status(self):
+        return self._resp.status
+
+    @property
+    def headers(self):
+        return self._resp.headers
+
+    def read(self):
+        return self._resp.read()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        self.close()
+        return False
+
+    def close(self):
+        try:
+            self._resp.close()
+        finally:
+            self._lock.release()
+
+
+class _LockedErrorBody:
+    """fp for the HTTPError raised on a non-2xx response, for the same
+    hold-the-lock-until-read reason as _LockedResponse, but for the error
+    path, where the caller drains the body via exc.read() outside of any
+    `with` block, so the lock is released there instead of via __exit__.
+
+    Needs its own close(), even though nothing here calls it directly:
+    urllib.error.HTTPError is an io.IOBase subclass, so an HTTPError left
+    unread and garbage-collected has its __del__ call close(), which calls
+    fp.close(); without this, that raises AttributeError inside __del__
+    (an "unraisable exception", silently logged rather than propagated)."""
+
+    def __init__(self, resp, lock):
+        self._resp = resp
+        self._lock = lock
+        self._released = False
+
+    def read(self, *args):
+        try:
+            return self._resp.read(*args)
+        finally:
+            self._release()
+
+    def close(self):
+        try:
+            self._resp.close()
+        finally:
+            self._release()
+
+    def _release(self):
+        if not self._released:
+            self._released = True
+            self._lock.release()
+
+
 def _send(req):
     """Send a urllib.request.Request over a persistent HTTPSConnection to
     discord.com instead of urllib.request.urlopen(), which always opens a
     fresh connection per call with no way to keep it warm. A drop-in
     replacement for urlopen() as far as callers can tell: a context manager
     with .read()/.headers on 2xx, raises urllib.error.HTTPError otherwise.
+
+    _conn_lock is held across the whole call, including the caller's read
+    of the response body (via _LockedResponse/_LockedErrorBody below), not
+    just the request()/getresponse() pair; see their docstrings for why.
     """
     global _conn
     headers = dict(req.header_items())
-    with _conn_lock:
+    _conn_lock.acquire()
+    try:
         if _conn is None:
             _conn = http.client.HTTPSConnection(req.host, timeout=_TIMEOUT)
         try:
@@ -65,10 +143,15 @@ def _send(req):
             _conn = http.client.HTTPSConnection(req.host, timeout=_TIMEOUT)
             _conn.request(req.get_method(), req.selector, req.data, headers)
             resp = _conn.getresponse()
+    except BaseException:
+        _conn_lock.release()
+        raise
 
     if resp.status >= 300:
-        raise urllib.error.HTTPError(req.full_url, resp.status, resp.reason, resp.headers, resp)
-    return resp
+        raise urllib.error.HTTPError(
+            req.full_url, resp.status, resp.reason, resp.headers, _LockedErrorBody(resp, _conn_lock)
+        )
+    return _LockedResponse(resp, _conn_lock)
 
 
 def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_body=None, reason=None):
