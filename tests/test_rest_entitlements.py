@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 from conftest import FakeDiscordResponse
 
-from cordless._rest import entitlements, skus
-from cordless._rest.models import SKU, Entitlement
+from cordless._rest import entitlements, skus, subscriptions
+from cordless._rest.models import SKU, Entitlement, Subscription
 from cordless.app import Cordless
 
 _ENV = {"DISCORD_BOT_TOKEN": "tok"}
@@ -23,6 +23,15 @@ _ENTITLEMENT_PAYLOAD = {
     "deleted": False,
 }
 _SKU_PAYLOAD = {"id": "2", "type": 5, "application_id": "3", "name": "shiv's premium", "slug": "shiv-premium"}
+_SUBSCRIPTION_PAYLOAD = {
+    "id": "4",
+    "user_id": "55",
+    "sku_ids": ["2"],
+    "entitlement_ids": ["1"],
+    "current_period_start": "2024-01-01T00:00:00Z",
+    "current_period_end": "2024-02-01T00:00:00Z",
+    "status": 0,
+}
 
 
 def _urlopen(responses):
@@ -133,6 +142,35 @@ def test_fetch_skus_returns_sku_list():
     assert result == [SKU(_SKU_PAYLOAD)]
 
 
+# --- _rest/subscriptions.py ---
+
+
+def test_fetch_sku_subscriptions_returns_subscription_list():
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_SUBSCRIPTION_PAYLOAD])]) as urlopen:
+        result = run(subscriptions.fetch_sku_subscriptions("2"))
+
+    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/skus/2/subscriptions"
+    assert result == [Subscription(_SUBSCRIPTION_PAYLOAD)]
+
+
+def test_fetch_sku_subscriptions_passes_query_params():
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([])]) as urlopen:
+        run(subscriptions.fetch_sku_subscriptions("2", limit=5, user_id="55"))
+
+    url = urlopen.call_args.args[0].full_url
+    assert "limit=5" in url
+    assert "user_id=55" in url
+
+
+def test_fetch_sku_subscription_returns_single_subscription():
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_SUBSCRIPTION_PAYLOAD)]) as urlopen:
+        result = run(subscriptions.fetch_sku_subscription("2", "4", user_id="55"))
+
+    url = urlopen.call_args.args[0].full_url
+    assert url == "https://discord.com/api/v10/skus/2/subscriptions/4?user_id=55"
+    assert isinstance(result, Subscription)
+
+
 # --- bot.<verb>() delegation ---
 
 
@@ -172,6 +210,18 @@ def test_bot_fetch_skus_delegates_to_rest_module():
     bot = Cordless()
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_SKU_PAYLOAD])]):
         assert run(bot.fetch_skus("3")) == [SKU(_SKU_PAYLOAD)]
+
+
+def test_bot_fetch_sku_subscriptions_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_SUBSCRIPTION_PAYLOAD])]):
+        assert run(bot.fetch_sku_subscriptions("2")) == [Subscription(_SUBSCRIPTION_PAYLOAD)]
+
+
+def test_bot_fetch_sku_subscription_delegates_to_rest_module():
+    bot = Cordless()
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_SUBSCRIPTION_PAYLOAD)]):
+        assert isinstance(run(bot.fetch_sku_subscription("2", "4")), Subscription)
 
 
 # --- entitlement.*() object-method delegation ---

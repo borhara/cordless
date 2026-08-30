@@ -27,6 +27,7 @@ from . import (
     soundboard,
     stage_instances,
     stickers,
+    subscriptions,
     templates,
     threads,
     users,
@@ -116,6 +117,12 @@ class RESTMixin:
 
     async def fetch_skus(self, application_id, **kwargs):
         return await skus.fetch_skus(application_id, **kwargs)
+
+    async def fetch_sku_subscriptions(self, sku_id, **kwargs):
+        return await subscriptions.fetch_sku_subscriptions(sku_id, **kwargs)
+
+    async def fetch_sku_subscription(self, sku_id, subscription_id, **kwargs):
+        return await subscriptions.fetch_sku_subscription(sku_id, subscription_id, **kwargs)
 
     # -- users --
     async def fetch_current_user(self, **kwargs):

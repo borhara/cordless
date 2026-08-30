@@ -581,6 +581,13 @@ class SKU(DiscordObject):
     `.slug`, `.flags`."""
 
 
+class Subscription(DiscordObject):
+    """A recurring premium purchase, from `bot.fetch_sku_subscriptions()`.
+    `.id`, `.user_id`, `.sku_ids`, `.entitlement_ids`,
+    `.current_period_start`, `.current_period_end`, `.status`,
+    `.canceled_at`."""
+
+
 class Application(DiscordObject):
     """The bot's own application, from `bot.fetch_application()`/
     `bot.edit_application()`. `.id`, `.name`, `.icon`, `.description`,
