@@ -9,6 +9,8 @@ from .models import FollowedChannel, Invite, MessagePin
 
 
 async def fetch_channel(channel_id, *, token=None):
+    """Fetches a channel by id. Works for a guild channel, a thread, or a
+    DM, whatever channel_id happens to point at."""
     data = await _client.request("GET", f"/channels/{channel_id}", token=token)
     return Channel(data)
 
@@ -95,10 +97,13 @@ async def edit_channel_permissions(channel_id, overwrite_id, *, type, allow=UNSE
 
 
 async def delete_channel_permission(channel_id, overwrite_id, *, reason=None, token=None):
+    """Removes a permission overwrite for a role or member."""
     await _client.request("DELETE", f"/channels/{channel_id}/permissions/{overwrite_id}", token=token, reason=reason)
 
 
 async def fetch_channel_invites(channel_id, *, token=None):
+    """Fetches every invite pointing at this channel, each with its own
+    use count."""
     data = await _client.request("GET", f"/channels/{channel_id}/invites", token=token)
     assert data is not None, "GET always returns a body"
     return [Invite(i) for i in data]
@@ -116,6 +121,8 @@ async def create_channel_invite(
     target_application_id=UNSET,
     token=None,
 ):
+    """Creates an invite to this channel. Leaving max_age and max_uses
+    unset gives an invite that never expires and has no use limit."""
     payload = _client.payload(
         max_age=max_age,
         max_uses=max_uses,
@@ -150,15 +157,20 @@ async def set_voice_channel_status(channel_id, status=None, *, token=None):
 
 
 async def add_group_dm_recipient(channel_id, user_id, access_token, *, nick=UNSET, token=None):
+    """Adds a user to a group DM. access_token is an OAuth2 token for that
+    user with the gdm.join scope, obtained separately, a bot can't add
+    someone to a group DM on its own authority."""
     payload = _client.payload(access_token=access_token, nick=nick)
     await _client.request("PUT", f"/channels/{channel_id}/recipients/{user_id}", payload, token=token)
 
 
 async def remove_group_dm_recipient(channel_id, user_id, *, token=None):
+    """Removes a user from a group DM."""
     await _client.request("DELETE", f"/channels/{channel_id}/recipients/{user_id}", token=token)
 
 
 async def fetch_channel_pins(channel_id, *, before=None, limit=None, token=None):
+    """Fetches the channel's pinned messages, newest first."""
     qs = _client.pagination_qs(before=before, limit=limit)
     data = await _client.request("GET", f"/channels/{channel_id}/messages/pins{qs}", token=token)
     assert data is not None, "GET always returns a body"
@@ -166,10 +178,13 @@ async def fetch_channel_pins(channel_id, *, before=None, limit=None, token=None)
 
 
 async def pin_message(channel_id, message_id, *, token=None):
+    """Pins a message. A channel can only hold 50 pinned messages at
+    once."""
     await _client.request("PUT", f"/channels/{channel_id}/messages/pins/{message_id}", token=token)
 
 
 async def unpin_message(channel_id, message_id, *, token=None):
+    """Unpins a message without deleting it."""
     await _client.request("DELETE", f"/channels/{channel_id}/messages/pins/{message_id}", token=token)
 
 
@@ -177,6 +192,8 @@ async def unpin_message(channel_id, message_id, *, token=None):
 
 
 async def fetch_guild_channels(guild_id, *, token=None):
+    """Fetches every top-level channel in the guild. Threads aren't
+    included, use the thread listing endpoints for those."""
     data = await _client.request("GET", f"/guilds/{guild_id}/channels", token=token)
     assert data is not None, "GET always returns a body"
     return [Channel(c) for c in data]
@@ -207,6 +224,9 @@ async def create_guild_channel(
     reason=None,
     token=None,
 ):
+    """Creates a new channel in the guild. type picks the channel kind
+    (text, voice, category, forum, ...); leave it unset for an ordinary
+    text channel."""
     payload = _client.payload(
         name=name,
         type=type,

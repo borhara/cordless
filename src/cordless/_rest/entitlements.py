@@ -17,6 +17,9 @@ async def fetch_entitlements(
     exclude_deleted=None,
     token=None,
 ):
+    """Fetches the application's entitlements, its record of who owns
+    which SKU, optionally filtered to a user, a guild, or a set of SKU
+    ids."""
     parts = _client.query_parts(
         user_id=user_id,
         sku_ids=",".join(sku_ids) if sku_ids else None,
@@ -39,19 +42,26 @@ async def fetch_entitlements(
 
 
 async def fetch_entitlement(application_id, entitlement_id, *, token=None):
+    """Fetches a single entitlement by id."""
     data = await _client.request("GET", f"/applications/{application_id}/entitlements/{entitlement_id}", token=token)
     return Entitlement(data)
 
 
 async def consume_entitlement(application_id, entitlement_id, *, token=None):
+    """Marks a one-time-purchase consumable entitlement as used. Only
+    valid for consumable SKUs, subscriptions don't need this."""
     await _client.request("POST", f"/applications/{application_id}/entitlements/{entitlement_id}/consume", token=token)
 
 
 async def create_test_entitlement(application_id, sku_id, owner_id, owner_type, *, token=None):
+    """Grants a fake entitlement for testing, without it ever going
+    through Discord's payment flow. owner_type is 1 for a guild
+    subscription or 2 for a user subscription."""
     payload = _client.payload(sku_id=sku_id, owner_id=owner_id, owner_type=owner_type)
     data = await _client.request("POST", f"/applications/{application_id}/entitlements", payload, token=token)
     return Entitlement(data)
 
 
 async def delete_test_entitlement(application_id, entitlement_id, *, token=None):
+    """Deletes a test entitlement created with create_test_entitlement."""
     await _client.request("DELETE", f"/applications/{application_id}/entitlements/{entitlement_id}", token=token)
