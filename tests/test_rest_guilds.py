@@ -638,3 +638,15 @@ def test_guild_fetch_new_member_welcome_delegates_to_rest_module():
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/new-member-welcome"
     assert isinstance(result, NewMemberWelcome)
+
+
+def test_guild_fetch_join_requests_delegates_to_rest_module():
+    from cordless._rest.models import GuildJoinRequest
+
+    guild = Guild({"id": "10"})
+    payload = {"total": 1, "guild_join_requests": [{"id": "1", "guild_id": "10", "user_id": "55"}]}
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+        result = run(guild.fetch_join_requests())
+
+    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/requests"
+    assert result == [GuildJoinRequest({"id": "1", "guild_id": "10", "user_id": "55"})]

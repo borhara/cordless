@@ -18,6 +18,7 @@ from . import (
     channels,
     emojis,
     entitlements,
+    guild_requests,
     guilds,
     invites,
     members,
@@ -515,6 +516,13 @@ class RESTMixin:
 
     async def fetch_guild_new_member_welcome(self, guild_id, **kwargs):
         return await guilds.fetch_guild_new_member_welcome(guild_id, **kwargs)
+
+    # -- guild join requests --
+    async def fetch_guild_join_requests(self, guild_id, **kwargs):
+        return await guild_requests.fetch_guild_join_requests(guild_id, **kwargs)
+
+    async def edit_guild_join_request(self, guild_id, request_id, action, **kwargs):
+        return await guild_requests.edit_guild_join_request(guild_id, request_id, action, **kwargs)
 
     # -- channels --
     async def fetch_channel(self, channel_id, **kwargs):

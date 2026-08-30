@@ -203,6 +203,36 @@ class NewMemberWelcome(DiscordObject):
     `.welcome_message`, `.new_member_actions`, `.resource_channels`."""
 
 
+class GuildJoinRequest(DiscordObject):
+    """A pending membership screening application, from
+    `guild.fetch_join_requests()`. `.id`, `.guild_id`, `.user_id`,
+    `.application_status`, `.form_responses`."""
+
+    @property
+    def user(self):
+        """The applicant's `User`, or `None` if not included."""
+        from ..models import User
+
+        user_data = self._data.get("user")
+        return User(user_data) if user_data is not None else None
+
+    async def approve(self, **kwargs):
+        """Approve this join request. Returns the updated
+        `GuildJoinRequest`. Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        from . import guild_requests
+
+        return await guild_requests.edit_guild_join_request(self.guild_id, self.id, "APPROVED", **kwargs)
+
+    async def reject(self, *, rejection_reason=None, **kwargs):
+        """Reject this join request. Returns the updated `GuildJoinRequest`.
+        Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        from . import guild_requests
+
+        return await guild_requests.edit_guild_join_request(
+            self.guild_id, self.id, "REJECTED", rejection_reason=rejection_reason, **kwargs
+        )
+
+
 class IncidentsData(DiscordObject):
     """From `guild.edit_incident_actions()`. `.invites_disabled_until`,
     `.dms_disabled_until`, `.dm_spam_detected_at`, `.raid_detected_at`."""

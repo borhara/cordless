@@ -892,6 +892,14 @@ class Guild(DiscordObject):
 
         return await guilds.fetch_guild_new_member_welcome(self.id, **kwargs)
 
+    async def fetch_join_requests(self, **kwargs):
+        """List this guild's pending membership screening join requests, as
+        a list of `GuildJoinRequest`. Requires `DISCORD_BOT_TOKEN` and
+        `MANAGE_GUILD`."""
+        from ._rest import guild_requests
+
+        return await guild_requests.fetch_guild_join_requests(self.id, **kwargs)
+
     async def fetch_member(self, user_id, **kwargs):
         """Fetch a single guild `Member` by user id. Requires `DISCORD_BOT_TOKEN`."""
         from ._rest import members
