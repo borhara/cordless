@@ -66,10 +66,7 @@ def parse_webhook_url(url):
         # casing) would otherwise land its live token in whatever logs
         # this exception surfaces to (e.g. Lambda's default unhandled
         # exception logging, since this isn't a CordlessError app.py catches).
-        raise ValueError(
-            "Not a Discord webhook URL: expected something matching "
-            "discord.com/api/webhooks/<id>/<token>"
-        )
+        raise ValueError("Not a Discord webhook URL: expected something matching discord.com/api/webhooks/<id>/<token>")
     return match.group(1), match.group(2)
 
 
