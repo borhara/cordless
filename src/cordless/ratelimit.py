@@ -20,6 +20,7 @@ for any route this warm container hasn't seen a response for yet.
 
 import os
 import random
+import re
 import time
 
 _TABLE_ENV_VAR = "CORDLESS_RATELIMIT_TABLE"
@@ -77,9 +78,35 @@ def _learn_bucket(route, headers):
         _route_buckets[route] = bucket
 
 
-def _effective_key(route):
-    """route's bucket id if this warm container has learned one, else route itself."""
-    return _route_buckets.get(route, route)
+# Discord's rate limit buckets aren't inclusive of the major resource a
+# route acts on: two different channels (or guilds, or webhooks) can report
+# the exact same X-RateLimit-Bucket id while Discord still tracks their
+# quotas independently server-side. Matches the leading /channels/<id>,
+# /guilds/<id>, or /webhooks/<id> segment, since that's the part of the
+# path a shared bucket id must still be kept separate by.
+_MAJOR_PARAM_RE = re.compile(r"^/(channels|guilds|webhooks)/[^/]+")
+
+
+def _major_resource(path):
+    match = _MAJOR_PARAM_RE.match(path)
+    return match.group(0) if match else ""
+
+
+def _effective_key(route, path):
+    """route's bucket id, combined with path's major resource, if this warm
+    container has learned a bucket id for route; otherwise route itself
+    (which already encodes everything needed, major resource included).
+
+    The major resource has to ride along with the bucket id: without it, a
+    route for channel 123 and a route for channel 456 that happen to report
+    the same bucket id would collapse onto one cached entry and each
+    incorrectly throttle the other, even though Discord itself tracks their
+    quotas separately."""
+    bucket = _route_buckets.get(route)
+    if bucket is None:
+        return route
+    major = _major_resource(path)
+    return f"{bucket}:{major}" if major else bucket
 
 
 def record_response(method, path, headers):
@@ -94,7 +121,7 @@ def record_response(method, path, headers):
     reset_at = time.time() + float(reset_after)
     route = _key(method, path)
     _learn_bucket(route, headers)
-    key = _effective_key(route)
+    key = _effective_key(route, path)
     _local[key] = (remaining, reset_at)
     if remaining <= _LOW_REMAINING:
         # publish proactively, so a concurrent invocation can back off before
@@ -106,7 +133,7 @@ def wait_if_needed(method, path):
     """Block until a bucket is clear, if local or shared state says it isn't."""
     if not enabled():
         return
-    key = _effective_key(_key(method, path))
+    key = _effective_key(_key(method, path), path)
     cached = _local.get(key)
     if cached and cached[0] > _LOW_REMAINING and cached[1] > time.time():
         return  # comfortably clear locally, no need to ask anyone
@@ -131,7 +158,7 @@ def note_blocked(method, path, retry_after, headers=None):
         return
     route = _key(method, path)
     _learn_bucket(route, headers)
-    key = _effective_key(route)
+    key = _effective_key(route, path)
     blocked_until = time.time() + retry_after
     _local[key] = (0, blocked_until)
     _put_shared(key, blocked_until)

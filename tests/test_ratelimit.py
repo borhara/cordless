@@ -128,8 +128,50 @@ def test_record_response_learns_the_bucket_id(monkeypatch):
         {"X-RateLimit-Remaining": "3", "X-RateLimit-Reset-After": "2", "X-RateLimit-Bucket": "shared-bucket"},
     )
     assert ratelimit._route_buckets["PUT /channels/1/messages/2/reactions/x/@me"] == "shared-bucket"
-    assert "shared-bucket" in ratelimit._local
+    # keyed by bucket id + major resource (/channels/1), not the bucket id alone
+    assert "shared-bucket:/channels/1" in ratelimit._local
     assert "PUT /channels/1/messages/2/reactions/x/@me" not in ratelimit._local
+
+
+def test_record_response_does_not_collapse_the_same_bucket_across_different_channels(monkeypatch):
+    """Discord documents that X-RateLimit-Bucket is non-inclusive of the
+    major resource (channel_id/guild_id/webhook_id): two different channels
+    can report the same bucket id while Discord still tracks their quotas
+    independently server-side. Collapsing them onto one cached entry would
+    make one channel's exhausted bucket incorrectly throttle the other."""
+    monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
+    ratelimit.record_response(
+        "POST",
+        "/channels/123/messages",
+        {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset-After": "5", "X-RateLimit-Bucket": "same-bucket"},
+    )
+    ratelimit.record_response(
+        "POST",
+        "/channels/456/messages",
+        {"X-RateLimit-Remaining": "5", "X-RateLimit-Reset-After": "5", "X-RateLimit-Bucket": "same-bucket"},
+    )
+
+    assert ratelimit._local["same-bucket:/channels/123"][0] == 0
+    assert ratelimit._local["same-bucket:/channels/456"][0] == 5
+
+
+def test_wait_if_needed_does_not_throttle_a_different_channel_sharing_a_bucket(monkeypatch):
+    monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
+    monkeypatch.setattr(ratelimit, "_shared_block", lambda key: None)
+
+    ratelimit.record_response(
+        "POST",
+        "/channels/123/messages",
+        {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset-After": "5", "X-RateLimit-Bucket": "same-bucket"},
+    )
+    slept = []
+    import time
+
+    monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
+
+    ratelimit.wait_if_needed("POST", "/channels/456/messages")  # different channel, same bucket
+
+    assert slept == []
 
 
 def test_record_response_shares_state_across_two_routes_reporting_the_same_bucket(monkeypatch):
