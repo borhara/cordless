@@ -8,6 +8,7 @@ import pytest
 from moto import mock_aws
 
 import cordless.ratelimit as ratelimit
+from cordless.errors import DiscordHTTPError
 
 REGION = "us-east-1"
 TABLE = "my-bot-ratelimit"
@@ -221,28 +222,49 @@ def test_wait_if_needed_checks_dynamo_on_cold_start(monkeypatch):
     assert calls == ["POST /channels/1/messages"]
 
 
-def test_wait_if_needed_caps_a_confirmed_block_higher_than_a_predicted_one(monkeypatch):
-    """A block note_blocked recorded from a real 429 deserves more trust
-    than one record_response merely predicted from a low remaining count,
-    so it gets a higher (but still bounded) cap: _CONFIRMED_MAX_WAIT rather
-    than _MAX_WAIT. Both stay capped, not uncapped, since wait_if_needed
-    runs before the request is even sent, inside whatever timeout budget
-    the caller has, and fully honouring a long block risks the invocation
-    being killed mid-sleep with no response ever sent at all."""
+def test_wait_if_needed_fully_honours_a_confirmed_block_within_the_cap(monkeypatch):
+    """A block note_blocked recorded from a real 429 is real, Discord-sourced
+    knowledge, not a guess, so within _CONFIRMED_MAX_WAIT, wait_if_needed must
+    never sleep less than the confirmed remaining time (same guarantee as
+    retry_after_wait gives the direct 429 path), rather than under-waiting
+    and risking an avoidable second 429."""
     monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
     import time
 
-    monkeypatch.setattr(random, "uniform", lambda a, b: b)  # deterministic: top of the jitter range
+    slept = []
+    monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
+
+    ratelimit.note_blocked("POST", "/channels/1/messages", ratelimit._CONFIRMED_MAX_WAIT - 1)
+    ratelimit.wait_if_needed("POST", "/channels/1/messages")
+
+    assert slept and slept[0] >= ratelimit._CONFIRMED_MAX_WAIT - 1
+
+
+def test_wait_if_needed_raises_instead_of_under_waiting_a_long_confirmed_block(monkeypatch):
+    """The other half of the guarantee above: wait_if_needed runs before the
+    request is even sent, inside whatever timeout budget the caller has (the
+    default main handler's is 10s), so a confirmed block longer than
+    _CONFIRMED_MAX_WAIT can't be fully honoured safely either. Rather than
+    silently falling back to a short, under-honest wait and sending into a
+    bucket already known to still be exhausted, it must raise a clear,
+    typed error and never attempt the request at all."""
+    monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
+    import time
+
     slept = []
     monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
 
     ratelimit.note_blocked("POST", "/channels/1/messages", 60.0)
-    ratelimit.wait_if_needed("POST", "/channels/1/messages")
+    with pytest.raises(DiscordHTTPError, match="429"):
+        ratelimit.wait_if_needed("POST", "/channels/1/messages")
 
-    assert slept and slept[0] == pytest.approx(ratelimit._CONFIRMED_MAX_WAIT)
+    assert slept == []  # never slept at all, let alone sent the request
 
 
 def test_wait_if_needed_caps_a_predicted_block_at_the_lower_default(monkeypatch):
+    """A merely predicted block (record_response, not yet confirmed by an
+    actual 429) never raises, since it's just a guess from a low remaining
+    count, so it only ever gets a short, capped, best-effort wait."""
     monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
     import time
 

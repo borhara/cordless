@@ -23,21 +23,24 @@ import random
 import re
 import time
 
+from . import errors
+
 _TABLE_ENV_VAR = "CORDLESS_RATELIMIT_TABLE"
 _LOW_REMAINING = 1
 _MAX_WAIT = 5.0
 # wait_if_needed runs before a request is even sent, inside whatever timeout
 # budget the caller has, and the default main handler's is 10s (see
-# _rest/_client.py's _MAX_RETRY_SECONDS comment), so this can't just honour
-# a confirmed block's real remaining time uncapped the way retry_after_wait
-# does for a 429 hit directly: sleeping past the caller's own timeout kills
-# the invocation mid-wait with no response ever sent, worse than the one
-# avoidable 429 a shorter wait might still risk (which the already-correct
-# reactive path then handles properly). This cap is still meaningfully
-# higher than _MAX_WAIT's, since a confirmed block deserves more trust than
-# a merely-predicted one, while leaving headroom under a 10s timeout for the
-# request itself once woken.
-_CONFIRMED_MAX_WAIT = 8.0
+# _rest/_client.py's _MAX_RETRY_SECONDS comment). A confirmed block (see
+# note_blocked) is real, Discord-sourced knowledge that sending right now
+# gets rejected, so it's always either fully honoured or not attempted at
+# all, never under-waited and sent anyway, which would just trade a
+# guaranteed clear error for a maybe-avoidable 429. This is the line: below
+# it, wait_if_needed sleeps the confirmed block's actual remaining time
+# (never less, same as retry_after_wait); at or above it, sleeping that long
+# risks the caller's own timeout killing the invocation mid-wait with no
+# response ever sent, so it raises instead of blocking that long on a guess
+# about how much timeout budget is left.
+_CONFIRMED_MAX_WAIT = 6.0
 _RETRY_JITTER_CAP = 2.0
 
 _local = {}
@@ -145,7 +148,15 @@ def record_response(method, path, headers):
 
 
 def wait_if_needed(method, path):
-    """Block until a bucket is clear, if local or shared state says it isn't."""
+    """Block until a bucket is clear, if local or shared state says it isn't.
+
+    Raises DiscordHTTPError(429, ...) instead of blocking, without sending
+    anything, if a confirmed block's remaining time exceeds
+    _CONFIRMED_MAX_WAIT (see that constant's comment for why). A merely
+    predicted block (not yet confirmed by an actual 429) never raises; it
+    only ever gets a short, capped, best-effort wait, since the prediction
+    itself might already be stale or wrong.
+    """
     if not enabled():
         return
     key = _effective_key(_key(method, path), path)
@@ -159,8 +170,13 @@ def wait_if_needed(method, path):
     if not candidates:
         return
     blocked_until, confirmed = max(candidates, key=lambda c: c[0])
-    cap = _CONFIRMED_MAX_WAIT if confirmed else _MAX_WAIT
-    wait = jittered_wait(blocked_until - time.time(), cap=cap)
+    remaining = blocked_until - time.time()
+
+    if confirmed and remaining > _CONFIRMED_MAX_WAIT:
+        raise errors.discord_http_error(
+            429, f"cached rate limit on {key} has {remaining:.1f}s left, not attempting the request"
+        )
+    wait = retry_after_wait(remaining) if confirmed else jittered_wait(remaining)
     print(f"[cordless] rate limit: waiting {wait:.2f}s on {key}")
     time.sleep(wait)
 
