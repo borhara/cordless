@@ -986,6 +986,36 @@ def test_discord_request_gives_up_after_retry_budget_exhausted(monkeypatch):
         asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
 
+def test_discord_request_does_not_sleep_past_the_retry_deadline(monkeypatch):
+    """Regression test: the deadline check must account for the upcoming
+    sleep, not just the current time when the check runs, otherwise a 429
+    arriving close to the deadline with a large retry_after would sleep
+    well past _MAX_RETRY_SECONDS before giving up."""
+    import os
+
+    from cordless._rest import _client
+
+    slept = []
+    monkeypatch.setattr(_client, "sleep", lambda s: slept.append(s))
+
+    # first call sets deadline = 0 + _MAX_RETRY_SECONDS (30); second call, at
+    # the 429 check, is 25, comfortably before the deadline on its own, but
+    # a 20s retry_after would still land well past it
+    times = iter([0.0, 25.0])
+    monkeypatch.setattr(_client, "monotonic", lambda: next(times))
+    responses = [make_http_error(429, json.dumps({"retry_after": 20.0}).encode())]
+
+    with (
+        patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
+        _urlopen(responses),
+        pytest.raises(DiscordHTTPError, match="429"),
+    ):
+        bot = Cordless()
+        asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
+
+    assert slept == []
+
+
 # --- load_extension ---
 
 

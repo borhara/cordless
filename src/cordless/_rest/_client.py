@@ -212,7 +212,7 @@ def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_bo
                 return data
         except urllib.error.HTTPError as exc:
             body_out = exc.read()
-            if exc.code == 429 and monotonic() < deadline:
+            if exc.code == 429:
                 try:
                     # .get(..., 1) only covers a missing key - an explicit
                     # {"retry_after": null} body still reaches float(None),
@@ -220,9 +220,18 @@ def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_bo
                     retry_after = float(json.loads(body_out).get("retry_after", 1))
                 except (TypeError, ValueError, AttributeError):
                     retry_after = 1.0
+                # note_blocked runs even if we're about to give up ourselves,
+                # so a concurrent invocation sharing this bucket still learns
+                # about it instead of finding out the hard way
                 ratelimit.note_blocked(method, path, retry_after, headers=exc.headers)
-                sleep(ratelimit.retry_after_wait(retry_after))
-                continue
+                wait = ratelimit.retry_after_wait(retry_after)
+                # checked against the wait, not just the current time: a
+                # 429 arriving near the deadline with a long retry_after
+                # must not sleep past it just because the deadline hadn't
+                # technically passed yet when the check ran
+                if monotonic() + wait < deadline:
+                    sleep(wait)
+                    continue
             raise errors.discord_http_error(
                 exc.code, body_out.decode(errors="replace"), body=body_out, headers=exc.headers
             ) from exc
