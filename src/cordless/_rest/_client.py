@@ -38,6 +38,13 @@ _MAX_RETRY_SECONDS = 30.0
 
 _TIMEOUT = 10
 
+# Methods safe to automatically retry after a network error without risking
+# a duplicate side effect: repeating them is a no-op or lands on the same
+# end state either way. POST and PATCH aren't included, since Discord gives
+# no guarantee that resending one is safe if the first attempt actually
+# reached Discord and was processed before the connection dropped.
+_IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "PUT", "DELETE"})
+
 # Kept open across invocations in a warm Lambda container, so most requests
 # skip the TLS handshake instead of paying for it every time - same pattern
 # as webhook.py/defer.py's own kept-alive connections.
@@ -139,9 +146,16 @@ def _send(req):
             _conn.request(req.get_method(), req.selector, req.data, headers)
             resp = _conn.getresponse()
         except (http.client.HTTPException, OSError):
-            # the other end closed the kept-alive connection, reconnect once
+            # the other end closed the kept-alive connection. Always drop it
+            # and open a fresh one so the next call doesn't inherit a dead
+            # socket, but only actually resend this request for idempotent
+            # methods: if Discord already received and processed it before
+            # the connection died, resending a POST/PATCH would duplicate
+            # whatever it did (e.g. sending the same message twice)
             _conn.close()
             _conn = http.client.HTTPSConnection(req.host, timeout=_TIMEOUT)
+            if req.get_method() not in _IDEMPOTENT_METHODS:
+                raise
             _conn.request(req.get_method(), req.selector, req.data, headers)
             resp = _conn.getresponse()
     except BaseException:
@@ -213,10 +227,12 @@ def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_bo
                 exc.code, body_out.decode(errors="replace"), body=body_out, headers=exc.headers
             ) from exc
         except OSError:
-            # a transient network blip (connection reset, dropped keep-alive, ...),
-            # not an HTTP-level error, retry once, same as webhook.py/defer.py do
-            # for their kept-alive connections.
-            if network_retried:
+            # a transient network blip that hit after _send() already handed
+            # back a response object, e.g. the connection dropped while
+            # reading the body, after the status/headers had already come
+            # through. Same idempotency reasoning as _send()'s own retry
+            # applies here too: only safe to resend for idempotent methods.
+            if network_retried or method not in _IDEMPOTENT_METHODS:
                 raise
             network_retried = True
             continue

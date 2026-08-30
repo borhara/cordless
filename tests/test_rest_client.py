@@ -100,6 +100,22 @@ def test_send_reconnects_when_kept_alive_connection_is_dropped(fake_conn, monkey
     assert len(fake_conn.requests) == 1  # only the retried request actually went through
 
 
+def test_send_does_not_resend_a_post_when_connection_is_dropped(fake_conn, monkeypatch):
+    """Same broken-connection scenario as the GET case above, but for a
+    POST: _send must not resend it, since Discord may have already received
+    and processed the first attempt before the connection died, and
+    resending would risk duplicating whatever it did."""
+    monkeypatch.setattr(_client, "_conn", fake_conn("discord.com"))
+    fake_conn.raise_once = OSError("connection reset by peer")
+
+    with pytest.raises(OSError):
+        _client._send(_request(method="POST"))
+
+    assert fake_conn.close_calls == 1  # the broken connection is still dropped
+    assert len(fake_conn.requests) == 0  # but the POST itself is never resent
+    assert not _client._conn_lock.locked()  # and the lock isn't leaked on this path
+
+
 def test_send_returns_readable_response_on_success(fake_conn):
     fake_conn.responses = [(200, b'{"id": "1"}')]
 

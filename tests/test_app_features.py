@@ -835,14 +835,15 @@ def test_discord_request_retries_once_on_transient_network_error(monkeypatch):
     """A transient network blip (connection reset, dropped keep-alive, ...)
     raises a plain OSError out of urlopen(), distinct from the HTTPError 429
     handling above: _request_raw_sync must retry it once rather than
-    aborting the request outright."""
+    aborting the request outright, for an idempotent method (GET) where
+    repeating the request can't duplicate a side effect."""
     import os
 
     responses = [OSError("connection reset by peer"), FakeDiscordResponse({})]
 
     with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
         bot = Cordless()
-        result = asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
+        result = asyncio.run(bot._discord_request("GET", "/channels/123/messages", None))
 
     assert result == b"{}"
 
@@ -851,6 +852,25 @@ def test_discord_request_only_retries_network_error_once(monkeypatch):
     import os
 
     responses = [OSError("connection reset by peer"), OSError("connection reset by peer")]
+
+    with (
+        patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
+        _urlopen(responses),
+        pytest.raises(OSError),
+    ):
+        bot = Cordless()
+        asyncio.run(bot._discord_request("GET", "/channels/123/messages", None))
+
+
+def test_discord_request_does_not_retry_a_post_after_network_error(monkeypatch):
+    """Regression test: unlike GET above, a POST must not be retried after a
+    network error. Discord may have already received and processed it
+    before the connection dropped, so resending it risks a duplicate side
+    effect (e.g. sending the same message twice) that the caller has no way
+    to detect or undo."""
+    import os
+
+    responses = [OSError("connection reset by peer"), FakeDiscordResponse({})]
 
     with (
         patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
