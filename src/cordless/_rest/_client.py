@@ -38,11 +38,21 @@ _MAX_RETRY_SECONDS = 30.0
 
 _TIMEOUT = 10
 
-# Methods safe to automatically retry after a network error without risking
-# a duplicate side effect: repeating them is a no-op or lands on the same
-# end state either way. POST and PATCH aren't included, since Discord gives
-# no guarantee that resending one is safe if the first attempt actually
-# reached Discord and was processed before the connection dropped.
+# Default idempotency-by-method for automatic retry after a network error:
+# repeating one of these can't risk a duplicate side effect, since it's a
+# no-op or lands on the same end state either way. POST and PATCH aren't
+# included, since Discord gives no guarantee that resending one is safe if
+# the first attempt actually reached Discord and was processed before the
+# connection dropped.
+#
+# This is only a default, not a guarantee HTTP semantics enforce: it's
+# verified true for every PUT _rest/*.py currently wraps (bulk command
+# overwrite, pin/react/join/add-member-ish "ends up in state X" calls,
+# sync template, ...), not something Discord's docs promise for every verb
+# it might ever label PUT. A new PUT-based endpoint isn't automatically
+# safe just because it's PUT: check that repeating it converges to the same
+# state before trusting this default, and if it doesn't, pass
+# idempotent=False explicitly at that call site (see request()/request_raw()).
 _IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "PUT", "DELETE"})
 
 # Kept open across invocations in a warm Lambda container, so most requests
@@ -125,12 +135,17 @@ class _LockedErrorBody:
             self._lock.release()
 
 
-def _send(req):
+def _send(req, idempotent):
     """Send a urllib.request.Request over a persistent HTTPSConnection to
     discord.com instead of urllib.request.urlopen(), which always opens a
     fresh connection per call with no way to keep it warm. A drop-in
     replacement for urlopen() as far as callers can tell: a context manager
     with .read()/.headers on 2xx, raises urllib.error.HTTPError otherwise.
+
+    idempotent is the caller's already-resolved answer (see
+    _request_raw_sync) to whether resending req is safe; _send doesn't
+    infer it from req's method itself, so it stays correct for a caller
+    that overrode the default.
 
     _conn_lock is held across the whole call, including the caller's read
     of the response body (via _LockedResponse/_LockedErrorBody below), not
@@ -148,13 +163,13 @@ def _send(req):
         except (http.client.HTTPException, OSError):
             # the other end closed the kept-alive connection. Always drop it
             # and open a fresh one so the next call doesn't inherit a dead
-            # socket, but only actually resend this request for idempotent
-            # methods: if Discord already received and processed it before
-            # the connection died, resending a POST/PATCH would duplicate
-            # whatever it did (e.g. sending the same message twice)
+            # socket, but only actually resend this request when it's safe
+            # to: if Discord already received and processed it before the
+            # connection died, resending a non-idempotent request would
+            # duplicate whatever it did (e.g. sending the same message twice)
             _conn.close()
             _conn = http.client.HTTPSConnection(req.host, timeout=_TIMEOUT)
-            if req.get_method() not in _IDEMPOTENT_METHODS:
+            if not idempotent:
                 raise
             _conn.request(req.get_method(), req.selector, req.data, headers)
             resp = _conn.getresponse()
@@ -171,7 +186,7 @@ def _send(req):
     return _LockedResponse(resp, _conn_lock)
 
 
-def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_body=None, reason=None):
+def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_body=None, reason=None, idempotent=None):
     """The actual blocking urllib work; only ever run inside an executor thread.
 
     raw_body is an escape hatch for the handful of endpoints that don't use
@@ -181,7 +196,13 @@ def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_bo
 
     reason sets X-Audit-Log-Reason, shown in the guild's audit log next to
     the resulting entry: only meaningful on endpoints Discord actually
-    audit-logs, but harmless to send otherwise."""
+    audit-logs, but harmless to send otherwise.
+
+    idempotent overrides _IDEMPOTENT_METHODS' default safe-to-retry-after-
+    a-network-error guess for method. Only needed for the rare endpoint
+    where the default guess is wrong for that specific call, e.g. a PUT
+    that isn't actually idempotent (see _IDEMPOTENT_METHODS' docstring)."""
+    safe_to_retry = method in _IDEMPOTENT_METHODS if idempotent is None else idempotent
     token = token or os.environ["DISCORD_BOT_TOKEN"]
     if raw_body is not None:
         body, content_type = raw_body
@@ -206,7 +227,7 @@ def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_bo
         ratelimit.wait_if_needed(method, path)
         req = urllib.request.Request(url, data=body, headers=headers, method=method)
         try:
-            with _send(req) as resp:
+            with _send(req, safe_to_retry) as resp:
                 data = resp.read()
                 ratelimit.record_response(method, path, resp.headers)
                 return data
@@ -240,23 +261,26 @@ def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_bo
             # back a response object, e.g. the connection dropped while
             # reading the body, after the status/headers had already come
             # through. Same idempotency reasoning as _send()'s own retry
-            # applies here too: only safe to resend for idempotent methods.
-            if network_retried or method not in _IDEMPOTENT_METHODS:
+            # applies here too: only safe to resend when safe_to_retry.
+            if network_retried or not safe_to_retry:
                 raise
             network_retried = True
             continue
 
 
-async def request_raw(method, path, payload=None, files=None, token=None, raw_body=None, reason=None):
-    """Make an authenticated Discord API call, retrying 429s. Returns the raw response body."""
+async def request_raw(method, path, payload=None, files=None, token=None, raw_body=None, reason=None, idempotent=None):
+    """Make an authenticated Discord API call, retrying 429s. Returns the raw
+    response body. See _request_raw_sync's docstring for idempotent."""
     return await asyncio.get_event_loop().run_in_executor(
-        None, _request_raw_sync, method, path, payload, files, token, raw_body, reason
+        None, _request_raw_sync, method, path, payload, files, token, raw_body, reason, idempotent
     )
 
 
-async def request(method, path, payload=None, files=None, token=None, raw_body=None, reason=None):
+async def request(method, path, payload=None, files=None, token=None, raw_body=None, reason=None, idempotent=None):
     """Like request_raw, but parses the JSON response body (None for an empty body)."""
-    data = await request_raw(method, path, payload, files, token=token, raw_body=raw_body, reason=reason)
+    data = await request_raw(
+        method, path, payload, files, token=token, raw_body=raw_body, reason=reason, idempotent=idempotent
+    )
     return json.loads(data) if data else None
 
 

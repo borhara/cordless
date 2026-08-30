@@ -633,7 +633,7 @@ def test_raw_dict_uikit_component_sets_flag():
 def _captured_request(coro):
     captured = {}
 
-    def fake_request(method, path, payload=None, files=None, token=None, raw_body=None, reason=None):
+    def fake_request(method, path, payload=None, files=None, token=None, raw_body=None, reason=None, idempotent=None):
         captured["payload"] = payload
         captured["files"] = files
         return b"{}"
@@ -879,6 +879,40 @@ def test_discord_request_does_not_retry_a_post_after_network_error(monkeypatch):
     ):
         bot = Cordless()
         asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
+
+
+def test_request_raw_idempotent_override_prevents_retry_for_a_normally_safe_method():
+    """idempotent=False must override _IDEMPOTENT_METHODS' default GET-is-
+    safe guess, for the rare GET-shaped call a caller knows isn't actually
+    safe to repeat."""
+    import os
+
+    from cordless._rest import _client
+
+    responses = [OSError("connection reset by peer"), FakeDiscordResponse({})]
+
+    with (
+        patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
+        _urlopen(responses),
+        pytest.raises(OSError),
+    ):
+        asyncio.run(_client.request_raw("GET", "/gateway", idempotent=False))
+
+
+def test_request_raw_idempotent_override_allows_retry_for_a_normally_unsafe_method():
+    """The flip side: idempotent=True must override the default POST-is-
+    unsafe guess, for an endpoint the caller knows converges to the same
+    state regardless of how many times it's called."""
+    import os
+
+    from cordless._rest import _client
+
+    responses = [OSError("connection reset by peer"), FakeDiscordResponse({})]
+
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
+        result = asyncio.run(_client.request_raw("POST", "/gateway", idempotent=True))
+
+    assert result == b"{}"
 
 
 def test_discord_request_defaults_retry_after_when_429_body_is_not_json(monkeypatch):
