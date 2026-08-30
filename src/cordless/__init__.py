@@ -35,7 +35,7 @@ from .errors import (
     UnknownModalError,
     UnsupportedInteractionError,
 )
-from .models import Attachment, Channel, Member, Message, Permissions, Role, User
+from .models import Attachment, Channel, Guild, Member, Message, Permissions, Role, User
 
 __all__ = [
     "Cordless",
@@ -63,6 +63,7 @@ __all__ = [
     # Models
     "Attachment",
     "Channel",
+    "Guild",
     "Member",
     "Message",
     "Permissions",
