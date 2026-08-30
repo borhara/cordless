@@ -227,17 +227,31 @@ def test_wait_if_needed_fully_honours_a_confirmed_block_within_the_cap(monkeypat
     knowledge, not a guess, so within _CONFIRMED_MAX_WAIT, wait_if_needed must
     never sleep less than the confirmed remaining time (same guarantee as
     retry_after_wait gives the direct 429 path), rather than under-waiting
-    and risking an avoidable second 429."""
+    and risking an avoidable second 429.
+
+    Both _shared_block and _put_shared are mocked out, matching the sibling
+    tests below that also call note_blocked/wait_if_needed without the
+    dynamo_table fixture. note_blocked calls _put_shared unconditionally,
+    so leaving it real makes a genuine, bound-to-fail DynamoDB write whose
+    variable latency, not this test's own arithmetic, was eating into the
+    remaining time computed between note_blocked and wait_if_needed, flaky
+    in CI (and locally) even though the local state alone already answers
+    this without needing DynamoDB at all."""
     monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
     import time
 
+    monkeypatch.setattr(ratelimit, "_shared_block", lambda key: None)
+    monkeypatch.setattr(ratelimit, "_put_shared", lambda key, blocked_until, confirmed: None)
     slept = []
     monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
 
-    ratelimit.note_blocked("POST", "/channels/1/messages", ratelimit._CONFIRMED_MAX_WAIT - 1)
+    retry_after = ratelimit._CONFIRMED_MAX_WAIT - 1
+    ratelimit.note_blocked("POST", "/channels/1/messages", retry_after)
     ratelimit.wait_if_needed("POST", "/channels/1/messages")
 
-    assert slept and slept[0] >= ratelimit._CONFIRMED_MAX_WAIT - 1
+    # a little slack for the real time elapsed between the two calls above,
+    # same reasoning as retry_after_wait's own "never less than" guarantee
+    assert slept and slept[0] >= retry_after - 0.1
 
 
 def test_wait_if_needed_raises_instead_of_under_waiting_a_long_confirmed_block(monkeypatch):
