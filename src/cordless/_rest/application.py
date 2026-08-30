@@ -14,6 +14,8 @@ from .models import Application, ApplicationRoleConnectionMetadata, PublicApplic
 
 
 async def fetch_current_application(*, token=None):
+    """Fetches the bot's own application, the same one shown in the Discord
+    developer portal."""
     data = await _client.request("GET", "/applications/@me", token=token)
     return Application(data)
 
@@ -25,6 +27,8 @@ async def fetch_application(application_id, *, token=None):
 
 
 async def fetch_application_role_connection_metadata(application_id, *, token=None):
+    """Fetches the role connection metadata records currently registered
+    for linked roles. Empty if none have been set."""
     data = await _client.request("GET", f"/applications/{application_id}/role-connections/metadata", token=token)
     return [ApplicationRoleConnectionMetadata(r) for r in data or []]
 
