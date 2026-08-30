@@ -513,6 +513,9 @@ class RESTMixin:
     async def edit_guild_incident_actions(self, guild_id, **kwargs):
         return await guilds.edit_guild_incident_actions(guild_id, **kwargs)
 
+    async def fetch_guild_new_member_welcome(self, guild_id, **kwargs):
+        return await guilds.fetch_guild_new_member_welcome(guild_id, **kwargs)
+
     # -- channels --
     async def fetch_channel(self, channel_id, **kwargs):
         return await channels.fetch_channel(channel_id, **kwargs)

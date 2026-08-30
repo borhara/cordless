@@ -198,6 +198,11 @@ class GuildOnboarding(DiscordObject):
     `.guild_id`, `.prompts`, `.default_channel_ids`, `.enabled`, `.mode`."""
 
 
+class NewMemberWelcome(DiscordObject):
+    """From `guild.fetch_new_member_welcome()`. `.guild_id`, `.enabled`,
+    `.welcome_message`, `.new_member_actions`, `.resource_channels`."""
+
+
 class IncidentsData(DiscordObject):
     """From `guild.edit_incident_actions()`. `.invites_disabled_until`,
     `.dms_disabled_until`, `.dm_spam_detected_at`, `.raid_detected_at`."""

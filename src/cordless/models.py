@@ -885,6 +885,13 @@ class Guild(DiscordObject):
 
         return await guilds.edit_guild_incident_actions(self.id, **kwargs)
 
+    async def fetch_new_member_welcome(self, **kwargs):
+        """Fetch this guild's new member welcome configuration, or `None` if
+        it doesn't have one. Requires `DISCORD_BOT_TOKEN`."""
+        from ._rest import guilds
+
+        return await guilds.fetch_guild_new_member_welcome(self.id, **kwargs)
+
     async def fetch_member(self, user_id, **kwargs):
         """Fetch a single guild `Member` by user id. Requires `DISCORD_BOT_TOKEN`."""
         from ._rest import members
