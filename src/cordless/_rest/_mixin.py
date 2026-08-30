@@ -43,6 +43,18 @@ class RESTMixin:
     async def edit_application(self, **kwargs):
         return await application.edit_current_application(**kwargs)
 
+    # fetch_application() above is already taken (the bot's own application,
+    # matching fetch_current_user()'s bare-name convention) - this one looks
+    # up any application by id, so it gets a name of its own.
+    async def fetch_application_by_id(self, application_id, **kwargs):
+        return await application.fetch_application(application_id, **kwargs)
+
+    async def fetch_application_role_connection_metadata(self, application_id, **kwargs):
+        return await application.fetch_application_role_connection_metadata(application_id, **kwargs)
+
+    async def edit_application_role_connection_metadata(self, application_id, records, **kwargs):
+        return await application.edit_application_role_connection_metadata(application_id, records, **kwargs)
+
     # -- application commands --
     async def fetch_global_commands(self, application_id, **kwargs):
         return await application_commands.fetch_global_commands(application_id, **kwargs)

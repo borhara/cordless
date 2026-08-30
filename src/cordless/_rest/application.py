@@ -1,18 +1,41 @@
 """Application REST endpoints (Discord API v10).
 
-Both endpoints are keyed on @me - Discord resolves that to whichever
-application owns the bot token making the request, so unlike almost every
-other resource here there is no id parameter to pass in.
+fetch_current_application/edit_current_application are keyed on @me -
+Discord resolves that to whichever application owns the bot token making
+the request, so unlike almost every other resource here there is no id
+parameter to pass in. fetch_application is the odd one out: it looks up any
+application by id, not just the bot's own, but still needs a bot token like
+everything else in this package.
 """
 
 from . import _client
 from ._client import UNSET
-from .models import Application
+from .models import Application, ApplicationRoleConnectionMetadata, PublicApplication
 
 
 async def fetch_current_application(*, token=None):
     data = await _client.request("GET", "/applications/@me", token=token)
     return Application(data)
+
+
+async def fetch_application(application_id, *, token=None):
+    """Look up any application's public info by id, not just the bot's own."""
+    data = await _client.request("GET", f"/applications/{application_id}", token=token)
+    return PublicApplication(data)
+
+
+async def fetch_application_role_connection_metadata(application_id, *, token=None):
+    data = await _client.request("GET", f"/applications/{application_id}/role-connections/metadata", token=token)
+    return [ApplicationRoleConnectionMetadata(r) for r in data or []]
+
+
+async def edit_application_role_connection_metadata(application_id, records, *, token=None):
+    """records is the full list of up to 5 metadata records - this replaces
+    the whole set, same as bulk_overwrite_global_commands does for commands."""
+    data = await _client.request(
+        "PUT", f"/applications/{application_id}/role-connections/metadata", records, token=token
+    )
+    return [ApplicationRoleConnectionMetadata(r) for r in data or []]
 
 
 async def edit_current_application(

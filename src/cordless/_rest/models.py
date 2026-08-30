@@ -595,6 +595,22 @@ class Application(DiscordObject):
         return await application.edit_current_application(**kwargs)
 
 
+class PublicApplication(DiscordObject):
+    """Another application's public info, from `bot.fetch_application_by_id()`.
+    `.id`, `.name`, `.icon`, `.description`, `.bot_public`, `.owner`,
+    `.approximate_guild_count`, and any other field Discord sends. No
+    `.edit()` here - unlike `Application`, this isn't necessarily the bot's
+    own application."""
+
+
+class ApplicationRoleConnectionMetadata(DiscordObject):
+    """One Linked Roles metadata record, from
+    `bot.fetch_application_role_connection_metadata()`. `.type`, `.key`,
+    `.name`, `.description`, and the optional `.name_localizations`/
+    `.description_localizations` dicts. Edited as a full list via
+    `bot.edit_application_role_connection_metadata()`, not per-record."""
+
+
 class ApplicationCommand(DiscordObject):
     """From `bot.fetch_global_commands()`/`bot.fetch_guild_commands()`.
     `.id`, `.application_id`, `.guild_id` (only for guild-scoped commands),
