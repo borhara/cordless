@@ -7,11 +7,14 @@ from ._client import UNSET
 
 
 async def fetch_guild_member(guild_id, user_id, *, token=None):
+    """Fetches a single guild member by user id."""
     data = await _client.request("GET", f"/guilds/{guild_id}/members/{user_id}", token=token)
     return Member(_with_guild_id(data, guild_id))
 
 
 async def fetch_guild_members(guild_id, *, limit=None, after=None, token=None):
+    """Fetches a page of the guild's members, ordered by user id. Requires
+    the Server Members intent."""
     qs = _client.query_string(limit=limit, after=after)
     data = await _client.request("GET", f"/guilds/{guild_id}/members{qs}", token=token)
     assert data is not None, "GET always returns a body"
@@ -19,6 +22,9 @@ async def fetch_guild_members(guild_id, *, limit=None, after=None, token=None):
 
 
 async def search_guild_members(guild_id, query, *, limit=None, token=None):
+    """Fetches guild members whose username or nickname starts with
+    query. Unlike fetch_guild_members, this doesn't need the Server
+    Members intent."""
     qs = _client.query_string(query=query, limit=limit)
     data = await _client.request("GET", f"/guilds/{guild_id}/members/search{qs}", token=token)
     assert data is not None, "GET always returns a body"
@@ -65,16 +71,20 @@ async def edit_guild_member(
 
 
 async def edit_current_member(guild_id, *, nick=UNSET, banner=UNSET, avatar=UNSET, bio=UNSET, token=None):
+    """Edits the bot's own guild profile: nickname, per-guild banner and
+    avatar, and bio."""
     payload = _client.payload(nick=nick, banner=banner, avatar=avatar, bio=bio)
     data = await _client.request("PATCH", f"/guilds/{guild_id}/members/@me", payload, token=token)
     return Member(_with_guild_id(data, guild_id))
 
 
 async def add_guild_member_role(guild_id, user_id, role_id, *, reason=None, token=None):
+    """Gives a member a role."""
     await _client.request("PUT", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}", token=token, reason=reason)
 
 
 async def remove_guild_member_role(guild_id, user_id, role_id, *, reason=None, token=None):
+    """Takes a role away from a member."""
     await _client.request("DELETE", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}", token=token, reason=reason)
 
 
@@ -84,12 +94,14 @@ async def remove_guild_member(guild_id, user_id, *, reason=None, token=None):
 
 
 async def fetch_guild_roles(guild_id, *, token=None):
+    """Fetches every role in the guild."""
     data = await _client.request("GET", f"/guilds/{guild_id}/roles", token=token)
     assert data is not None, "GET always returns a body"
     return [Role(_with_guild_id(r, guild_id)) for r in data]
 
 
 async def fetch_guild_role(guild_id, role_id, *, token=None):
+    """Fetches a single role by id."""
     data = await _client.request("GET", f"/guilds/{guild_id}/roles/{role_id}", token=token)
     return Role(_with_guild_id(data, guild_id))
 
@@ -115,6 +127,9 @@ async def create_guild_role(
     reason=None,
     token=None,
 ):
+    """Creates a new role. Its position starts at the bottom of the
+    hierarchy, below the bot's own highest role, use
+    edit_guild_role_positions to move it."""
     payload = _client.payload(
         name=name,
         permissions=permissions,
@@ -130,6 +145,9 @@ async def create_guild_role(
 
 
 async def edit_guild_role_positions(guild_id, positions, *, reason=None, token=None):
+    """Reorders roles in the guild. positions is a list of
+    {"id": role_id, "position": int} dicts; roles left out keep their
+    current position."""
     data = await _client.request("PATCH", f"/guilds/{guild_id}/roles", positions, token=token, reason=reason)
     assert data is not None, "PATCH always returns a body here"
     return [Role(_with_guild_id(r, guild_id)) for r in data]
@@ -150,6 +168,7 @@ async def edit_guild_role(
     reason=None,
     token=None,
 ):
+    """Edits an existing role. Only the fields passed are changed."""
     payload = _client.payload(
         name=name,
         permissions=permissions,
@@ -165,4 +184,5 @@ async def edit_guild_role(
 
 
 async def delete_guild_role(guild_id, role_id, *, reason=None, token=None):
+    """Deletes a role, removing it from every member who has it."""
     await _client.request("DELETE", f"/guilds/{guild_id}/roles/{role_id}", token=token, reason=reason)
