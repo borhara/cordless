@@ -24,7 +24,7 @@ import urllib.request
 # to control this retry loop would also corrupt asyncio's internal timeouts
 from time import monotonic, sleep
 
-from .. import ratelimit
+from .. import errors, ratelimit
 from .._multipart import build_multipart_body
 from .._useragent import USER_AGENT
 from ..context import _attach_files
@@ -206,7 +206,9 @@ def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_bo
                 ratelimit.note_blocked(method, path, retry_after, headers=exc.headers)
                 sleep(ratelimit.retry_after_wait(retry_after))
                 continue
-            raise RuntimeError(f"Discord API error {exc.code}: {body_out.decode(errors='replace')}") from exc
+            raise errors.discord_http_error(
+                exc.code, body_out.decode(errors="replace"), body=body_out, headers=exc.headers
+            ) from exc
         except OSError:
             # a transient network blip (connection reset, dropped keep-alive, ...),
             # not an HTTP-level error, retry once, same as webhook.py/defer.py do

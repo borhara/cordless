@@ -15,6 +15,7 @@ from http.client import HTTPException, HTTPSConnection
 from ._multipart import build_multipart_body
 from ._useragent import USER_AGENT
 from .context import _FLAG_UI_KIT, _attach_files, _contains_uikit
+from .errors import discord_http_error
 
 _TIMEOUT = 10
 
@@ -116,7 +117,7 @@ def _request(method, path, body=None, content_type=None):
         break
 
     if status >= 300:
-        raise RuntimeError(f"Discord API error {status}: {data.decode(errors='replace')}")
+        raise discord_http_error(status, data.decode(errors="replace"), body=data)
     return status, data
 
 

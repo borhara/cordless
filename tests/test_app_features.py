@@ -10,7 +10,7 @@ from conftest import FakeDiscordResponse, make_http_error
 
 from cordless import Cog
 from cordless.app import Cordless, options_from_signature
-from cordless.errors import MessageTooLongError
+from cordless.errors import DiscordHTTPError, MessageTooLongError
 
 
 def _handle(bot, payload):
@@ -960,7 +960,7 @@ def test_discord_request_gives_up_after_retry_budget_exhausted(monkeypatch):
     with (
         patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
         _urlopen(responses),
-        pytest.raises(RuntimeError, match="429"),
+        pytest.raises(DiscordHTTPError, match="429"),
     ):
         bot = Cordless()
         asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))

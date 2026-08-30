@@ -10,6 +10,7 @@ import cordless.models
 import cordless.webhook
 from cordless._rest.models import Webhook
 from cordless.app import Cordless
+from cordless.errors import DiscordHTTPError, NotFound
 
 
 def _urlopen(responses):
@@ -268,7 +269,7 @@ def test_execute_github_compatible_posts_github_path(fake_conn):
 
 def test_non_2xx_status_raises(fake_conn):
     fake_conn.responses = [(404, b'{"message": "Unknown Webhook"}')]
-    with pytest.raises(RuntimeError, match="Discord API error 404.*Unknown Webhook"):
+    with pytest.raises(NotFound, match="Discord API error 404.*Unknown Webhook"):
         cordless.webhook.execute("123", "abc", {"content": "hi"})
 
 
@@ -288,7 +289,7 @@ def test_execute_gives_up_after_retries(fake_conn, monkeypatch):
     monkeypatch.setattr(cordless.webhook.time, "sleep", lambda s: None)
     fake_conn.responses = [(429, b"{}"), (429, b"{}"), (429, b"{}")]
 
-    with pytest.raises(RuntimeError, match="Discord API error 429"):
+    with pytest.raises(DiscordHTTPError, match="Discord API error 429"):
         cordless.webhook.execute("123", "abc", {"content": "hi"})
 
     assert len(fake_conn.requests) == 3

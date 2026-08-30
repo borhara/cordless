@@ -36,3 +36,52 @@ class PermissionDeniedError(CordlessError):
 
 class MessageTooLongError(CordlessError):
     """Raised when outgoing message content exceeds Discord's character limit."""
+
+
+class DiscordHTTPError(CordlessError):
+    """Raised when Discord's REST API returns a status cordless doesn't
+    retry on its own. status/body/headers carry the raw response, so a
+    caller that needs more than the message (a header, the raw body) still
+    has it, rather than having to parse the message string back apart."""
+
+    def __init__(self, status, message, *, body=None, headers=None):
+        super().__init__(f"Discord API error {status}: {message}")
+        self.status = status
+        self.body = body
+        self.headers = headers
+
+
+class BadRequest(DiscordHTTPError):
+    """400: the request itself was malformed, see the message for which field."""
+
+
+class Unauthorized(DiscordHTTPError):
+    """401: the bot token is missing or invalid."""
+
+
+class Forbidden(DiscordHTTPError):
+    """403: the bot lacks permission for this action."""
+
+
+class NotFound(DiscordHTTPError):
+    """404: the target resource doesn't exist, or the bot can't see it."""
+
+
+class ServerError(DiscordHTTPError):
+    """5xx: Discord's own error, generally safe to retry later."""
+
+
+_STATUS_ERRORS = {400: BadRequest, 401: Unauthorized, 403: Forbidden, 404: NotFound}
+
+
+def discord_http_error(status, message, *, body=None, headers=None):
+    """Pick the right DiscordHTTPError subclass for a REST response status:
+    one of the named 4xx classes above, ServerError for any 5xx, or the
+    base DiscordHTTPError itself for anything else Discord might send."""
+    if status in _STATUS_ERRORS:
+        cls = _STATUS_ERRORS[status]
+    elif status >= 500:
+        cls = ServerError
+    else:
+        cls = DiscordHTTPError
+    return cls(status, message, body=body, headers=headers)
