@@ -146,7 +146,10 @@ def _table():
     if table is None:
         import boto3
 
-        table = boto3.resource("dynamodb").Table(name)
+        # boto3.resource()'s return type is generated dynamically, so pyright
+        # can't see .Table on it without the mypy-boto3-dynamodb stubs this
+        # project doesn't depend on
+        table = boto3.resource("dynamodb").Table(name)  # pyright: ignore[reportAttributeAccessIssue]
         _tables[name] = table
     return table
 

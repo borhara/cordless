@@ -23,6 +23,7 @@ import urllib.request
 # is time.monotonic(), so a test monkeypatching that module-level attribute
 # to control this retry loop would also corrupt asyncio's internal timeouts
 from time import monotonic, sleep
+from typing import IO, cast
 
 from .. import errors, ratelimit
 from .._multipart import build_multipart_body
@@ -148,9 +149,11 @@ def _send(req):
         raise
 
     if resp.status >= 300:
-        raise urllib.error.HTTPError(
-            req.full_url, resp.status, resp.reason, resp.headers, _LockedErrorBody(resp, _conn_lock)
-        )
+        # HTTPError's fp only needs to be duck-type compatible (read/close),
+        # not literally IO[bytes]; cast rather than widen the real IO[bytes]
+        # type callers of _LockedErrorBody.read() actually get back
+        fp = cast(IO[bytes], _LockedErrorBody(resp, _conn_lock))
+        raise urllib.error.HTTPError(req.full_url, resp.status, resp.reason, resp.headers, fp)
     return _LockedResponse(resp, _conn_lock)
 
 
