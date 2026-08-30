@@ -14,6 +14,9 @@ async def create_stage_instance(
     guild_scheduled_event_id=UNSET,
     token=None,
 ):
+    """Starts a stage instance on a stage channel, going live. The
+    channel must already be a stage channel and the bot must be a
+    speaker or moderator on it."""
     payload = _client.payload(
         channel_id=channel_id,
         topic=topic,
@@ -26,15 +29,19 @@ async def create_stage_instance(
 
 
 async def fetch_stage_instance(channel_id, *, token=None):
+    """Fetches the live stage instance for a stage channel, or raises
+    NotFound if the stage isn't live."""
     data = await _client.request("GET", f"/stage-instances/{channel_id}", token=token)
     return StageInstance(data)
 
 
 async def edit_stage_instance(channel_id, *, topic=UNSET, privacy_level=UNSET, token=None):
+    """Edits the topic or privacy level of a live stage instance."""
     payload = _client.payload(topic=topic, privacy_level=privacy_level)
     data = await _client.request("PATCH", f"/stage-instances/{channel_id}", payload, token=token)
     return StageInstance(data)
 
 
 async def delete_stage_instance(channel_id, *, token=None):
+    """Ends a stage instance."""
     await _client.request("DELETE", f"/stage-instances/{channel_id}", token=token)

@@ -7,28 +7,33 @@ from .models import Sticker, StickerPack
 
 
 async def fetch_sticker(sticker_id, *, token=None):
+    """Fetches a single sticker by id, guild or Nitro pack alike."""
     data = await _client.request("GET", f"/stickers/{sticker_id}", token=token)
     return Sticker(data)
 
 
 async def fetch_sticker_packs(*, token=None):
+    """Fetches every sticker pack Discord offers as a Nitro perk."""
     data = await _client.request("GET", "/sticker-packs", token=token)
     assert data is not None, "GET always returns a body"
     return [StickerPack(p) for p in data["sticker_packs"]]
 
 
 async def fetch_sticker_pack(pack_id, *, token=None):
+    """Fetches a single sticker pack by id."""
     data = await _client.request("GET", f"/sticker-packs/{pack_id}", token=token)
     return StickerPack(data)
 
 
 async def fetch_guild_stickers(guild_id, *, token=None):
+    """Fetches every custom sticker uploaded to the guild."""
     data = await _client.request("GET", f"/guilds/{guild_id}/stickers", token=token)
     assert data is not None, "GET always returns a body"
     return [Sticker(s) for s in data]
 
 
 async def fetch_guild_sticker(guild_id, sticker_id, *, token=None):
+    """Fetches a single guild sticker by id."""
     data = await _client.request("GET", f"/guilds/{guild_id}/stickers/{sticker_id}", token=token)
     return Sticker(data)
 
@@ -46,10 +51,14 @@ async def create_guild_sticker(guild_id, name, description, tags, filename, file
 
 
 async def edit_guild_sticker(guild_id, sticker_id, *, name=UNSET, description=UNSET, tags=UNSET, token=None):
+    """Edits an existing guild sticker's name, description or tags. The
+    image itself can't be changed after upload, delete and recreate
+    instead."""
     payload = _client.payload(name=name, description=description, tags=tags)
     data = await _client.request("PATCH", f"/guilds/{guild_id}/stickers/{sticker_id}", payload, token=token)
     return Sticker(data)
 
 
 async def delete_guild_sticker(guild_id, sticker_id, *, token=None):
+    """Deletes a guild sticker."""
     await _client.request("DELETE", f"/guilds/{guild_id}/stickers/{sticker_id}", token=token)

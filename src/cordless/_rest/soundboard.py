@@ -14,18 +14,22 @@ async def send_soundboard_sound(channel_id, sound_id, *, source_guild_id=UNSET, 
 
 
 async def fetch_default_soundboard_sounds(*, token=None):
+    """Fetches the soundboard sounds Discord provides for free, available
+    to every guild."""
     data = await _client.request("GET", "/soundboard-default-sounds", token=token)
     assert data is not None, "GET always returns a body"
     return [SoundboardSound(s) for s in data]
 
 
 async def fetch_guild_soundboard_sounds(guild_id, *, token=None):
+    """Fetches every custom soundboard sound uploaded to the guild."""
     data = await _client.request("GET", f"/guilds/{guild_id}/soundboard-sounds", token=token)
     assert data is not None, "GET always returns a body"
     return [SoundboardSound(s) for s in data["items"]]
 
 
 async def fetch_guild_soundboard_sound(guild_id, sound_id, *, token=None):
+    """Fetches a single guild soundboard sound by id."""
     data = await _client.request("GET", f"/guilds/{guild_id}/soundboard-sounds/{sound_id}", token=token)
     return SoundboardSound(data)
 
@@ -43,6 +47,8 @@ async def create_guild_soundboard_sound(
 async def edit_guild_soundboard_sound(
     guild_id, sound_id, *, name=UNSET, volume=UNSET, emoji_id=UNSET, emoji_name=UNSET, reason=None, token=None
 ):
+    """Edits an existing guild soundboard sound. The sound itself can't
+    be changed after upload, delete and recreate instead."""
     payload = _client.payload(name=name, volume=volume, emoji_id=emoji_id, emoji_name=emoji_name)
     data = await _client.request(
         "PATCH", f"/guilds/{guild_id}/soundboard-sounds/{sound_id}", payload, reason=reason, token=token
@@ -51,4 +57,5 @@ async def edit_guild_soundboard_sound(
 
 
 async def delete_guild_soundboard_sound(guild_id, sound_id, *, reason=None, token=None):
+    """Deletes a guild soundboard sound."""
     await _client.request("DELETE", f"/guilds/{guild_id}/soundboard-sounds/{sound_id}", reason=reason, token=token)
