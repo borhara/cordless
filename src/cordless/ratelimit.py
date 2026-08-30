@@ -26,6 +26,18 @@ import time
 _TABLE_ENV_VAR = "CORDLESS_RATELIMIT_TABLE"
 _LOW_REMAINING = 1
 _MAX_WAIT = 5.0
+# wait_if_needed runs before a request is even sent, inside whatever timeout
+# budget the caller has, and the default main handler's is 10s (see
+# _rest/_client.py's _MAX_RETRY_SECONDS comment), so this can't just honour
+# a confirmed block's real remaining time uncapped the way retry_after_wait
+# does for a 429 hit directly: sleeping past the caller's own timeout kills
+# the invocation mid-wait with no response ever sent, worse than the one
+# avoidable 429 a shorter wait might still risk (which the already-correct
+# reactive path then handles properly). This cap is still meaningfully
+# higher than _MAX_WAIT's, since a confirmed block deserves more trust than
+# a merely-predicted one, while leaving headroom under a 10s timeout for the
+# request itself once woken.
+_CONFIRMED_MAX_WAIT = 8.0
 _RETRY_JITTER_CAP = 2.0
 
 _local = {}
@@ -40,15 +52,15 @@ def enabled():
     return bool(os.environ.get(_TABLE_ENV_VAR))
 
 
-def jittered_wait(seconds):
-    """Equal jitter: wait at least half the requested time, capped at _MAX_WAIT.
+def jittered_wait(seconds, cap=_MAX_WAIT):
+    """Equal jitter: wait at least half the requested time, capped at cap.
 
     Concurrent callers given the same `seconds` (e.g. several requests that
     all just got the same Discord retry_after) spread out across the second
     half of the window instead of all waking up at the same instant and
     colliding again.
     """
-    capped = min(seconds, _MAX_WAIT)
+    capped = min(seconds, cap)
     return capped / 2 + random.uniform(0, capped / 2)
 
 
@@ -122,11 +134,14 @@ def record_response(method, path, headers):
     route = _key(method, path)
     _learn_bucket(route, headers)
     key = _effective_key(route, path)
-    _local[key] = (remaining, reset_at)
+    # confirmed=False: this is a prediction from a still-successful response's
+    # headers, not an actual rejection, so wait_if_needed treats it with more
+    # caution than a block note_blocked recorded from a real 429.
+    _local[key] = (remaining, reset_at, False)
     if remaining <= _LOW_REMAINING:
         # publish proactively, so a concurrent invocation can back off before
         # it ever gets a 429 itself, not just after someone else already has
-        _put_shared(key, reset_at)
+        _put_shared(key, reset_at, confirmed=False)
 
 
 def wait_if_needed(method, path):
@@ -139,12 +154,15 @@ def wait_if_needed(method, path):
         return  # comfortably clear locally, no need to ask anyone
     # not clear (or unknown) locally - local state is still a valid wait source on
     # its own, since DynamoDB can be unreachable/unconfigured and fails open to None
-    candidates = [t for t in (cached[1] if cached else None, _shared_block(key)) if t]
-    blocked_until = max(candidates, default=None)
-    if blocked_until and blocked_until > time.time():
-        wait = jittered_wait(blocked_until - time.time())
-        print(f"[cordless] rate limit: waiting {wait:.2f}s on {key}")
-        time.sleep(wait)
+    local = (cached[1], cached[2]) if cached else None
+    candidates = [c for c in (local, _shared_block(key)) if c and c[0] > time.time()]
+    if not candidates:
+        return
+    blocked_until, confirmed = max(candidates, key=lambda c: c[0])
+    cap = _CONFIRMED_MAX_WAIT if confirmed else _MAX_WAIT
+    wait = jittered_wait(blocked_until - time.time(), cap=cap)
+    print(f"[cordless] rate limit: waiting {wait:.2f}s on {key}")
+    time.sleep(wait)
 
 
 def note_blocked(method, path, retry_after, headers=None):
@@ -160,8 +178,10 @@ def note_blocked(method, path, retry_after, headers=None):
     _learn_bucket(route, headers)
     key = _effective_key(route, path)
     blocked_until = time.time() + retry_after
-    _local[key] = (0, blocked_until)
-    _put_shared(key, blocked_until)
+    # confirmed=True: Discord actually rejected a real request with this
+    # exact retry_after, unlike record_response's merely-predicted block.
+    _local[key] = (0, blocked_until, True)
+    _put_shared(key, blocked_until, confirmed=True)
 
 
 _tables = {}
@@ -182,17 +202,28 @@ def _table():
 
 
 def _shared_block(key):
+    """(blocked_until, confirmed), or None if key has no recorded block (or
+    the table is unreachable/unconfigured, see the fail-open note below)."""
     try:
         item = _table().get_item(Key={"pk": key}).get("Item")
     except Exception:
         return None  # fail-open: a DynamoDB hiccup should never block sending
+    if not item:
+        return None
     # boto3's resource API deserializes DynamoDB's Number type as decimal.Decimal,
     # not float - cast here so callers can freely mix it with time.time() etc.
-    return float(item["blocked_until"]) if item else None
+    return float(item["blocked_until"]), bool(item.get("confirmed", False))
 
 
-def _put_shared(key, blocked_until):
+def _put_shared(key, blocked_until, confirmed):
     try:
-        _table().put_item(Item={"pk": key, "blocked_until": int(blocked_until) + 1, "ttl": int(blocked_until) + 60})
+        _table().put_item(
+            Item={
+                "pk": key,
+                "blocked_until": int(blocked_until) + 1,
+                "confirmed": confirmed,
+                "ttl": int(blocked_until) + 60,
+            }
+        )
     except Exception:
         pass  # fail-open, same as above

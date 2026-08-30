@@ -81,8 +81,9 @@ def test_record_response_caches_remaining_and_reset(monkeypatch):
     ratelimit.record_response(
         "POST", "/channels/1/messages", {"X-RateLimit-Remaining": "3", "X-RateLimit-Reset-After": "2.5"}
     )
-    remaining, reset_at = ratelimit._local["POST /channels/1/messages"]
+    remaining, reset_at, confirmed = ratelimit._local["POST /channels/1/messages"]
     assert remaining == 3
+    assert confirmed is False
     import time
 
     assert reset_at > time.time()
@@ -93,19 +94,28 @@ def test_record_response_publishes_to_shared_state_when_remaining_is_low(monkeyp
     any of them has to burn its own 429 to find out the same thing."""
     monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
     published = []
-    monkeypatch.setattr(ratelimit, "_put_shared", lambda key, blocked_until: published.append((key, blocked_until)))
+    monkeypatch.setattr(
+        ratelimit,
+        "_put_shared",
+        lambda key, blocked_until, confirmed: published.append((key, blocked_until, confirmed)),
+    )
 
     ratelimit.record_response(
         "POST", "/channels/1/messages", {"X-RateLimit-Remaining": "1", "X-RateLimit-Reset-After": "2.5"}
     )
 
     assert published and published[0][0] == "POST /channels/1/messages"
+    assert published[0][2] is False  # a predicted block, not a confirmed one
 
 
 def test_record_response_does_not_publish_when_remaining_is_comfortable(monkeypatch):
     monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
     published = []
-    monkeypatch.setattr(ratelimit, "_put_shared", lambda key, blocked_until: published.append((key, blocked_until)))
+    monkeypatch.setattr(
+        ratelimit,
+        "_put_shared",
+        lambda key, blocked_until, confirmed: published.append((key, blocked_until, confirmed)),
+    )
 
     ratelimit.record_response(
         "POST", "/channels/1/messages", {"X-RateLimit-Remaining": "5", "X-RateLimit-Reset-After": "2.5"}
@@ -211,6 +221,43 @@ def test_wait_if_needed_checks_dynamo_on_cold_start(monkeypatch):
     assert calls == ["POST /channels/1/messages"]
 
 
+def test_wait_if_needed_caps_a_confirmed_block_higher_than_a_predicted_one(monkeypatch):
+    """A block note_blocked recorded from a real 429 deserves more trust
+    than one record_response merely predicted from a low remaining count,
+    so it gets a higher (but still bounded) cap: _CONFIRMED_MAX_WAIT rather
+    than _MAX_WAIT. Both stay capped, not uncapped, since wait_if_needed
+    runs before the request is even sent, inside whatever timeout budget
+    the caller has, and fully honouring a long block risks the invocation
+    being killed mid-sleep with no response ever sent at all."""
+    monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
+    import time
+
+    monkeypatch.setattr(random, "uniform", lambda a, b: b)  # deterministic: top of the jitter range
+    slept = []
+    monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
+
+    ratelimit.note_blocked("POST", "/channels/1/messages", 60.0)
+    ratelimit.wait_if_needed("POST", "/channels/1/messages")
+
+    assert slept and slept[0] == pytest.approx(ratelimit._CONFIRMED_MAX_WAIT)
+
+
+def test_wait_if_needed_caps_a_predicted_block_at_the_lower_default(monkeypatch):
+    monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
+    import time
+
+    monkeypatch.setattr(random, "uniform", lambda a, b: b)  # deterministic: top of the jitter range
+    slept = []
+    monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
+
+    ratelimit.record_response(
+        "POST", "/channels/1/messages", {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset-After": "60"}
+    )
+    ratelimit.wait_if_needed("POST", "/channels/1/messages")
+
+    assert slept and slept[0] == pytest.approx(ratelimit._MAX_WAIT)
+
+
 def test_wait_if_needed_sleeps_on_local_state_even_if_shared_check_fails(monkeypatch):
     """A local note_blocked() must still cause a wait even when DynamoDB is
     unreachable/unconfigured and _shared_block fails open to None - otherwise
@@ -220,14 +267,14 @@ def test_wait_if_needed_sleeps_on_local_state_even_if_shared_check_fails(monkeyp
     import time
 
     monkeypatch.setattr(ratelimit, "_shared_block", lambda key: None)
-    monkeypatch.setattr(ratelimit, "_put_shared", lambda key, blocked_until: None)
+    monkeypatch.setattr(ratelimit, "_put_shared", lambda key, blocked_until, confirmed: None)
     slept = []
     monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
 
     ratelimit.note_blocked("POST", "/channels/1/messages", 0.3)
     ratelimit.wait_if_needed("POST", "/channels/1/messages")
 
-    assert slept and slept[0] <= ratelimit._MAX_WAIT
+    assert slept and slept[0] <= ratelimit._CONFIRMED_MAX_WAIT  # note_blocked's state is confirmed
 
 
 def test_wait_if_needed_logs_when_it_actually_waits(monkeypatch, capsys):
@@ -238,7 +285,7 @@ def test_wait_if_needed_logs_when_it_actually_waits(monkeypatch, capsys):
     import time
 
     monkeypatch.setattr(ratelimit, "_shared_block", lambda key: None)
-    monkeypatch.setattr(ratelimit, "_put_shared", lambda key, blocked_until: None)
+    monkeypatch.setattr(ratelimit, "_put_shared", lambda key, blocked_until, confirmed: None)
     monkeypatch.setattr(time, "sleep", lambda s: None)
 
     ratelimit.note_blocked("POST", "/channels/1/messages", 0.3)
@@ -265,8 +312,8 @@ def test_wait_if_needed_prefers_the_later_of_local_and_shared_block(monkeypatch)
     import time
 
     now = time.time()
-    ratelimit._local["POST /channels/1/messages"] = (0, now + 0.1)
-    monkeypatch.setattr(ratelimit, "_shared_block", lambda key: now + 10)
+    ratelimit._local["POST /channels/1/messages"] = (0, now + 0.1, False)
+    monkeypatch.setattr(ratelimit, "_shared_block", lambda key: (now + 10, False))
     slept = []
     monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
 
@@ -283,7 +330,7 @@ def test_wait_if_needed_sleeps_until_shared_block_clears(monkeypatch):
     monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
     import time
 
-    monkeypatch.setattr(ratelimit, "_shared_block", lambda key: time.time() + 0.05)
+    monkeypatch.setattr(ratelimit, "_shared_block", lambda key: (time.time() + 0.05, False))
     slept = []
     monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
     ratelimit.wait_if_needed("POST", "/channels/1/messages")
@@ -345,10 +392,13 @@ def test_note_blocked_without_headers_falls_back_to_route_keying(monkeypatch):
 def test_note_blocked_writes_local_and_shared_state(monkeypatch):
     monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, TABLE)
     written = []
-    monkeypatch.setattr(ratelimit, "_put_shared", lambda key, blocked_until: written.append((key, blocked_until)))
+    monkeypatch.setattr(
+        ratelimit, "_put_shared", lambda key, blocked_until, confirmed: written.append((key, blocked_until, confirmed))
+    )
     ratelimit.note_blocked("POST", "/channels/1/messages", 2.0)
     assert ratelimit._local["POST /channels/1/messages"][0] == 0
     assert written and written[0][0] == "POST /channels/1/messages"
+    assert written[0][2] is True  # note_blocked's state is confirmed, unlike record_response's
 
 
 @pytest.fixture
@@ -370,22 +420,24 @@ def test_shared_roundtrip_through_real_dynamo(dynamo_table):
     import time
 
     blocked_until = time.time() + 10
-    ratelimit._put_shared("POST /channels/1/messages", blocked_until)
-    assert ratelimit._shared_block("POST /channels/1/messages") == int(blocked_until) + 1
+    ratelimit._put_shared("POST /channels/1/messages", blocked_until, confirmed=True)
+    result = ratelimit._shared_block("POST /channels/1/messages")
+    assert result == (int(blocked_until) + 1, True)
     assert ratelimit._shared_block("POST /channels/2/messages") is None
 
 
 def test_shared_block_is_a_plain_float_not_decimal(dynamo_table):
     """boto3's resource API deserializes DynamoDB Numbers as decimal.Decimal, which
     blows up when wait_if_needed subtracts a float time.time() from it. Regression
-    test for that - assert the type, not just the value, so a mocked-only shared
+    test for that: assert the type, not just the value, so a mocked-only shared
     return can't hide it again."""
     import time
 
-    ratelimit._put_shared("POST /channels/1/messages", time.time() + 10)
-    result = ratelimit._shared_block("POST /channels/1/messages")
-    assert isinstance(result, float)
-    result - time.time()  # would raise TypeError if this were still a Decimal
+    ratelimit._put_shared("POST /channels/1/messages", time.time() + 10, confirmed=False)
+    blocked_until, confirmed = ratelimit._shared_block("POST /channels/1/messages")
+    assert isinstance(blocked_until, float)
+    assert confirmed is False
+    blocked_until - time.time()  # would raise TypeError if this were still a Decimal
 
 
 def test_wait_if_needed_works_end_to_end_against_real_dynamo(dynamo_table, monkeypatch):
@@ -399,7 +451,7 @@ def test_wait_if_needed_works_end_to_end_against_real_dynamo(dynamo_table, monke
     slept = []
     monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
 
-    ratelimit._put_shared("POST /channels/1/messages", time.time() + 0.2)
+    ratelimit._put_shared("POST /channels/1/messages", time.time() + 0.2, confirmed=True)
     ratelimit.wait_if_needed("POST", "/channels/1/messages")  # would raise TypeError pre-fix
 
     assert slept
@@ -414,4 +466,4 @@ def test_shared_block_fails_open_when_table_missing(monkeypatch):
 def test_put_shared_fails_open_when_table_missing(monkeypatch):
     monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, "does-not-exist")
     with mock_aws():
-        ratelimit._put_shared("POST /channels/1/messages", 123)  # should not raise
+        ratelimit._put_shared("POST /channels/1/messages", 123, confirmed=False)  # should not raise
