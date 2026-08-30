@@ -418,6 +418,56 @@ class GuildScheduledEvent(DiscordObject):
 
         return await scheduled_events.fetch_guild_scheduled_event_users(self.guild_id, self.id, **kwargs)
 
+    async def fetch_user_counts(self, **kwargs):
+        """Recurring events only: this event's total subscriber count, plus
+        per-exception counts. Requires `DISCORD_BOT_TOKEN`."""
+        from . import scheduled_events
+
+        return await scheduled_events.fetch_guild_scheduled_event_user_counts(self.guild_id, self.id, **kwargs)
+
+    async def create_exception(self, original_scheduled_start_time, **kwargs):
+        """Recurring events only: override or cancel one occurrence. Returns
+        the new `GuildScheduledEventException`. Requires `DISCORD_BOT_TOKEN`."""
+        from . import scheduled_events
+
+        return await scheduled_events.create_guild_scheduled_event_exception(
+            self.guild_id, self.id, original_scheduled_start_time, **kwargs
+        )
+
+
+class GuildScheduledEventException(DiscordObject):
+    """One recurring event's overridden or canceled occurrence, from
+    `event.create_exception()`. `.event_id`, `.event_exception_id`,
+    `.scheduled_start_time`, `.scheduled_end_time`, `.is_canceled`. Discord's
+    own response never carries a guild_id, so create/edit stitch the calling
+    event's one in here to make `.edit()`/`.delete()` possible."""
+
+    async def edit(self, **kwargs):
+        """Update this occurrence. Returns the updated
+        `GuildScheduledEventException`. Requires `DISCORD_BOT_TOKEN`."""
+        from . import scheduled_events
+
+        return await scheduled_events.edit_guild_scheduled_event_exception(
+            self._data["guild_id"], self.event_id, self.event_exception_id, **kwargs
+        )
+
+    async def delete(self, **kwargs):
+        """Delete this occurrence override. Requires `DISCORD_BOT_TOKEN`."""
+        from . import scheduled_events
+
+        await scheduled_events.delete_guild_scheduled_event_exception(
+            self._data["guild_id"], self.event_id, self.event_exception_id, **kwargs
+        )
+
+    async def fetch_users(self, **kwargs):
+        """List users subscribed to this specific occurrence, as a list of
+        `GuildScheduledEventUser`. Requires `DISCORD_BOT_TOKEN`."""
+        from . import scheduled_events
+
+        return await scheduled_events.fetch_guild_scheduled_event_exception_users(
+            self._data["guild_id"], self.event_id, self.event_exception_id, **kwargs
+        )
+
 
 class AutoModerationRule(DiscordObject):
     """An auto moderation rule, from `guild.fetch_auto_moderation_rules()`.

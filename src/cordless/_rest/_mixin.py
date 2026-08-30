@@ -220,6 +220,25 @@ class RESTMixin:
     async def fetch_guild_scheduled_event_users(self, guild_id, event_id, **kwargs):
         return await scheduled_events.fetch_guild_scheduled_event_users(guild_id, event_id, **kwargs)
 
+    async def fetch_guild_scheduled_event_user_counts(self, guild_id, event_id, **kwargs):
+        return await scheduled_events.fetch_guild_scheduled_event_user_counts(guild_id, event_id, **kwargs)
+
+    async def create_guild_scheduled_event_exception(self, guild_id, event_id, original_scheduled_start_time, **kwargs):
+        return await scheduled_events.create_guild_scheduled_event_exception(
+            guild_id, event_id, original_scheduled_start_time, **kwargs
+        )
+
+    async def edit_guild_scheduled_event_exception(self, guild_id, event_id, exception_id, **kwargs):
+        return await scheduled_events.edit_guild_scheduled_event_exception(guild_id, event_id, exception_id, **kwargs)
+
+    async def delete_guild_scheduled_event_exception(self, guild_id, event_id, exception_id, **kwargs):
+        return await scheduled_events.delete_guild_scheduled_event_exception(guild_id, event_id, exception_id, **kwargs)
+
+    async def fetch_guild_scheduled_event_exception_users(self, guild_id, event_id, exception_id, **kwargs):
+        return await scheduled_events.fetch_guild_scheduled_event_exception_users(
+            guild_id, event_id, exception_id, **kwargs
+        )
+
     # -- emojis --
     async def fetch_guild_emojis(self, guild_id, **kwargs):
         return await emojis.fetch_guild_emojis(guild_id, **kwargs)
