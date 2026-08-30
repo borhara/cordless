@@ -1,8 +1,9 @@
-"""Internal REST resource modules backing Cordless's flat bot.<verb>_<resource>()
-surface and the matching action methods on model objects (Guild, Channel,
-Thread, ...).
+"""Internal REST resource modules backing Cordless's flat
+bot.<verb>_<resource>() API and the corresponding action methods on model
+objects such as Guild, Channel, and Thread.
 
-Not a public import path - everything here is reached through a Cordless
-instance (see _mixin.py) or through a model object returned from one, the
-same way _aws.py/_multipart.py are internal.
+This is not a public import path. REST resources are accessed through a
+Cordless instance via _mixin.py or through model objects returned by those
+methods, following the same internal-module pattern used by _aws.py and
+_multipart.py.
 """
