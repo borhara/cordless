@@ -10,7 +10,12 @@ even had ownership transferred away), so it can no longer succeed for any
 bot regardless of guild count, despite what Discord's own docs still say.
 Delete Guild only works for the guild's owner, and with Create Guild gone
 there's no remaining way for a bot to become one - Modify Guild's owner_id
-transfer field silently no-ops when the target is a bot account too."""
+transfer field silently no-ops when the target is a bot account too.
+
+Modify Guild MFA Level (POST /guilds/{guild.id}/mfa) is left out for the
+same reason: it also requires guild ownership, so it's equally dead for
+every bot. discord.py deprecated its own equivalent for this exact reason
+once bots stopped being able to own guilds at all."""
 
 from ..models import Guild
 from . import _client
