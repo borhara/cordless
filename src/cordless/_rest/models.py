@@ -104,6 +104,33 @@ class Invite(DiscordObject):
 
         return await invites.delete_invite(self.code, **kwargs)
 
+    async def fetch_target_users(self, **kwargs):
+        """Fetch this invite's target user allowlist, as raw CSV text.
+        Requires `DISCORD_BOT_TOKEN`."""
+        from . import invites
+
+        return await invites.fetch_invite_target_users(self.code, **kwargs)
+
+    async def edit_target_users(self, filename, file_bytes, **kwargs):
+        """Replace this invite's target user allowlist from a CSV file.
+        Requires `DISCORD_BOT_TOKEN`."""
+        from . import invites
+
+        await invites.edit_invite_target_users(self.code, filename, file_bytes, **kwargs)
+
+    async def fetch_target_users_job_status(self, **kwargs):
+        """Check the progress of a target user allowlist upload, as a
+        `TargetUsersJobStatus`. Requires `DISCORD_BOT_TOKEN`."""
+        from . import invites
+
+        return await invites.fetch_invite_target_users_job_status(self.code, **kwargs)
+
+
+class TargetUsersJobStatus(DiscordObject):
+    """From `invite.fetch_target_users_job_status()`. `.status`,
+    `.total_users`, `.processed_users`, `.created_at`, `.completed_at`,
+    `.error_message`."""
+
 
 class FollowedChannel(DiscordObject):
     """Returned by `channel.follow_announcement()`: the webhook created in

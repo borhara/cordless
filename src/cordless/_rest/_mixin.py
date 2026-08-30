@@ -324,6 +324,15 @@ class RESTMixin:
     async def delete_invite(self, code, **kwargs):
         return await invites.delete_invite(code, **kwargs)
 
+    async def fetch_invite_target_users(self, code, **kwargs):
+        return await invites.fetch_invite_target_users(code, **kwargs)
+
+    async def edit_invite_target_users(self, code, filename, file_bytes, **kwargs):
+        await invites.edit_invite_target_users(code, filename, file_bytes, **kwargs)
+
+    async def fetch_invite_target_users_job_status(self, code, **kwargs):
+        return await invites.fetch_invite_target_users_job_status(code, **kwargs)
+
     # -- webhooks (bot token) --
     # create_webhook()/get_channel_webhooks()/delete_webhook() already live
     # directly on Cordless (see app.py) and delegate to webhooks.py
