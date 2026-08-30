@@ -36,14 +36,17 @@ The current feature surface, for orientation:
 - Environment-specific config (`--environment`/`--env`, overlay `.env` files)
 - Optional cross-invocation rate-limit coordination via DynamoDB
 - `cordless logs`: CloudWatch log tailing for the main or worker function
-- **Full Discord REST API coverage.** Today's REST surface is the handful of
-  helpers on `Cordless` (`send_message`, `edit_message`, webhooks, roles,
-  ...). That's being replaced with a complete typed client covering the rest
-  of Discord's API: channels, guild management, members, roles, bans,
-  invites, emoji, stickers, scheduled events, auto-moderation, application
-  command management, the interaction-response endpoints, OAuth2, and more.
-  Threads are the first resource shipped end-to-end; the rest are landing
-  resource by resource.
+- **Full Discord REST API coverage.** A complete typed client, mirrored
+  across three layers (flat `_rest/<resource>.py` functions, `bot.<verb>()`
+  mixin methods, and object-method sugar like `guild.create_channel()` /
+  `message.reply()`, all calling the same underlying request logic):
+  channels, threads, guild management, members and roles, messages,
+  reactions and polls, invites and webhooks (including token-authenticated
+  webhook execution), emoji and stickers, guild scheduled events,
+  auto-moderation, stage instances, guild templates, audit log, users,
+  voice, soundboard, entitlements/SKUs, and application command management.
+  Endpoints that only work with an OAuth2 Bearer user token, not the bot
+  token cordless uses everywhere else, are intentionally excluded.
 
 
 ## In progress
