@@ -101,25 +101,39 @@ def _validate_content_length(content):
         )
 
 
+def _validate_uikit(content, embeds, components):
+    """Discord rejects a Components v2 message that also sets content or
+    embeds, or that exceeds its component-count/text-length caps, but that
+    rejection happens on Discord's end after we've already sent the request
+    (an HTTP round trip for the REST layer, or after we've already returned
+    200 to API Gateway for an interaction response), so check upfront
+    instead of failing invisibly or late. Shared between the interaction
+    path (_build_message_data below) and the REST layer's create_message/
+    edit_channel_message, so both reject the same way instead of only one
+    of them catching it locally and the other relying on Discord's own
+    validation. content/embeds must already be normalized to None by the
+    caller for "not being set in this call" (e.g. _rest/messages.py's
+    UNSET sentinel), since None here specifically means "no conflict"."""
+    if content is not None or embeds is not None:
+        raise ValueError("Components v2 messages can't also set content or embeds, use TextDisplay/Container instead")
+    count = _count_components(components)
+    if count > _MAX_UIKIT_COMPONENTS:
+        raise ValueError(
+            f"Message has {count} components, which exceeds Discord's {_MAX_UIKIT_COMPONENTS}-component limit"
+        )
+    text_length = _uikit_text_length(components)
+    if text_length > _MAX_UIKIT_TEXT_LENGTH:
+        raise MessageTooLongError(
+            f"Components v2 text totals {text_length} characters, which exceeds "
+            f"Discord's {_MAX_UIKIT_TEXT_LENGTH}-character limit"
+        )
+
+
 def _build_message_data(msg, content, embeds, components, ephemeral=False, allowed_mentions=None):
     _content = content if content is not None else msg
     is_uikit = _contains_uikit(components)
     if is_uikit:
-        if _content is not None or embeds is not None:
-            raise ValueError(
-                "Components v2 messages can't also set content or embeds, use TextDisplay/Container instead"
-            )
-        count = _count_components(components)
-        if count > _MAX_UIKIT_COMPONENTS:
-            raise ValueError(
-                f"Message has {count} components, which exceeds Discord's {_MAX_UIKIT_COMPONENTS}-component limit"
-            )
-        text_length = _uikit_text_length(components)
-        if text_length > _MAX_UIKIT_TEXT_LENGTH:
-            raise MessageTooLongError(
-                f"Components v2 text totals {text_length} characters, which exceeds "
-                f"Discord's {_MAX_UIKIT_TEXT_LENGTH}-character limit"
-            )
+        _validate_uikit(_content, embeds, components)
     else:
         _validate_content_length(_content)
 

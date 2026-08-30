@@ -6,6 +6,7 @@ import os
 from asyncio import run
 from unittest.mock import patch
 
+import pytest
 from conftest import FakeDiscordResponse
 
 from cordless._rest import messages
@@ -70,6 +71,19 @@ def test_create_message_sets_components_v2_flag():
 
     body = json.loads(urlopen.call_args.args[0].data)
     assert body["flags"] & 32768
+
+
+def test_create_message_rejects_content_with_components_v2():
+    """Regression test: the interaction response path (_build_message_data)
+    already rejected this combination locally; create_message let it
+    through and relied on Discord's own server-side rejection instead."""
+    with pytest.raises(ValueError, match="Components v2"):
+        run(messages.create_message("20", content="hi", components=[{"type": 17, "components": []}]))
+
+
+def test_create_message_rejects_embeds_with_components_v2():
+    with pytest.raises(ValueError, match="Components v2"):
+        run(messages.create_message("20", embeds=[{"title": "hi"}], components=[{"type": 17, "components": []}]))
 
 
 def test_create_message_supports_reply_via_message_reference():
@@ -143,6 +157,20 @@ def test_edit_channel_message_sets_components_v2_flag():
 
     body = json.loads(urlopen.call_args.args[0].data)
     assert body["flags"] & 32768
+
+
+def test_edit_channel_message_rejects_content_with_components_v2():
+    with pytest.raises(ValueError, match="Components v2"):
+        run(messages.edit_channel_message("20", "1", content="hi", components=[{"type": 17, "components": []}]))
+
+
+def test_edit_channel_message_allows_untouched_content_with_components_v2():
+    """content left UNSET (not passed at all) isn't a conflict with setting
+    Components v2, only explicitly setting it in the same call is."""
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_MESSAGE_PAYLOAD)]) as urlopen:
+        run(messages.edit_channel_message("20", "1", components=[{"type": 17, "components": []}]))
+
+    assert urlopen.call_count == 1
 
 
 def test_edit_channel_message_respects_explicit_flags_without_uikit():

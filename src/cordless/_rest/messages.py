@@ -11,7 +11,7 @@ channel.send()/message.edit() instead.
 
 import urllib.parse
 
-from ..context import _FLAG_UI_KIT, _contains_uikit, _validate_content_length
+from ..context import _FLAG_UI_KIT, _contains_uikit, _validate_content_length, _validate_uikit
 from ..models import Message, User
 from . import _client
 from ._client import UNSET
@@ -56,7 +56,11 @@ async def create_message(
     poll=None,
     token=None,
 ):
-    _validate_content_length(content)
+    is_uikit = _contains_uikit(components)
+    if is_uikit:
+        _validate_uikit(content, embeds, components)
+    else:
+        _validate_content_length(content)
     payload = {}
     if content is not None:
         payload["content"] = content
@@ -79,7 +83,7 @@ async def create_message(
     if poll is not None:
         payload["poll"] = poll
     computed_flags = flags or 0
-    if _contains_uikit(components):
+    if is_uikit:
         computed_flags |= _FLAG_UI_KIT
     if computed_flags:
         payload["flags"] = computed_flags
@@ -110,9 +114,14 @@ async def edit_channel_message(
     passing None. flags is a plain bitfield (0 and "leave untouched" have
     the same effect as each other), so it stays omit-unless-set rather than
     using the same None-clears convention as the others."""
-    if content is not UNSET:
-        _validate_content_length(content)
     has_uikit = components not in (UNSET, None) and _contains_uikit(components)
+    if has_uikit:
+        # UNSET normalizes to None here: leaving content/embeds untouched is
+        # not a conflict with setting Components v2, only explicitly setting
+        # either one in the same call is (see _validate_uikit's docstring)
+        _validate_uikit(content if content is not UNSET else None, embeds if embeds is not UNSET else None, components)
+    elif content is not UNSET:
+        _validate_content_length(content)
     if flags is not None or has_uikit:
         computed_flags = (flags or 0) | (_FLAG_UI_KIT if has_uikit else 0)
     else:
