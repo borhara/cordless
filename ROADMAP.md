@@ -36,9 +36,6 @@ The current feature surface, for orientation:
 - Environment-specific config (`--environment`/`--env`, overlay `.env` files)
 - Optional cross-invocation rate-limit coordination via DynamoDB
 - `cordless logs`: CloudWatch log tailing for the main or worker function
-
-## In progress
-
 - **Full Discord REST API coverage.** Today's REST surface is the handful of
   helpers on `Cordless` (`send_message`, `edit_message`, webhooks, roles,
   ...). That's being replaced with a complete typed client covering the rest
@@ -48,11 +45,14 @@ The current feature surface, for orientation:
   Threads are the first resource shipped end-to-end; the rest are landing
   resource by resource.
 
-## Planned next
 
-- Rough cost visibility in `cordless deploy`/`cordless logs` output (Lambda
-  invocations, plus DynamoDB if rate limiting is enabled), so "serverless"
-  doesn't mean "opaque."
+## In progress
+N/A
+
+
+## Planned next
+N/A
+
 
 ## Under consideration
 
@@ -94,6 +94,7 @@ The current feature surface, for orientation:
   Server Settings UI already covers this per guild with no bot involvement,
   which is the intended path. `default_member_permissions` (already
   supported) remains the way to gate a command from code.
+- Rough cost visibility in cordless deploy/cordless logs output: skipped: almost every cordless bot sits inside AWS's free tier, so a live estimate would mostly just print "~$0.00" while costing us pricing constants and CloudWatch polling to maintain. Not worth it unless that changes.
 
 ---
 
