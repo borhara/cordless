@@ -16,6 +16,14 @@ same bucket id collapse onto the same cached state instead of being tracked
 as if they had independent quota. Which bucket a route belongs to is only
 known once a response reveals it, so route_key stays the fallback identity
 for any route this warm container hasn't seen a response for yet.
+
+A fresh container starts with no bucket knowledge of its own (_route_buckets
+is in-memory only), so it can't compute the same bucket-keyed key another
+container just published shared state under, and would otherwise never find
+it. Every shared publish is therefore mirrored under the plain route key too
+(see _mirror_under_route_key), so a cold container's fallback lookup, which
+is exactly what it's stuck using until it learns the bucket for itself,
+still finds the block a warm sibling already recorded.
 """
 
 import os
@@ -107,6 +115,24 @@ def _major_resource(path):
     return match.group(0) if match else ""
 
 
+def _mirror_under_route_key(key, route, blocked_until, confirmed):
+    """When key (bucket-based) differs from route (the plain fallback
+    identity), also publish the exact same shared state under route.
+
+    A container that has never itself seen a response for route has an
+    empty _route_buckets entry for it and can't compute key, the same
+    bucket-based key this container just published under; it can only
+    ever fall back to querying by route directly (that's exactly what
+    _effective_key returns when the bucket is unknown). Without this
+    mirror, that fallback lookup always misses, so a cold container sends
+    straight into a bucket another invocation already confirmed (or
+    predicted) is exhausted, defeating the point of cross-invocation
+    coordination for precisely the case (a fresh container) it matters
+    most for."""
+    if key != route:
+        _put_shared(route, blocked_until, confirmed=confirmed)
+
+
 def _effective_key(route, path):
     """route's bucket id, combined with path's major resource, if this warm
     container has learned a bucket id for route; otherwise route itself
@@ -145,6 +171,7 @@ def record_response(method, path, headers):
         # publish proactively, so a concurrent invocation can back off before
         # it ever gets a 429 itself, not just after someone else already has
         _put_shared(key, reset_at, confirmed=False)
+        _mirror_under_route_key(key, route, reset_at, confirmed=False)
 
 
 def wait_if_needed(method, path):
@@ -198,6 +225,7 @@ def note_blocked(method, path, retry_after, headers=None):
     # exact retry_after, unlike record_response's merely-predicted block.
     _local[key] = (0, blocked_until, True)
     _put_shared(key, blocked_until, confirmed=True)
+    _mirror_under_route_key(key, route, blocked_until, confirmed=True)
 
 
 _tables = {}

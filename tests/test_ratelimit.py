@@ -479,6 +479,31 @@ def test_wait_if_needed_works_end_to_end_against_real_dynamo(dynamo_table, monke
     assert slept
 
 
+def test_cold_container_discovers_a_bucket_keyed_block_via_the_route_mirror(dynamo_table, monkeypatch):
+    """The actual cold-start bug: container A learns this route's bucket id
+    and publishes shared state under the bucket-keyed key. A fresh container
+    B has never seen a response for this route, so its _route_buckets is
+    empty and it can only ever compute the plain route key, not the
+    bucket-keyed one A published under, so without the route-key mirror,
+    B's lookup always misses and it sends straight into a bucket A already
+    confirmed is exhausted, exactly the case cross-invocation coordination
+    exists for."""
+    monkeypatch.setattr(random, "uniform", lambda a, b: a)
+
+    # container A: learns the bucket id from a real 429, publishes shared state.
+    # retry_after is well past _CONFIRMED_MAX_WAIT so B's outcome (raise, not
+    # a sleep-then-send) unambiguously proves it found A's confirmed block.
+    ratelimit.note_blocked("POST", "/channels/123/messages", 60.0, headers={"X-RateLimit-Bucket": "abc"})
+    assert ratelimit._route_buckets["POST /channels/123/messages"] == "abc"
+
+    # container B: fresh process, no bucket knowledge of its own
+    ratelimit._route_buckets.clear()
+    ratelimit._local.clear()
+
+    with pytest.raises(DiscordHTTPError, match="429"):
+        ratelimit.wait_if_needed("POST", "/channels/123/messages")
+
+
 def test_shared_block_fails_open_when_table_missing(monkeypatch):
     monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, "does-not-exist")
     with mock_aws():
