@@ -122,7 +122,12 @@ async def create_guild_scheduled_event_exception(
     is_canceled=UNSET,
     token=None,
 ):
-    """Recurring events only: override or cancel one occurrence."""
+    """Recurring events only: override or cancel one occurrence.
+
+    The result must actually differ from the series. Discord 400s (code
+    180005) on a no-op exception, so is_canceled=False alone won't work.
+    A rescheduled scheduled_start_time is also ordering-constrained against
+    the series' other occurrences (can't be before the previous one's)."""
     payload = _client.payload(
         original_scheduled_start_time=original_scheduled_start_time,
         scheduled_start_time=scheduled_start_time,
@@ -145,6 +150,10 @@ async def edit_guild_scheduled_event_exception(
     is_canceled=UNSET,
     token=None,
 ):
+    """Same "must differ from the series" rule as create_guild_scheduled_
+    event_exception applies to the result here too. Editing is_canceled
+    back to False is itself a 400 if nothing else about the exception still
+    differs from the series."""
     payload = _client.payload(
         scheduled_start_time=scheduled_start_time, scheduled_end_time=scheduled_end_time, is_canceled=is_canceled
     )
