@@ -13,33 +13,40 @@ from .models import Webhook
 
 
 async def fetch_channel_webhooks(channel_id, *, token=None):
+    """Fetches every webhook attached to the channel."""
     data = await _client.request("GET", f"/channels/{channel_id}/webhooks", token=token)
     assert data is not None, "GET always returns a body"
     return [Webhook(w) for w in data]
 
 
 async def fetch_guild_webhooks(guild_id, *, token=None):
+    """Fetches every webhook in the guild, across all its channels."""
     data = await _client.request("GET", f"/guilds/{guild_id}/webhooks", token=token)
     assert data is not None, "GET always returns a body"
     return [Webhook(w) for w in data]
 
 
 async def fetch_webhook(webhook_id, *, token=None):
+    """Fetches a single webhook by id."""
     data = await _client.request("GET", f"/webhooks/{webhook_id}", token=token)
     return Webhook(data)
 
 
 async def create_webhook(channel_id, name, *, avatar=UNSET, reason=None, token=None):
+    """Creates a new webhook on a channel. name can't be "clyde", Discord
+    reserves that one."""
     payload = _client.payload(name=name, avatar=avatar)
     data = await _client.request("POST", f"/channels/{channel_id}/webhooks", payload, token=token, reason=reason)
     return Webhook(data)
 
 
 async def edit_webhook(webhook_id, *, name=UNSET, avatar=UNSET, channel_id=UNSET, reason=None, token=None):
+    """Edits a webhook's name, avatar, or which channel it posts to."""
     payload = _client.payload(name=name, avatar=avatar, channel_id=channel_id)
     data = await _client.request("PATCH", f"/webhooks/{webhook_id}", payload, token=token, reason=reason)
     return Webhook(data)
 
 
 async def delete_webhook(webhook_id, *, reason=None, token=None):
+    """Deletes a webhook."""
     await _client.request("DELETE", f"/webhooks/{webhook_id}", token=token, reason=reason)

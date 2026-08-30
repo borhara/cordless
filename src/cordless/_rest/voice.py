@@ -12,17 +12,21 @@ from .models import VoiceRegion, VoiceState
 
 
 async def fetch_voice_regions(*, token=None):
+    """Fetches every voice region Discord offers, not scoped to any one
+    guild."""
     data = await _client.request("GET", "/voice/regions", token=token)
     assert data is not None, "GET always returns a body"
     return [VoiceRegion(r) for r in data]
 
 
 async def fetch_current_user_voice_state(guild_id, *, token=None):
+    """Fetches the bot's own voice state in the guild."""
     data = await _client.request("GET", f"/guilds/{guild_id}/voice-states/@me", token=token)
     return VoiceState(data)
 
 
 async def fetch_user_voice_state(guild_id, user_id, *, token=None):
+    """Fetches a user's voice state in the guild."""
     data = await _client.request("GET", f"/guilds/{guild_id}/voice-states/{user_id}", token=token)
     return VoiceState(data)
 
