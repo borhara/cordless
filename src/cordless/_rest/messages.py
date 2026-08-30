@@ -28,6 +28,9 @@ def _to_dicts(components):
 
 
 async def fetch_channel_messages(channel_id, *, around=None, before=None, after=None, limit=None, token=None):
+    """Fetches a page of the channel's messages. around, before and after
+    are mutually exclusive, each anchors the page around a different
+    message id."""
     qs = _client.query_string(around=around, before=before, after=after, limit=limit)
     data = await _client.request("GET", f"/channels/{channel_id}/messages{qs}", token=token)
     assert data is not None, "GET always returns a body"
@@ -35,6 +38,7 @@ async def fetch_channel_messages(channel_id, *, around=None, before=None, after=
 
 
 async def fetch_message(channel_id, message_id, *, token=None):
+    """Fetches a single message by id."""
     data = await _client.request("GET", f"/channels/{channel_id}/messages/{message_id}", token=token)
     return Message(data)
 
@@ -56,6 +60,9 @@ async def create_message(
     poll=None,
     token=None,
 ):
+    """Sends a message to the channel. The lower-level equivalent of
+    channel.send(), which also handles replies, retained attachments and
+    other conveniences this function doesn't."""
     is_uikit = _contains_uikit(components)
     if is_uikit:
         _validate_uikit(content, embeds, components)
@@ -93,6 +100,8 @@ async def create_message(
 
 
 async def crosspost_message(channel_id, message_id, *, token=None):
+    """Publishes a message in an announcement channel to every guild
+    following it."""
     data = await _client.request("POST", f"/channels/{channel_id}/messages/{message_id}/crosspost", token=token)
     return Message(data)
 
@@ -141,6 +150,7 @@ async def edit_channel_message(
 
 
 async def delete_channel_message(channel_id, message_id, *, token=None):
+    """Deletes a message."""
     await _client.request("DELETE", f"/channels/{channel_id}/messages/{message_id}", token=token)
 
 
@@ -153,21 +163,26 @@ async def bulk_delete_messages(channel_id, message_ids, *, token=None):
 
 
 async def create_reaction(channel_id, message_id, emoji, *, token=None):
+    """Adds a reaction to a message on the bot's own behalf."""
     path = f"/channels/{channel_id}/messages/{message_id}/reactions/{_quote_emoji(emoji)}/@me"
     await _client.request("PUT", path, token=token)
 
 
 async def delete_own_reaction(channel_id, message_id, emoji, *, token=None):
+    """Removes the bot's own reaction from a message."""
     path = f"/channels/{channel_id}/messages/{message_id}/reactions/{_quote_emoji(emoji)}/@me"
     await _client.request("DELETE", path, token=token)
 
 
 async def delete_user_reaction(channel_id, message_id, emoji, user_id, *, token=None):
+    """Removes another user's reaction from a message."""
     path = f"/channels/{channel_id}/messages/{message_id}/reactions/{_quote_emoji(emoji)}/{user_id}"
     await _client.request("DELETE", path, token=token)
 
 
 async def fetch_reactions(channel_id, message_id, emoji, *, type=None, after=None, limit=None, token=None):
+    """Fetches the users who reacted to a message with a given emoji.
+    type distinguishes a normal reaction from a super reaction (burst)."""
     qs = _client.query_string(type=type, after=after, limit=limit)
     data = await _client.request(
         "GET", f"/channels/{channel_id}/messages/{message_id}/reactions/{_quote_emoji(emoji)}{qs}", token=token
@@ -177,15 +192,19 @@ async def fetch_reactions(channel_id, message_id, emoji, *, type=None, after=Non
 
 
 async def delete_all_reactions(channel_id, message_id, *, token=None):
+    """Removes every reaction from a message, all emoji and all users."""
     await _client.request("DELETE", f"/channels/{channel_id}/messages/{message_id}/reactions", token=token)
 
 
 async def delete_all_reactions_for_emoji(channel_id, message_id, emoji, *, token=None):
+    """Removes every user's reaction of a single emoji from a message,
+    leaving other emoji untouched."""
     path = f"/channels/{channel_id}/messages/{message_id}/reactions/{_quote_emoji(emoji)}"
     await _client.request("DELETE", path, token=token)
 
 
 async def fetch_poll_answer_voters(channel_id, message_id, answer_id, *, after=None, limit=None, token=None):
+    """Fetches the users who voted for one answer on a poll."""
     qs = _client.query_string(after=after, limit=limit)
     path = f"/channels/{channel_id}/polls/{message_id}/answers/{answer_id}{qs}"
     data = await _client.request("GET", path, token=token)

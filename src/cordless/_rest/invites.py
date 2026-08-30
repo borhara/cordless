@@ -17,6 +17,10 @@ from .models import Invite, TargetUsersJobStatus
 
 
 async def fetch_invite(code, *, with_counts=None, guild_scheduled_event_id=None, token=None):
+    """Fetches an invite by its code. with_counts adds approximate member
+    and presence counts; guild_scheduled_event_id attaches a scheduled
+    event to the returned invite so a client can offer to add it to the
+    joiner's calendar."""
     params = [
         p
         for p in (
@@ -31,6 +35,7 @@ async def fetch_invite(code, *, with_counts=None, guild_scheduled_event_id=None,
 
 
 async def delete_invite(code, *, token=None):
+    """Deletes an invite, revoking it immediately."""
     data = await _client.request("DELETE", f"/invites/{code}", token=token)
     return Invite(data)
 
@@ -50,5 +55,7 @@ async def edit_invite_target_users(code, filename, file_bytes, *, token=None):
 
 
 async def fetch_invite_target_users_job_status(code, *, token=None):
+    """Fetches the processing status of the CSV uploaded through
+    edit_invite_target_users."""
     data = await _client.request("GET", f"/invites/{code}/target-users/job-status", token=token)
     return TargetUsersJobStatus(data)

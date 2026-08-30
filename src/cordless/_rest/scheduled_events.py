@@ -7,6 +7,8 @@ from .models import GuildScheduledEvent, GuildScheduledEventException, GuildSche
 
 
 async def fetch_guild_scheduled_events(guild_id, *, with_user_count=False, token=None):
+    """Fetches every scheduled event in the guild, including ones that
+    have already ended."""
     qs = _client.query_string(with_user_count=with_user_count)
     data = await _client.request("GET", f"/guilds/{guild_id}/scheduled-events{qs}", token=token)
     assert data is not None, "GET always returns a body"
@@ -47,6 +49,7 @@ async def create_guild_scheduled_event(
 
 
 async def fetch_guild_scheduled_event(guild_id, event_id, *, with_user_count=False, token=None):
+    """Fetches a single scheduled event by id."""
     qs = _client.query_string(with_user_count=with_user_count)
     data = await _client.request("GET", f"/guilds/{guild_id}/scheduled-events/{event_id}{qs}", token=token)
     return GuildScheduledEvent(data)
@@ -90,12 +93,14 @@ async def edit_guild_scheduled_event(
 
 
 async def delete_guild_scheduled_event(guild_id, event_id, *, token=None):
+    """Deletes a scheduled event."""
     await _client.request("DELETE", f"/guilds/{guild_id}/scheduled-events/{event_id}", token=token)
 
 
 async def fetch_guild_scheduled_event_users(
     guild_id, event_id, *, limit=None, with_member=False, before=None, after=None, token=None
 ):
+    """Fetches the users subscribed to a scheduled event."""
     qs = _client.query_string(limit=limit, with_member=with_member, before=before, after=after)
     data = await _client.request("GET", f"/guilds/{guild_id}/scheduled-events/{event_id}/users{qs}", token=token)
     assert data is not None, "GET always returns a body"
@@ -164,6 +169,8 @@ async def edit_guild_scheduled_event_exception(
 
 
 async def delete_guild_scheduled_event_exception(guild_id, event_id, exception_id, *, token=None):
+    """Deletes an exception, letting that occurrence of a recurring event
+    fall back to the series' regular schedule."""
     await _client.request(
         "DELETE", f"/guilds/{guild_id}/scheduled-events/{event_id}/exceptions/{exception_id}", token=token
     )
@@ -172,6 +179,8 @@ async def delete_guild_scheduled_event_exception(guild_id, event_id, exception_i
 async def fetch_guild_scheduled_event_exception_users(
     guild_id, event_id, exception_id, *, with_member=False, limit=None, before=None, after=None, token=None
 ):
+    """Fetches the users subscribed to one exceptional occurrence of a
+    recurring event."""
     qs = _client.query_string(with_member=with_member, limit=limit, before=before, after=after)
     data = await _client.request(
         "GET", f"/guilds/{guild_id}/scheduled-events/{event_id}/exceptions/{exception_id}/users{qs}", token=token
