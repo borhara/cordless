@@ -8,6 +8,12 @@ request()/request_raw() are async, matching every other public REST call in
 cordless, but the actual urllib work is blocking - each call runs the whole
 retry loop in a worker thread via run_in_executor, the same one-executor-call-
 per-outbound-request shape the rest of the codebase already uses.
+
+One persistent connection, guarded by _conn_lock held across the whole
+request including the body read (see _LockedResponse). Calls therefore
+serialise: gathering many REST calls in one handler runs them one at a time,
+not in parallel. Fine for a Lambda handling a single interaction; a handler
+that fans out heavily should batch its own work instead.
 """
 
 import asyncio
@@ -229,6 +235,9 @@ def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_bo
     network_retried = False
     while True:
         ratelimit.wait_if_needed(method, path)
+        # a plain value object, not something urlopen() ever sees: _send() reads
+        # .host/.selector/.data/.header_items() off it. Request is reused for the
+        # url split and header-casing normalisation it does for free.
         req = urllib.request.Request(url, data=body, headers=headers, method=method)
         try:
             with _send(req, safe_to_retry) as resp:

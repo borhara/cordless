@@ -123,7 +123,8 @@ class MessagePin(DiscordObject):
     @property
     def message(self):
         """The pinned `Message`."""
-        return Message(self._data.get("message"))
+        message_data = self._data.get("message")
+        return Message(message_data) if message_data is not None else None
 
 
 class Ban(DiscordObject):
@@ -132,7 +133,8 @@ class Ban(DiscordObject):
     @property
     def user(self):
         """The banned `User`."""
-        return User(self._data.get("user"))
+        user_data = self._data.get("user")
+        return User(user_data) if user_data is not None else None
 
 
 class Integration(DiscordObject):
@@ -475,7 +477,8 @@ class GuildScheduledEventUser(DiscordObject):
     @property
     def user(self):
         """The subscribed `User`."""
-        return User(self._data.get("user"))
+        user_data = self._data.get("user")
+        return User(user_data) if user_data is not None else None
 
     @property
     def member(self):
@@ -510,7 +513,8 @@ class GuildTemplate(DiscordObject):
     @property
     def creator(self):
         """The `User` who created this template."""
-        return User(self._data.get("creator"))
+        creator_data = self._data.get("creator")
+        return User(creator_data) if creator_data is not None else None
 
     async def sync(self, **kwargs):
         """Sync this template to its source guild's current state. Returns
