@@ -257,6 +257,33 @@ def test_handle_still_routes_discord_interaction_on_post_root():
     assert json.loads(result["body"])["data"]["content"] == "pong"
 
 
+def test_handle_routes_discord_interaction_on_non_root_post_path():
+    bot = Cordless()
+
+    @bot.route("GET", "/healthz")
+    async def health(event, bot):
+        return "ok"
+
+    @bot.command("ping")
+    async def ping(ctx):
+        return await ctx.send("pong")
+
+    # an interaction endpoint URL with a path segment must still reach dispatch
+    result = bot.handle(_event("POST", "/discord/interactions", body=json.dumps({"type": 2, "data": {"name": "ping"}})))
+    assert json.loads(result["body"])["data"]["content"] == "pong"
+
+
+def test_handle_unmatched_non_post_is_still_404():
+    bot = Cordless()
+
+    @bot.route("POST", "/stripe")
+    async def hook(event, bot):
+        return "ok"
+
+    result = bot.handle(_event("GET", "/nope"))
+    assert result["statusCode"] == 404
+
+
 def test_handle_route_skips_signature_verification():
     bot = Cordless(public_key="0" * 64)
 

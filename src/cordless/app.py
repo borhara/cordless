@@ -838,6 +838,10 @@ class Cordless(RESTMixin):
 
         match = self.router.match_route(method, path)
         if match is None:
+            # an unmatched POST may still be a Discord interaction whose
+            # endpoint URL carries a path, so fall through to handle()
+            if method == "POST":
+                return None
             return _json_response(404, {"error": f"no route for {method} {path}"})
 
         handler, params = match
