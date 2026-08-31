@@ -15,6 +15,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from ._progress import _DIM, _GREEN, _RED, _RESET, _YELLOW, Spinner, _tty
@@ -165,22 +166,42 @@ def _load_env(source_dir, environment=None):
 
 def _make_handler(reloader, verbose=False):
     class DevHandler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            body = b"cordless dev is running \xe2\x9c\x93"
-            self.send_response(200)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+        def _serve(self):
+            split = urllib.parse.urlsplit(self.path)
+            path = "/" + "/".join(s for s in split.path.split("/") if s)
+            method = self.command
+            bot = reloader.get()
 
-        def do_POST(self):
+            # keep the friendly landing page when nothing claims GET /
+            if method == "GET" and path == "/" and bot.router.match_route("GET", "/") is None:
+                body = b"cordless dev is running \xe2\x9c\x93"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
             length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length).decode()
-            event = {"body": body, "headers": dict(self.headers)}
+            raw = self.rfile.read(length) if length else b""
+            try:
+                body = raw.decode()
+            except UnicodeDecodeError:
+                body = base64.b64encode(raw).decode()
+            query = {k: v[-1] for k, v in urllib.parse.parse_qs(split.query).items()}
+            event = {
+                "body": body,
+                "headers": dict(self.headers),
+                "rawPath": path,
+                "rawQueryString": split.query,
+                "queryStringParameters": query or None,
+                "requestContext": {"http": {"method": method, "path": path}},
+                "isBase64Encoded": False,
+            }
 
             start = time.perf_counter()
             try:
-                result = reloader.get().handle(event)
+                result = bot.handle(event)
             except Exception as exc:
                 import traceback
 
@@ -203,15 +224,17 @@ def _make_handler(reloader, verbose=False):
             self.end_headers()
             self.wfile.write(payload)
 
-            _log_request(_describe_interaction(body), result["statusCode"], elapsed_ms, body, verbose=verbose)
+            label = _describe_interaction(body) if method == "POST" and path == "/" else f"{method} {path}"
+            _log_request(label, result["statusCode"], elapsed_ms, body, verbose=verbose)
+
+        do_GET = _serve
+        do_POST = _serve
+        do_PUT = _serve
+        do_PATCH = _serve
+        do_DELETE = _serve
 
         def log_message(self, fmt, *args):
-            if self.command == "POST":
-                return  # do_POST already logged a richer line above
-            status = args[1] if len(args) > 1 else ""
-            dim = _DIM if _tty else ""
-            reset = _RESET if _tty else ""
-            print(f"  {dim}{_timestamp()}{reset} → {self.command} {status}")
+            return  # _serve already logs a richer line
 
     return DevHandler
 

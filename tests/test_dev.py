@@ -177,6 +177,55 @@ def test_get_health_check(dev_server):
         assert resp.status == 200
 
 
+@pytest.fixture
+def route_bot_project(tmp_path):
+    (tmp_path / "mybot.py").write_text(
+        "import json\n"
+        "from cordless import Cordless\n"
+        "bot = Cordless()\n"
+        "@bot.route('POST', '/gh/{repo}/hook')\n"
+        "async def hook(event, bot):\n"
+        "    return {'repo': event['pathParameters']['repo'], 'body': json.loads(event['body'])}\n"
+        "@bot.route('GET', '/healthz')\n"
+        "async def healthz(event, bot):\n"
+        "    return 'ok'\n"
+    )
+    sys.path.insert(0, str(tmp_path))
+    yield tmp_path
+    sys.path.remove(str(tmp_path))
+    sys.modules.pop("mybot", None)
+
+
+@pytest.fixture
+def route_dev_server(route_bot_project):
+    reloader = Reloader("mybot:bot", str(route_bot_project))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _make_handler(reloader))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{server.server_address[1]}"
+    server.shutdown()
+    server.server_close()
+
+
+def test_dev_serves_post_route_with_path_param(route_dev_server):
+    req = urllib.request.Request(f"{route_dev_server}/gh/cordless/hook", data=b'{"ref": "main"}', method="POST")
+    with urllib.request.urlopen(req) as resp:
+        assert json.loads(resp.read()) == {"repo": "cordless", "body": {"ref": "main"}}
+
+
+def test_dev_serves_get_route(route_dev_server):
+    with urllib.request.urlopen(f"{route_dev_server}/healthz") as resp:
+        assert resp.read() == b"ok"
+
+
+def test_dev_unmatched_route_is_404(route_dev_server):
+    try:
+        urllib.request.urlopen(f"{route_dev_server}/nope")
+        assert False, "expected 404"
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 404
+
+
 def test_post_interaction_with_files_round_trips_raw_bytes(bot_project):
     """isBase64Encoded responses (multipart file attachments) must be decoded
     back to raw bytes before hitting the socket, same as real API Gateway."""
