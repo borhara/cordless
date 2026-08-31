@@ -447,6 +447,88 @@ def test_registering_subcommand_under_existing_command_raises():
             pass
 
 
+def test_empty_command_description_raises_naming_the_command():
+    bot = Cordless()
+
+    with pytest.raises(ValueError, match="Command 'buy': description must be 1 to 100"):
+
+        @bot.command("buy", description="")
+        async def buy(ctx):
+            pass
+
+
+def test_overlong_command_description_raises():
+    bot = Cordless()
+
+    with pytest.raises(ValueError, match="Command 'buy': description"):
+
+        @bot.command("buy", description="x" * 101)
+        async def buy(ctx):
+            pass
+
+
+def test_empty_option_description_raises_naming_command_and_option():
+    bot = Cordless()
+
+    with pytest.raises(ValueError, match="Command 'buy' option 'qty': description"):
+
+        @bot.command("buy", description="Buy", options=[{"name": "qty", "description": "", "type": 4}])
+        async def buy(ctx):
+            pass
+
+
+def test_uppercase_option_name_raises():
+    bot = Cordless()
+
+    with pytest.raises(ValueError, match="Command 'buy': invalid option name 'Qty'"):
+
+        @bot.command("buy", description="Buy", options=[{"name": "Qty", "description": "How many", "type": 4}])
+        async def buy(ctx):
+            pass
+
+
+def test_more_than_25_options_raises():
+    bot = Cordless()
+    options = [{"name": f"o{i}", "description": "x", "type": 3} for i in range(26)]
+
+    with pytest.raises(ValueError, match="Command 'buy' has 26 options"):
+
+        @bot.command("buy", description="Buy", options=options)
+        async def buy(ctx):
+            pass
+
+
+def test_more_than_25_choices_raises():
+    bot = Cordless()
+    opt = {"name": "n", "description": "x", "type": 4, "choices": [{"name": str(i), "value": i} for i in range(26)]}
+
+    with pytest.raises(ValueError, match="option 'n' has 26 choices"):
+
+        @bot.command("pick", description="Pick", options=[opt])
+        async def pick(ctx):
+            pass
+
+
+def test_group_description_length_validated():
+    bot = Cordless()
+
+    with pytest.raises(ValueError, match="Command 'shop/admin/ban' group: description"):
+
+        @bot.command("shop/admin/ban", description="Ban", group_description="x" * 101)
+        async def ban(ctx):
+            pass
+
+
+def test_inferred_options_pass_validation():
+    bot = Cordless()
+
+    @bot.command("buy", description="Buy an item")
+    async def buy(ctx, item: str, qty: int = 1):
+        pass
+
+    assert "buy" in bot.router.commands
+
+
 def test_subcommand_permissions_propagate_to_parent():
     bot = Cordless()
 

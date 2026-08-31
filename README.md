@@ -39,6 +39,7 @@ cordless flips this. Your bot is a Lambda function: it only runs when Discord se
 - **Local dev:** `cordless dev` runs your bot on localhost with a live public tunnel
 - **Slow commands:** deferred interactions hand off to a worker Lambda so Discord's 3-second limit is never a problem
 - **Full REST API:** every Discord endpoint, typed, reachable as `bot.<verb>()` or directly on the objects you already have (`guild.create_channel()`, `message.reply()`)
+- **Raw HTTP routes:** `@bot.route("POST", "/stripe/webhook")` handles third-party webhooks, OAuth callbacks and health checks on the same function, outside Discord's interaction flow
 
 ---
 

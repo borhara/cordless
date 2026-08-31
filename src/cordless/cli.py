@@ -200,6 +200,7 @@ def _deploy(args):
     bot_target = _resolve_bot(None, source_dir, cfg)
     bot = _load_bot(bot_target, path=source_dir) if bot_target else None
     crons = {name: entry["schedule"] for name, entry in bot.crons.items()} if bot else None
+    routes = bot.router.route_defs() if bot else None
 
     deploy(
         function_name=function_name,
@@ -226,6 +227,7 @@ def _deploy(args):
         endpoint=args.endpoint or cfg.get("endpoint"),
         keep_warm=cfg.get("keep-warm"),
         log_retention_days=int(cfg.get("log_retention", _DEFAULT_LOG_RETENTION_DAYS)),
+        routes=routes,
     )
 
     if args.register:
@@ -521,6 +523,7 @@ def _doctor(args):
     bot_target = _resolve_bot(args.bot, source_dir, cfg)
     bot = _load_bot(bot_target, path=source_dir) if bot_target else None
     crons = {name: entry["schedule"] for name, entry in bot.crons.items()} if bot else None
+    routes = bot.router.route_defs() if bot else None
 
     from ._progress import _DIM, _RESET
 
@@ -537,6 +540,7 @@ def _doctor(args):
         keep_warm=keep_warm,
         ratelimit=ratelimit,
         local_env=local_env,
+        routes=routes,
         on_section=_print_as_it_goes,
     )
     print(f"\n  {_DIM}── done ──{_RESET}\n")

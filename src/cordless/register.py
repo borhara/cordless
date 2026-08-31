@@ -92,4 +92,50 @@ def sync_commands(commands, guild_id=None, bot_token=None, client_id=None, clien
         with urllib.request.urlopen(request) as response:
             return json.loads(response.read())
     except urllib.error.HTTPError as exc:
-        raise RuntimeError(f"Failed to register commands ({exc.code}): {exc.read().decode()}") from exc
+        body = exc.read().decode()
+        raise RuntimeError(
+            f"Failed to register commands ({exc.code}): {_explain_form_errors(body, commands) or body}"
+        ) from exc
+
+
+def _explain_form_errors(body, commands):
+    """Rewrite Discord's positional Invalid Form Body errors (`errors.0.
+    options.18.description`) into lines that name the command and option at
+    fault. Returns None when the body is not that shape."""
+    try:
+        errors = json.loads(body).get("errors")
+    except (ValueError, AttributeError):
+        return None
+    if not isinstance(errors, dict):
+        return None
+
+    lines = []
+
+    def walk(node, defn, trail):
+        if not isinstance(node, dict):
+            return
+        leaf = node.get("_errors")
+        if isinstance(leaf, list) and leaf:
+            message = "; ".join(item.get("message", "") for item in leaf)
+            lines.append(f"{', '.join(trail)}: {message}" if trail else message)
+            return
+        for key, child in node.items():
+            if key == "_errors":
+                continue
+            if key.isdigit() and isinstance(defn, list):
+                index = int(key)
+                item = defn[index] if index < len(defn) else None
+                if not isinstance(item, dict) or "name" not in item:
+                    walk(child, item, trail + [f"[{key}]"])
+                elif not trail:
+                    walk(child, item, [f"command {item['name']!r}"])
+                else:
+                    label = {1: "subcommand", 2: "group"}.get(item.get("type"), "option")
+                    walk(child, item, trail + [f"{label} {item['name']!r}"])
+            elif key in ("options", "choices") and isinstance(defn, dict):
+                walk(child, defn.get(key), trail)
+            else:
+                walk(child, defn.get(key) if isinstance(defn, dict) else None, trail + [key])
+
+    walk(errors, commands, [])
+    return "; ".join(lines) or None

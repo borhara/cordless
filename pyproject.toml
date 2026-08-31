@@ -76,6 +76,7 @@ include = [
     "src/cordless/models.py",
     "src/cordless/app.py",
     "src/cordless/router.py",
+    "src/cordless/routes.py",
     "src/cordless/webhook.py",
     "src/cordless/_multipart.py",
     "src/cordless/errors.py",

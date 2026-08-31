@@ -44,11 +44,58 @@ def _prewarm_defer():
         pass
 
 
+_MAX_OPTIONS = 25
+_MAX_CHOICES = 25
+
+
 def _validate_command_name(name):
     """Fail at decoration time instead of with a cryptic Discord API error at register time."""
     for part in name.split("/"):
         if not _NAME_RE.fullmatch(part):
             raise ValueError(f"Invalid command name {name!r}: Discord requires 1-32 lowercase letters, digits, - or _")
+
+
+def _check_description(where, text):
+    """Discord requires a 1 to 100 character description on chat-input
+    commands and every option. An empty or overlong one is otherwise only
+    caught by a positional Invalid Form Body error at register time."""
+    length = 0 if text is None else len(text)
+    if not 1 <= length <= 100:
+        raise ValueError(f"{where}: description must be 1 to 100 characters, got {length}")
+
+
+def _validate_command_shape(name, description, options, group_description=None):
+    """Decoration-time checks for the static limits that produce opaque
+    Discord errors: description lengths, option names, and the 25-item caps
+    on options and choices. Every message names the command."""
+    _check_description(f"Command {name!r}", description)
+    if group_description is not None:
+        _check_description(f"Command {name!r} group", group_description)
+
+    if len(options) > _MAX_OPTIONS:
+        raise ValueError(f"Command {name!r} has {len(options)} options, Discord allows at most {_MAX_OPTIONS}")
+
+    for opt in options:
+        opt_name = opt.get("name", "")
+        if not _NAME_RE.fullmatch(opt_name):
+            raise ValueError(
+                f"Command {name!r}: invalid option name {opt_name!r}, "
+                "Discord requires 1-32 lowercase letters, digits, - or _"
+            )
+        _check_description(f"Command {name!r} option {opt_name!r}", opt.get("description"))
+
+        choices = opt.get("choices") or []
+        if len(choices) > _MAX_CHOICES:
+            raise ValueError(
+                f"Command {name!r} option {opt_name!r} has {len(choices)} choices, "
+                f"Discord allows at most {_MAX_CHOICES}"
+            )
+        for ch in choices:
+            ch_name = ch.get("name")
+            if ch_name is None or not 1 <= len(str(ch_name)) <= 100:
+                raise ValueError(
+                    f"Command {name!r} option {opt_name!r}: choice name must be 1 to 100 characters, got {ch_name!r}"
+                )
 
 
 def _unwrap_optional(annotation):
@@ -249,6 +296,7 @@ class Cordless(RESTMixin):
 
         def decorator(func):
             _options = options if options is not None else options_from_signature(func)
+            _validate_command_shape(name, description, _options, group_description)
             if defer:
                 func._defer = True
                 if ephemeral:
@@ -691,6 +739,35 @@ class Cordless(RESTMixin):
 
         return decorator
 
+    def route(self, method, path):
+        """Register a raw HTTP handler on the same Lambda, outside the
+        Discord interaction flow.
+
+        Use it for requests that must reach this function without Discord
+        signature verification: incoming webhooks from other services, OAuth
+        redirect callbacks, health checks. The handler is called as
+        `handler(event, bot)` with the raw Lambda event and this instance,
+        so it can reuse `send_message`, `execute_webhook`, and the rest.
+
+        `path` may contain `{name}` segments; matched values arrive on
+        `event["pathParameters"]`. A trailing `{name+}` captures the rest of
+        the path. The handler may return a string, a dict or list (sent as
+        JSON), a status int, a `(status, body)` or `(status, body, headers)`
+        tuple, or a full Lambda proxy dict.
+
+        Works on either endpoint. On the default Function URL every path
+        reaches the function and cordless does the matching. Setting
+        `endpoint = "api_gateway"` adds edge 404s for unknown paths and
+        makes `cordless deploy` sync these routes onto the API alongside the
+        Discord commands.
+        """
+
+        def decorator(func):
+            self.router.register_route(method, path, func)
+            return func
+
+        return decorator
+
     def error(self, func):
         """Register the error handler, called as `(ctx, exc)`. If it sends a
         response (or returns one), that becomes the interaction's response;
@@ -716,6 +793,11 @@ class Cordless(RESTMixin):
         `handler()` instead, which wraps this plus keep-warm pings and
         `@bot.cron` dispatch, call this directly only if you're building a
         custom Lambda entrypoint."""
+        if self.router.routes:
+            response = self._try_route(event)
+            if response is not None:
+                return response
+
         body = _extract_body(event)
 
         # None means verification is deliberately off (local/testing); an empty
@@ -743,6 +825,39 @@ class Cordless(RESTMixin):
         except CordlessError as exc:
             print(f"[cordless] {exc.__class__.__name__}: {exc}")
             return _json_response(400, {"error": str(exc)})
+
+    def _try_route(self, event):
+        """Dispatch `event` to a matching `@bot.route` handler. Returns the
+        response dict, or `None` when the event is a Discord interaction and
+        should fall through to the normal path."""
+        from .routes import build_response, request_method_path
+
+        method, path = request_method_path(event)
+        if method is None or (method == "POST" and path == "/"):
+            return None
+
+        match = self.router.match_route(method, path)
+        if match is None:
+            # an unmatched POST may still be a Discord interaction whose
+            # endpoint URL carries a path, so fall through to handle()
+            if method == "POST":
+                return None
+            return _json_response(404, {"error": f"no route for {method} {path}"})
+
+        handler, params = match
+        route_event = dict(event)
+        route_event["pathParameters"] = {**(event.get("pathParameters") or {}), **params}
+        try:
+            result = asyncio.run(handler(route_event, self))
+        except CordlessError as exc:
+            print(f"[cordless] {exc.__class__.__name__}: {exc}")
+            return _json_response(400, {"error": str(exc)})
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+            return _json_response(500, {"error": "route handler raised an exception"})
+        return build_response(result)
 
     def load_extension(self, name: str) -> None:
         """Load a cog module by dotted path (e.g. 'cogs.game').
@@ -796,6 +911,9 @@ class Cordless(RESTMixin):
                 resolved_options = kwargs["options"]
                 if resolved_options is None:
                     resolved_options = options_from_signature(func)
+                _validate_command_shape(
+                    kwargs["name"], kwargs["description"], resolved_options, kwargs.get("group_description")
+                )
                 self.router.register_command(
                     kwargs["name"],
                     func,
@@ -830,6 +948,8 @@ class Cordless(RESTMixin):
                 self.router.register_modal(kwargs["custom_id"], func)
             elif ctype == "autocomplete":
                 self.router.register_autocomplete(kwargs["cmd_name"], kwargs["option_name"], func)
+            elif ctype == "route":
+                self.router.register_route(kwargs["method"], kwargs["path"], func)
             elif ctype == "user_command":
                 self.router.register_command(
                     kwargs["name"],

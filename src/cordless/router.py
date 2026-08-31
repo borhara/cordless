@@ -10,6 +10,8 @@ from .errors import (
     UnknownModalError,
     UnsupportedInteractionError,
 )
+from .routes import compile_pattern, match_pattern, patterns_conflict, specificity
+from .routes import normalize as _normalize_route
 
 PING = 1
 APPLICATION_COMMAND = 2
@@ -39,6 +41,7 @@ class Router:
         self.selects = {}
         self.modals = {}
         self.autocompletes = {}  # (cmd_key, option_name) → handler
+        self.routes = []  # raw HTTP routes: {method, path, pattern, handler}
         self._error_handler = None
 
     def register_command(
@@ -101,6 +104,36 @@ class Router:
 
     def register_autocomplete(self, cmd_name, option_name, handler):
         self.autocompletes[(cmd_name, option_name)] = handler
+
+    def register_route(self, method, path, handler):
+        """Register a raw HTTP handler. Rejects a route that would match the
+        same paths as one already registered."""
+        method, norm = _normalize_route(method, path)
+        pattern = compile_pattern(norm)
+        for existing in self.routes:
+            if existing["method"] == method and patterns_conflict(existing["pattern"], pattern):
+                raise ValueError(
+                    f"Route {method} {path!r} conflicts with the registered {existing['method']} {existing['path']!r}"
+                )
+        self.routes.append({"method": method, "path": norm, "pattern": pattern, "handler": handler})
+        self.routes.sort(key=lambda route: specificity(route["pattern"]), reverse=True)
+
+    def match_route(self, method, path):
+        """Return `(handler, path_params)` for the first route matching
+        `method` and `path`, or `None`."""
+        method = method.upper()
+        for route in self.routes:
+            if route["method"] != method:
+                continue
+            params = match_pattern(route["pattern"], path)
+            if params is not None:
+                return route["handler"], params
+        return None
+
+    def route_defs(self):
+        """Sorted `(method, path)` pairs with `{name}` tokens intact, for
+        `cordless deploy` to sync onto the API."""
+        return sorted((route["method"], route["path"]) for route in self.routes)
 
     def register_error_handler(self, handler):
         self._error_handler = handler
