@@ -1,3 +1,4 @@
+# pyright: strict
 """multipart/form-data encoding for Discord file attachments.
 
 No boto3 dependency, unlike defer.py, since it's used on the direct
@@ -7,9 +8,11 @@ No boto3 dependency, unlike defer.py, since it's used on the direct
 import json
 import mimetypes
 import uuid
+from collections.abc import Mapping
+from typing import Any
 
 
-def _quote_header_value(value):
+def _quote_header_value(value: object) -> str:
     """Escape a value for use inside a quoted Content-Disposition parameter.
     Strips CR/LF outright (they'd inject extra header lines or parts into
     the multipart body, not just break the current header) and backslash-
@@ -19,7 +22,7 @@ def _quote_header_value(value):
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def build_multipart_body(payload, files):
+def build_multipart_body(payload: Any, files: list[tuple[str, bytes]]) -> tuple[bytes, str]:
     """Encode a Discord message payload plus file attachments.
 
     `files` is a list of (filename, bytes) tuples. Returns
@@ -46,7 +49,9 @@ def build_multipart_body(payload, files):
     return b"".join(parts), f"multipart/form-data; boundary={boundary}"
 
 
-def build_form_multipart_body(fields, file_field_name, filename, file_bytes):
+def build_form_multipart_body(
+    fields: Mapping[str, object], file_field_name: str, filename: str, file_bytes: bytes
+) -> tuple[bytes, str]:
     """Encode a plain multipart/form-data body: simple string fields plus
     one named file part. Discord's usual attachment convention wraps
     everything in a payload_json part and numbered files[n] parts (see
@@ -56,7 +61,7 @@ def build_form_multipart_body(fields, file_field_name, filename, file_bytes):
     boundary = "cordless-" + uuid.uuid4().hex
     sep = f"--{boundary}\r\n".encode()
 
-    parts = []
+    parts: list[bytes] = []
     for name, value in fields.items():
         header = f'Content-Disposition: form-data; name="{_quote_header_value(name)}"\r\n\r\n'.encode()
         parts.append(sep + header + str(value).encode() + b"\r\n")
@@ -75,7 +80,7 @@ def build_form_multipart_body(fields, file_field_name, filename, file_bytes):
     return b"".join(parts), f"multipart/form-data; boundary={boundary}"
 
 
-def parse_multipart_payload(body):
+def parse_multipart_payload(body: bytes) -> Any:
     """Extract the JSON payload_json part back out of a multipart body built
     by build_multipart_body(): the inverse operation, used by
     cordless.testing to decode a file-attachment response."""
