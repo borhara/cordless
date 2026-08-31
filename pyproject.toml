@@ -96,3 +96,8 @@ select = ["E", "F", "I"]  # pycodestyle, pyflakes, isort
 # as markdown, so line-length doesn't apply the same way it does to code
 "src/cordless/app.py" = ["E501"]
 "src/cordless/context.py" = ["E501"]
+# the resource modules import these model classes, so the reverse edge (model
+# action methods calling resource functions) sits at end of file, after the
+# class bodies, to keep the import from being circular
+"src/cordless/models.py" = ["E402"]
+"src/cordless/_rest/models.py" = ["E402"]
