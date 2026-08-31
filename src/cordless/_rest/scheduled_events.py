@@ -1,6 +1,6 @@
 """Guild scheduled event REST endpoints (Discord API v10)."""
 
-from ..context import _with_guild_id
+from .._payload import _with_guild_id
 from . import _client
 from ._client import UNSET
 from .models import GuildScheduledEvent, GuildScheduledEventException, GuildScheduledEventUser

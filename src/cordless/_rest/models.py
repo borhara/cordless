@@ -11,7 +11,7 @@ same code path, so there is no request logic duplicated between them.
 import asyncio
 import json
 
-from ..models import DiscordObject
+from .._base import DiscordObject
 
 
 class ThreadMember(DiscordObject):

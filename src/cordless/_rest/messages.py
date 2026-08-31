@@ -11,7 +11,7 @@ channel.send()/message.edit() instead.
 
 import urllib.parse
 
-from ..context import _FLAG_UI_KIT, _contains_uikit, _validate_content_length, _validate_uikit
+from .._payload import _FLAG_UI_KIT, _contains_uikit, _validate_content_length, _validate_uikit
 from ..models import Message, User
 from . import _client
 from ._client import UNSET

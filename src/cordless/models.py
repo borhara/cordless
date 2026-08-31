@@ -1,3 +1,5 @@
+from ._base import DiscordObject
+
 # bit values from Discord's permissions flags docs. new bits get added
 # there occasionally, check against the current docs before adding one.
 _PERMISSION_BITS = {
@@ -96,29 +98,6 @@ def _cdn_asset_url(path, image_hash):
         return None
     ext = "gif" if image_hash.startswith("a_") else "png"
     return f"{_CDN_BASE}/{path.format(hash=image_hash)}.{ext}"
-
-
-class DiscordObject:
-    """Thin attribute wrapper around a raw Discord API object."""
-
-    def __init__(self, data):
-        self._data = data or {}
-
-    def __getattr__(self, name):
-        try:
-            return self._data[name]
-        except KeyError:
-            raise AttributeError(name) from None
-
-    def __eq__(self, other):
-        if isinstance(other, DiscordObject):
-            return self._data == other._data
-        if isinstance(other, dict):
-            return self._data == other
-        return NotImplemented
-
-    def __repr__(self):
-        return f"{type(self).__name__}(id={self._data.get('id')!r})"
 
 
 class User(DiscordObject):

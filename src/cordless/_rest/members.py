@@ -1,6 +1,6 @@
 """Guild member and role REST endpoints (Discord API v10)."""
 
-from ..context import _with_guild_id
+from .._payload import _with_guild_id
 from ..models import Member, Role
 from . import _client
 from ._client import UNSET

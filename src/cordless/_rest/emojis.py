@@ -6,7 +6,7 @@ flat bot.<verb>_application_emoji() surface, keyed by an explicit
 application_id.
 """
 
-from ..context import _with_guild_id
+from .._payload import _with_guild_id
 from . import _client
 from ._client import UNSET
 from .models import Emoji

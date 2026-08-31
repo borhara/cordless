@@ -27,8 +27,8 @@ from typing import IO, cast
 
 from .. import errors, ratelimit
 from .._multipart import build_multipart_body
+from .._payload import _attach_files
 from .._useragent import USER_AGENT
-from ..context import _attach_files
 
 # How long a request keeps retrying a 429 before giving up. Matches
 # defer_worker's 30s default timeout - callers doing bursty sends from the

@@ -13,8 +13,8 @@ import time
 from http.client import HTTPException, HTTPSConnection
 
 from ._multipart import build_multipart_body
+from ._payload import _FLAG_UI_KIT, _attach_files, _contains_uikit
 from ._useragent import USER_AGENT
-from .context import _FLAG_UI_KIT, _attach_files, _contains_uikit
 from .errors import discord_http_error
 from .ratelimit import retry_after_wait
 
