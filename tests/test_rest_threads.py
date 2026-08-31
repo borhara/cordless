@@ -134,6 +134,23 @@ def test_start_thread_from_forum_passes_explicit_zero_rate_limit_per_user():
     assert json.loads(urlopen.call_args.args[0].data)["rate_limit_per_user"] == 0
 
 
+def test_start_thread_from_forum_nests_file_attachments_under_message():
+    """This endpoint carries the first post's params, attachments included,
+    under "message", a top-level attachments array (what the generic
+    _attach_files would write) is ignored and the upload is dropped."""
+    from cordless._multipart import parse_multipart_payload
+
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
+        run(threads.start_thread_from_forum("20", "discussion", message="first post", files=[("chart.png", b"data")]))
+
+    req = urlopen.call_args.args[0]
+    assert req.get_method() == "POST"
+    payload = parse_multipart_payload(req.data)
+    assert "attachments" not in payload
+    assert payload["message"]["attachments"] == [{"id": 0, "filename": "chart.png"}]
+    assert b'filename="chart.png"' in req.data
+
+
 def test_bot_start_thread_from_forum_delegates_to_rest_module():
     bot = Cordless()
     with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_THREAD_PAYLOAD)]):

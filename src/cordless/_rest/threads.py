@@ -1,5 +1,6 @@
 """Thread REST endpoints (Discord API v10)."""
 
+from .._multipart import build_multipart_body
 from . import _client
 from .models import Thread, ThreadMember
 
@@ -41,7 +42,8 @@ async def start_thread_from_forum(
     """Starts a new post in a forum or media channel. The post itself is
     both the thread and its first message, built from the message
     argument the same way create_message builds one."""
-    payload = {"name": name, "message": {"content": message}}
+    forum_message = {"content": message}
+    payload = {"name": name, "message": forum_message}
 
     if applied_tags:
         payload["applied_tags"] = applied_tags
@@ -55,7 +57,15 @@ async def start_thread_from_forum(
     if rate_limit_per_user is not None:
         payload["rate_limit_per_user"] = rate_limit_per_user
 
-    data = await _client.request("POST", f"/channels/{channel_id}/threads", payload, files=files, token=token)
+    if files:
+        # this endpoint carries the message params (attachments included)
+        # under "message", not at the top level, so _client's generic
+        # _attach_files can't place them, build the multipart body here.
+        forum_message["attachments"] = [{"id": i, "filename": filename} for i, (filename, _) in enumerate(files)]
+        raw_body = build_multipart_body(payload, files)
+        data = await _client.request("POST", f"/channels/{channel_id}/threads", raw_body=raw_body, token=token)
+    else:
+        data = await _client.request("POST", f"/channels/{channel_id}/threads", payload, token=token)
     return Thread(data)
 
 
