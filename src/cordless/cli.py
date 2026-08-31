@@ -2,6 +2,7 @@ import argparse
 import importlib
 import os
 import sys
+from typing import Any
 
 from ._env import load_dotenv, read_dotenv, resolve_environment
 
@@ -23,7 +24,7 @@ def _load_bot(target, path=None):
         raise SystemExit(f"Module '{module_name}' has no attribute '{attr}'")
 
 
-def _pick(*values):
+def _pick(*values) -> Any:
     """First value that is not None, so 0 and "" survive (unlike `or`)."""
     for v in values:
         if v is not None:
