@@ -1,8 +1,13 @@
+# pyright: strict
 """Minimal terminal spinner, no external dependencies."""
 
 import sys
 import threading
 import time
+from collections.abc import Callable, Iterable
+from typing import TypeVar
+
+_T = TypeVar("_T")
 
 _FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 _GREEN = "\033[32m"
@@ -23,12 +28,12 @@ verbose = False
 class Spinner:
     """Context manager that shows an animated spinner, then ✓ or ✗ on exit."""
 
-    def __init__(self, label):
+    def __init__(self, label: str) -> None:
         self.label = label
         self._stop = threading.Event()
-        self._thread = None
+        self._thread: threading.Thread | None = None
 
-    def __enter__(self):
+    def __enter__(self) -> "Spinner":
         if _tty and not verbose:
             self._thread = threading.Thread(target=self._spin, daemon=True)
             self._thread.start()
@@ -36,7 +41,7 @@ class Spinner:
             print(f"  {self.label}...", flush=True)
         return self
 
-    def __exit__(self, exc_type, *_):
+    def __exit__(self, exc_type: type[BaseException] | None, *_: object) -> bool:
         if _tty and not verbose:
             self._stop.set()
             if self._thread:
@@ -50,7 +55,7 @@ class Spinner:
             print(f"  ✓ {self.label}", flush=True)
         return False  # don't suppress exceptions
 
-    def _spin(self):
+    def _spin(self) -> None:
         i = 0
         while not self._stop.is_set():
             frame = _FRAMES[i % len(_FRAMES)]
@@ -60,7 +65,7 @@ class Spinner:
             time.sleep(0.08)
 
 
-def wait(label, fn):
+def wait(label: str, fn: Callable[[], _T]) -> _T:
     """Show an animated 'label...' spinner while fn() runs, then erase it -
     no checkmark, since the outcome here isn't exception-shaped (a doctor
     section can come back with failing checks without fn() itself raising),
@@ -71,7 +76,7 @@ def wait(label, fn):
 
     stop = threading.Event()
 
-    def _spin():
+    def _spin() -> None:
         i = 0
         while not stop.is_set():
             frame = _FRAMES[i % len(_FRAMES)]
@@ -91,14 +96,14 @@ def wait(label, fn):
         sys.stdout.flush()
 
 
-def success(message):
+def success(message: str) -> None:
     if _tty:
         print(f"\n  {_BOLD}{_GREEN}✓{_RESET}  {message}\n")
     else:
         print(f"\n✓  {message}\n")
 
 
-def summary(lines):
+def summary(lines: Iterable[tuple[bool, str, str]]) -> None:
     """Print a short list of (ok, label, detail) status lines, e.g. what
     runtime and signature verification method a deploy actually ended up
     with - printed once, at the end, in its own clearly marked block, so it
