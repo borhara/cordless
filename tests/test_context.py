@@ -93,6 +93,7 @@ def test_send_ephemeral_sets_flags():
         return await ctx.send("shh", ephemeral=True)
 
     result = bot.handle({"body": json.dumps({"type": 2, "data": {"name": "secret"}})})
+    assert result is not None
     body = json.loads(result["body"])
     assert body["data"]["flags"] == 64
     assert body["data"]["content"] == "shh"
@@ -106,18 +107,21 @@ def test_send_without_ephemeral_has_no_flags():
         return await ctx.send("hello")
 
     result = bot.handle({"body": json.dumps({"type": 2, "data": {"name": "public"}})})
+    assert result is not None
     assert "flags" not in json.loads(result["body"])["data"]
 
 
 def test_send_uikit_sets_flag():
     ctx = _make_ctx()
     run(ctx.send(components=[Container([TextDisplay("Hi")])]))
+    assert ctx.response is not None
     assert json.loads(ctx.response["body"])["data"]["flags"] & 32768
 
 
 def test_send_uikit_and_ephemeral_combines_flags():
     ctx = _make_ctx()
     run(ctx.send(components=[Container([TextDisplay("Hi")])], ephemeral=True))
+    assert ctx.response is not None
     assert json.loads(ctx.response["body"])["data"]["flags"] == (32768 | 64)
 
 
@@ -152,12 +156,14 @@ def test_send_uikit_rejects_text_over_four_thousand_characters():
 def test_send_with_embed():
     ctx = _make_ctx()
     run(ctx.send("content", embeds=[Embed(title="Hi")]))
+    assert ctx.response is not None
     assert json.loads(ctx.response["body"])["data"]["embeds"][0]["title"] == "Hi"
 
 
 def test_send_with_components():
     ctx = _make_ctx()
     run(ctx.send(components=[ActionRow([Button("Click", custom_id="c")])]))
+    assert ctx.response is not None
     assert json.loads(ctx.response["body"])["data"]["components"][0]["type"] == 1
 
 
@@ -173,6 +179,7 @@ def test_send_over_content_limit_raises():
 def test_send_at_content_limit_succeeds():
     ctx = _make_ctx()
     run(ctx.send("#" * 2000))
+    assert ctx.response is not None
     assert json.loads(ctx.response["body"])["data"]["content"] == "#" * 2000
 
 
@@ -188,6 +195,7 @@ def test_edit_over_content_limit_raises():
 def test_send_with_files_returns_base64_multipart_body():
     ctx = _make_ctx()
     run(ctx.send("here", files=[("report.pdf", b"binary-data")]))
+    assert ctx.response is not None
 
     assert ctx.response["isBase64Encoded"] is True
     assert ctx.response["headers"]["Content-Type"].startswith("multipart/form-data")
@@ -207,6 +215,7 @@ def test_send_with_files_returns_base64_multipart_body():
 def test_send_without_files_is_plain_json():
     ctx = _make_ctx()
     run(ctx.send("hi"))
+    assert ctx.response is not None
     assert "isBase64Encoded" not in ctx.response
     assert ctx.response["headers"]["Content-Type"] == "application/json"
 
@@ -214,6 +223,7 @@ def test_send_without_files_is_plain_json():
 def test_edit_with_files_returns_base64_multipart_body():
     ctx = _make_ctx()
     run(ctx.edit("updated", files=[("img.png", b"\x89PNG...")]))
+    assert ctx.response is not None
 
     assert ctx.response["isBase64Encoded"] is True
     body = base64.b64decode(ctx.response["body"])
@@ -227,6 +237,7 @@ def test_edit_with_files_returns_base64_multipart_body():
 def test_send_modal():
     ctx = _make_ctx()
     run(ctx.send_modal(Modal("my_modal", "Title", TextInput("q", "Question"))))
+    assert ctx.response is not None
     body = json.loads(ctx.response["body"])
     assert body["type"] == 9
     assert body["data"]["custom_id"] == "my_modal"
@@ -238,6 +249,7 @@ def test_send_modal():
 def test_respond_autocomplete():
     ctx = _make_ctx()
     run(ctx.respond_autocomplete([{"name": "Option A", "value": "a"}]))
+    assert ctx.response is not None
     body = json.loads(ctx.response["body"])
     assert body["type"] == 8
     assert body["data"]["choices"][0]["value"] == "a"
@@ -283,15 +295,18 @@ def test_user_exposes_attributes_in_guild():
     ctx = _make_ctx(
         member={
             "nick": "Nick",
-            "user": {"id": "1", "username": "testuser", "global_name": "Test User"},
+            "user": {"id": "1", "username": "shiv", "global_name": "Test User"},
         }
     )
-    assert ctx.user.username == "testuser"
+    assert ctx.user is not None
+    assert ctx.member is not None
+    assert ctx.user.username == "shiv"
     assert ctx.user.id == "1"
     assert ctx.user.display_name == "Test User"
     assert ctx.member.nick == "Nick"
     assert ctx.member.display_name == "Nick"
-    assert ctx.member.user.username == "testuser"
+    assert ctx.member.user is not None
+    assert ctx.member.user.username == "shiv"
 
 
 def test_member_permissions_exposed():
@@ -302,19 +317,23 @@ def test_member_permissions_exposed():
             "user": {"id": "1", "username": "shiv"},
         }
     )
+    assert ctx.member is not None
+    assert ctx.member.permissions is not None
     assert ctx.member.permissions.administrator
     assert not ctx.member.permissions.manage_guild
 
 
 def test_user_exposes_attributes_in_dm():
-    ctx = _make_ctx(user={"id": "2", "username": "testuser"})
-    assert ctx.user.username == "testuser"
-    assert ctx.user.display_name == "testuser"
+    ctx = _make_ctx(user={"id": "2", "username": "shiv"})
+    assert ctx.user is not None
+    assert ctx.user.username == "shiv"
+    assert ctx.user.display_name == "shiv"
     assert ctx.member is None
 
 
 def test_user_missing_attribute_raises():
-    ctx = _make_ctx(user={"id": "2", "username": "testuser"})
+    ctx = _make_ctx(user={"id": "2", "username": "shiv"})
+    assert ctx.user is not None
     try:
         ctx.user.email
     except AttributeError:
@@ -328,11 +347,14 @@ def test_user_missing_attribute_raises():
 
 def test_message_and_channel_expose_attributes():
     ctx = _make_ctx(
-        message={"id": "10", "content": "hi", "author": {"id": "1", "username": "testuser"}},
+        message={"id": "10", "content": "hi", "author": {"id": "1", "username": "shiv"}},
         channel={"id": "20", "name": "general"},
     )
+    assert ctx.message is not None
+    assert ctx.channel is not None
     assert ctx.message.content == "hi"
-    assert ctx.message.author.username == "testuser"
+    assert ctx.message.author is not None
+    assert ctx.message.author.username == "shiv"
     assert ctx.channel.name == "general"
 
 
@@ -344,6 +366,7 @@ def test_message_and_channel_absent_are_none():
 
 def test_guild_exposes_attributes():
     ctx = _make_ctx(guild={"id": "30", "locale": "en-US", "features": ["COMMUNITY"]})
+    assert ctx.guild is not None
     assert ctx.guild.id == "30"
     assert ctx.guild.locale == "en-US"
     assert ctx.guild.features == ["COMMUNITY"]
@@ -387,6 +410,8 @@ def test_target_user_from_user_command():
         }
     )
     assert ctx.target_user == {"id": "999", "username": "shiv"}
+    assert ctx.target_user is not None
+    assert ctx.target_member is not None
     assert ctx.target_user.username == "shiv"
     assert ctx.target_member.nick == "cap"
     # resolved.members omits the nested user object; Context stitches it back in
@@ -411,6 +436,7 @@ def test_target_message_from_message_command():
         }
     )
     assert ctx.target_message == {"id": "555", "content": "hello world"}
+    assert ctx.target_message is not None
     assert ctx.target_message.content == "hello world"
     assert ctx.target_user is None
     assert ctx.target_member is None

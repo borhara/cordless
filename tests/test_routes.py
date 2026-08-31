@@ -1,5 +1,6 @@
 import json
 from asyncio import run
+from typing import Any
 
 import pytest
 
@@ -26,6 +27,12 @@ def _event(method, path, *, body="", headers=None, query=None):
         "requestContext": {"http": {"method": method, "path": path}},
         "isBase64Encoded": False,
     }
+
+
+def _handle(bot, event) -> dict[str, Any]:
+    result = bot.handle(event)
+    assert result is not None
+    return result
 
 
 # --- normalize ---
@@ -212,7 +219,7 @@ def test_handle_dispatches_route():
         assert received_bot is bot
         return {"got": json.loads(event["body"])["id"]}
 
-    result = bot.handle(_event("POST", "/stripe/webhook", body='{"id": "evt_1"}'))
+    result = _handle(bot, _event("POST", "/stripe/webhook", body='{"id": "evt_1"}'))
     assert result["statusCode"] == 200
     assert json.loads(result["body"]) == {"got": "evt_1"}
 
@@ -226,7 +233,7 @@ def test_handle_passes_path_params():
         seen.update(event["pathParameters"])
         return 204
 
-    result = bot.handle(_event("GET", "/gh/cordless/hook"))
+    result = _handle(bot, _event("GET", "/gh/cordless/hook"))
     assert result["statusCode"] == 204
     assert seen == {"repo": "cordless"}
 
@@ -238,7 +245,7 @@ def test_handle_unmatched_route_is_404():
     async def health(event, bot):
         return "ok"
 
-    result = bot.handle(_event("GET", "/nope"))
+    result = _handle(bot, _event("GET", "/nope"))
     assert result["statusCode"] == 404
 
 
@@ -253,7 +260,7 @@ def test_handle_still_routes_discord_interaction_on_post_root():
     async def ping(ctx):
         return await ctx.send("pong")
 
-    result = bot.handle({"body": json.dumps({"type": 2, "data": {"name": "ping"}})})
+    result = _handle(bot, {"body": json.dumps({"type": 2, "data": {"name": "ping"}})})
     assert json.loads(result["body"])["data"]["content"] == "pong"
 
 
@@ -269,7 +276,8 @@ def test_handle_routes_discord_interaction_on_non_root_post_path():
         return await ctx.send("pong")
 
     # an interaction endpoint URL with a path segment must still reach dispatch
-    result = bot.handle(_event("POST", "/discord/interactions", body=json.dumps({"type": 2, "data": {"name": "ping"}})))
+    event = _event("POST", "/discord/interactions", body=json.dumps({"type": 2, "data": {"name": "ping"}}))
+    result = _handle(bot, event)
     assert json.loads(result["body"])["data"]["content"] == "pong"
 
 
@@ -280,7 +288,7 @@ def test_handle_unmatched_non_post_is_still_404():
     async def hook(event, bot):
         return "ok"
 
-    result = bot.handle(_event("GET", "/nope"))
+    result = _handle(bot, _event("GET", "/nope"))
     assert result["statusCode"] == 404
 
 
@@ -291,7 +299,7 @@ def test_handle_route_skips_signature_verification():
     async def hook(event, bot):
         return "ok"
 
-    result = bot.handle(_event("POST", "/stripe/webhook", body="{}"))
+    result = _handle(bot, _event("POST", "/stripe/webhook", body="{}"))
     assert result["statusCode"] == 200
     assert result["body"] == "ok"
 
@@ -303,7 +311,7 @@ def test_handle_route_cordless_error_is_400():
     async def boom(event, bot):
         raise CordlessError("nope")
 
-    result = bot.handle(_event("GET", "/boom"))
+    result = _handle(bot, _event("GET", "/boom"))
     assert result["statusCode"] == 400
     assert json.loads(result["body"])["error"] == "nope"
 
@@ -315,7 +323,7 @@ def test_handle_route_unexpected_error_is_500():
     async def boom(event, bot):
         raise RuntimeError("kaboom")
 
-    result = bot.handle(_event("GET", "/boom"))
+    result = _handle(bot, _event("GET", "/boom"))
     assert result["statusCode"] == 500
 
 
@@ -328,7 +336,7 @@ def test_handle_route_unusable_return_value_is_500_not_unhandled():
     async def health(event, bot):
         return True
 
-    result = bot.handle(_event("GET", "/health"))
+    result = _handle(bot, _event("GET", "/health"))
     assert result["statusCode"] == 500
     assert "bool" in json.loads(result["body"])["error"]
 
@@ -340,7 +348,7 @@ def test_bot_without_routes_is_untouched():
     async def ping(ctx):
         return await ctx.send("pong")
 
-    result = bot.handle({"body": json.dumps({"type": 2, "data": {"name": "ping"}})})
+    result = _handle(bot, {"body": json.dumps({"type": 2, "data": {"name": "ping"}})})
     assert json.loads(result["body"])["data"]["content"] == "pong"
 
 
@@ -355,8 +363,8 @@ def test_static_route_beats_parameter_route():
     async def static(event, bot):
         return "static"
 
-    assert bot.handle(_event("GET", "/u/me"))["body"] == "static"
-    assert bot.handle(_event("GET", "/u/alice"))["body"] == "dynamic"
+    assert _handle(bot, _event("GET", "/u/me"))["body"] == "static"
+    assert _handle(bot, _event("GET", "/u/shiv"))["body"] == "dynamic"
 
 
 # --- Cog ---
@@ -371,7 +379,7 @@ def test_cog_route_registers():
         return "ok"
 
     bot.add_cog(cog)
-    assert bot.handle(_event("GET", "/healthz"))["body"] == "ok"
+    assert _handle(bot, _event("GET", "/healthz"))["body"] == "ok"
 
 
 # --- testing.invoke_route ---

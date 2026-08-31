@@ -35,6 +35,7 @@ def test_fetch_guild_members_returns_member_list():
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/members"
     assert len(result) == 1
+    assert result[0].user is not None
     assert result[0].user.username == "shiv"
 
 
@@ -540,6 +541,7 @@ def test_ctx_member_gets_guild_id_injected_for_action_methods():
     }
     ctx = Context(interaction)
 
+    assert ctx.member is not None
     assert ctx.member._data["guild_id"] == "10"
 
 

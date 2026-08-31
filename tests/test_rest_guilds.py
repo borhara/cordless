@@ -83,6 +83,7 @@ def test_fetch_guild_bans_returns_ban_list():
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/bans"
     assert result == [Ban(_BAN_PAYLOAD)]
+    assert result[0].user is not None
     assert result[0].user.username == "shiv"
 
 

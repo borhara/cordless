@@ -142,7 +142,7 @@ def test_member_carries_nick():
 # ---------------------------------------------------------------------------
 
 
-def _bot(public_key="ab" * 32):
+def _bot(public_key: str | None = "ab" * 32):
     return Cordless(public_key=public_key)
 
 
@@ -155,6 +155,7 @@ def test_invoke_by_name_dispatches_through_real_router():
 
     response, ctx = run(invoke(bot, "ping"))
     assert response == {"type": 4, "data": {"content": "pong"}}
+    assert ctx.user is not None
     assert ctx.user.id == "1"
 
 
@@ -166,6 +167,7 @@ def test_invoke_decodes_a_file_attachment_response():
         await ctx.send(files=[("report.pdf", b"fake-file-bytes")])
 
     response, ctx = run(invoke(bot, "upload"))
+    assert response is not None
     assert response["data"]["attachments"] == [{"id": 0, "filename": "report.pdf"}]
 
 
@@ -177,6 +179,7 @@ def test_invoke_forwards_options_to_the_handler():
         await ctx.send(f"bought {qty}x {item}")
 
     response, _ = run(invoke(bot, "buy", options={"item": "sword", "qty": 3}))
+    assert response is not None
     assert response["data"]["content"] == "bought 3x sword"
 
 
@@ -204,6 +207,7 @@ def test_invoke_resolves_subcommand_paths():
         await ctx.send("nothing in stock")
 
     response, _ = run(invoke(bot, "shop/list"))
+    assert response is not None
     assert response["data"]["content"] == "nothing in stock"
 
 
@@ -216,6 +220,7 @@ def test_invoke_accepts_a_custom_interaction_for_context_menu_commands():
 
     interaction = command("inspect", target={"id": "42", "username": "target-user"})
     response, _ = run(invoke(bot, interaction))
+    assert response is not None
     assert response["data"]["content"] == "inspecting target-user"
 
 
@@ -228,7 +233,10 @@ def test_invoke_exposes_member_on_ctx():
 
     interaction = command("check", member=member(permissions=Permissions(manage_guild=True)))
     response, ctx = run(invoke(bot, interaction))
+    assert response is not None
     assert response["data"]["content"] == "True"
+    assert ctx.member is not None
+    assert ctx.member.permissions is not None
     assert ctx.member.permissions.manage_guild is True
 
 
@@ -302,6 +310,7 @@ def test_invoke_dispatches_a_button():
         await ctx.send("confirmed")
 
     response, _ = run(invoke(bot, button("confirm")))
+    assert response is not None
     assert response["data"]["content"] == "confirmed"
 
 
@@ -313,6 +322,7 @@ def test_invoke_dispatches_a_prefix_matched_button():
         await ctx.send(f"picked {ctx.custom_id_args[0]}")
 
     response, ctx = run(invoke(bot, button("shop:item1")))
+    assert response is not None
     assert response["data"]["content"] == "picked item1"
     assert ctx.custom_id_args == ["item1"]
 
@@ -325,6 +335,7 @@ def test_invoke_dispatches_a_select_with_values():
         await ctx.send(f"picked {', '.join(ctx.values)}")
 
     response, _ = run(invoke(bot, select("pick", values=["a", "b"])))
+    assert response is not None
     assert response["data"]["content"] == "picked a, b"
 
 
@@ -338,6 +349,7 @@ def test_invoke_dispatches_a_role_select_with_resolved_roles():
 
     role = {"id": "999", "name": "Admin"}
     response, _ = run(invoke(bot, select("pickrole", values=[role], kind="role")))
+    assert response is not None
     assert response["data"]["content"] == "picked Admin"
 
 
@@ -381,6 +393,7 @@ def test_invoke_dispatches_a_modal_submission():
         await ctx.send(f"hello {ctx.modal_values['name_field']}")
 
     response, ctx = run(invoke(bot, modal("form", values={"name_field": "shiv"})))
+    assert response is not None
     assert response["data"]["content"] == "hello shiv"
     assert ctx.modal_values == {"name_field": "shiv"}
 
@@ -427,6 +440,7 @@ def test_invoke_dispatches_autocomplete_and_filters_string_choices():
 
     interaction = autocomplete("shop", {"item": "sw"}, focused="item")
     response, ctx = run(invoke(bot, interaction))
+    assert response is not None
     assert response["data"]["choices"] == [{"name": "sword", "value": "sword"}]
     assert ctx.focused_value == "sw"
 
@@ -447,6 +461,7 @@ def test_invoke_dispatches_autocomplete_with_dict_choices_unfiltered():
         return [{"name": "Sword of Doom", "value": "sword"}]
 
     response, _ = run(invoke(bot, autocomplete("shop", {"item": "any"}, focused="item")))
+    assert response is not None
     assert response["data"]["choices"] == [{"name": "Sword of Doom", "value": "sword"}]
 
 

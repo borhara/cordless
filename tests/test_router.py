@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 import pytest
 
@@ -7,8 +8,10 @@ from cordless.errors import PermissionDeniedError
 from cordless.models import Permissions
 
 
-def _handle(bot, payload):
-    return bot.handle({"body": json.dumps(payload)})
+def _handle(bot, payload) -> dict[str, Any]:
+    result = bot.handle({"body": json.dumps(payload)})
+    assert result is not None
+    return result
 
 
 def _body(result):

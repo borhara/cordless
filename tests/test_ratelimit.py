@@ -470,10 +470,12 @@ def test_shared_block_is_a_plain_float_not_decimal(dynamo_table):
     import time
 
     ratelimit._put_shared("POST /channels/1/messages", time.time() + 10, confirmed=False)
-    blocked_until, confirmed = ratelimit._shared_block("POST /channels/1/messages")
+    block = ratelimit._shared_block("POST /channels/1/messages")
+    assert block is not None
+    blocked_until, confirmed = block
     assert isinstance(blocked_until, float)
     assert confirmed is False
-    blocked_until - time.time()  # would raise TypeError if this were still a Decimal
+    _ = blocked_until - time.time()  # would raise TypeError if this were still a Decimal
 
 
 def test_wait_if_needed_works_end_to_end_against_real_dynamo(dynamo_table, monkeypatch):

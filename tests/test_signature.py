@@ -24,6 +24,7 @@ def test_ping_interaction_is_answered_without_a_handler():
     body = json.dumps({"type": 1})
 
     result = bot.handle(_signed_event(signing_key, body))
+    assert result is not None
 
     assert result["statusCode"] == 200
     assert json.loads(result["body"])["type"] == 1
@@ -42,6 +43,7 @@ def test_valid_signature_is_accepted():
     body = json.dumps({"type": 2, "data": {"name": "ping"}})
 
     result = bot.handle(_signed_event(signing_key, body))
+    assert result is not None
 
     assert result["statusCode"] == 200
 
@@ -62,6 +64,7 @@ def test_invalid_signature_is_rejected():
     }
 
     result = bot.handle(event)
+    assert result is not None
 
     assert result["statusCode"] == 401
 
@@ -73,6 +76,7 @@ def test_missing_signature_headers_are_rejected():
     bot = Cordless(public_key=public_key)
 
     result = bot.handle({"body": json.dumps({"type": 1})})
+    assert result is not None
 
     assert result["statusCode"] == 401
 
@@ -98,6 +102,7 @@ def test_base64_encoded_body_is_decoded_before_verification():
     }
 
     result = bot.handle(event)
+    assert result is not None
 
     assert result["statusCode"] == 200
 
@@ -116,5 +121,6 @@ def test_no_public_key_skips_verification():
         return await ctx.send("pong")
 
     result = bot.handle({"body": json.dumps({"type": 2, "data": {"name": "ping"}})})
+    assert result is not None
 
     assert result["statusCode"] == 200

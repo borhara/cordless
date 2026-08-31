@@ -108,6 +108,7 @@ def test_fetch_guild_scheduled_event_users_returns_user_list():
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/scheduled-events/1/users"
     assert result == [GuildScheduledEventUser(dict(_EVENT_USER_PAYLOAD, guild_id="10"))]
+    assert result[0].user is not None
     assert result[0].user.username == "shiv"
 
 
@@ -254,6 +255,7 @@ def test_event_user_member_has_guild_id_stitched_in():
     must stitch it in the same way fetch_guild_members does."""
     payload = dict(_EVENT_USER_PAYLOAD, guild_id="10", member={"nick": "shiv"})
     event_user = GuildScheduledEventUser(payload)
+    assert event_user.member is not None
     assert event_user.member.guild_id == "10"
 
 

@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from typing import Literal
+from typing import Any, Literal
 from unittest.mock import patch
 
 import pytest
@@ -13,8 +13,10 @@ from cordless.app import Cordless, options_from_signature
 from cordless.errors import DiscordHTTPError, MessageTooLongError
 
 
-def _handle(bot, payload):
-    return bot.handle({"body": json.dumps(payload)})
+def _handle(bot, payload) -> dict[str, Any]:
+    result = bot.handle({"body": json.dumps(payload)})
+    assert result is not None
+    return result
 
 
 def _body(result):
@@ -42,12 +44,14 @@ def test_handler_returns_lambda_compatible_callable():
 def test_invalid_json_body_returns_400():
     bot = Cordless()
     result = bot.handle({"body": "{not json"})
+    assert result is not None
     assert result["statusCode"] == 400
 
 
 def test_missing_body_returns_400():
     bot = Cordless()
     result = bot.handle({})
+    assert result is not None
     assert result["statusCode"] == 400
 
 
@@ -61,6 +65,7 @@ def test_defer_ephemeral_sets_flags():
 
     ctx = Context({"type": 2, "data": {"name": "x"}, "id": "1", "token": "t"})
     run(ctx.defer(ephemeral=True))
+    assert ctx.response is not None
     body = json.loads(ctx.response["body"])
     assert body["type"] == 5
     assert body["data"]["flags"] == 64
@@ -73,6 +78,7 @@ def test_defer_plain_has_no_data():
 
     ctx = Context({"type": 2, "data": {"name": "x"}, "id": "1", "token": "t"})
     run(ctx.defer())
+    assert ctx.response is not None
     assert "data" not in json.loads(ctx.response["body"])
 
 
@@ -185,7 +191,7 @@ def test_stringized_literal_choices_are_resolved():
 
 
 def test_unresolvable_annotation_falls_back_to_string():
-    async def f(ctx, thing: "NotDefinedAnywhere"):  # noqa: F821
+    async def f(ctx, thing: "NotDefinedAnywhere"):  # noqa: F821  # pyright: ignore[reportUndefinedVariable]
         pass
 
     assert options_from_signature(f)[0]["type"] == 3
@@ -210,7 +216,7 @@ def test_int_literal_choices():
 
 
 def test_float_literal_choices_are_typed_as_number():
-    async def f(ctx, ratio: Literal[1.5, 2.5]):
+    async def f(ctx, ratio: Literal[1.5, 2.5]):  # pyright: ignore[reportInvalidTypeForm]
         pass
 
     opt = options_from_signature(f)[0]
@@ -612,6 +618,7 @@ def test_empty_public_key_rejects_invalid_signature():
             },
         }
     )
+    assert result is not None
     assert result["statusCode"] == 401
 
 

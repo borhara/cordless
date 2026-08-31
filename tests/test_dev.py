@@ -451,6 +451,7 @@ class _FakeThread:
         self._alive = True
 
     def start(self):
+        assert self._target is not None
         self._target()
         self._alive = False
 

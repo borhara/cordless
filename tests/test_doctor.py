@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import boto3
 import pytest
-from conftest import FakeDiscordResponse
+from conftest import FakeDiscordResponse, make_http_error
 from moto import mock_aws
 
 from cordless.doctor import (
@@ -163,11 +163,8 @@ def test_check_discord_config_valid_bot_token():
 
 
 def test_check_discord_config_invalid_bot_token():
-    import urllib.error
-
     env = {"DISCORD_PUBLIC_KEY": "a" * 64, "DISCORD_BOT_TOKEN": "bad-tok"}
-    err = urllib.error.HTTPError("url", 401, "Unauthorized", {}, None)
-    err.read = lambda: b'{"message": "401: Unauthorized"}'
+    err = make_http_error(401, body=b'{"message": "401: Unauthorized"}')
     with patch("cordless.register.urllib.request.urlopen", side_effect=err):
         checks = check_discord_config(env)
 

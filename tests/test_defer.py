@@ -1,6 +1,7 @@
 """Deferred flow: router ACK + worker invoke, worker-mode dispatch, followup PATCH, crons."""
 
 import json
+from typing import Any
 
 import pytest
 
@@ -9,8 +10,10 @@ from cordless.app import Cordless
 from cordless.worker import make_worker_handler
 
 
-def _handle(bot, payload):
-    return bot.handle({"body": json.dumps(payload)})
+def _handle(bot, payload) -> dict[str, Any]:
+    result = bot.handle({"body": json.dumps(payload)})
+    assert result is not None
+    return result
 
 
 def _body(result):

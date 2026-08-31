@@ -1,6 +1,7 @@
 import io
 import json
 import urllib.error
+from typing import Any, cast
 from unittest.mock import patch
 
 BOT_ENV = {"DISCORD_BOT_TOKEN": "tok"}
@@ -28,8 +29,8 @@ class FakeDiscordResponse:
         return False
 
 
-def make_http_error(code, body=b"", headers=None):
+def make_http_error(code, body=b"", headers: dict[str, str] | None = None):
     """A real urllib.error.HTTPError, for simulating a non-2xx urlopen() response."""
     return urllib.error.HTTPError(
-        url="https://discord.com/api/v10", code=code, msg="", hdrs=headers, fp=io.BytesIO(body)
+        url="https://discord.com/api/v10", code=code, msg="", hdrs=cast("Any", headers), fp=io.BytesIO(body)
     )

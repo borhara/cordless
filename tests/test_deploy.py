@@ -1,6 +1,7 @@
 import json
 import os
 import zipfile
+from typing import Any
 
 import boto3
 import pytest
@@ -126,8 +127,8 @@ def deploy_patches(monkeypatch, tmp_path):
     return tmp_path
 
 
-def _base_deploy_kwargs(tmp_path, **overrides):
-    kwargs = dict(
+def _base_deploy_kwargs(tmp_path, **overrides) -> dict[str, Any]:
+    kwargs: dict[str, Any] = dict(
         function_name="my-bot",
         role_name="my-bot-role",
         handler="lambda_function.handler",
@@ -185,6 +186,7 @@ def test_function_exists_returns_true_when_present(aws_clients, tmp_path):
     _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
     exists, arn = _function_exists(lam, "my-fn")
     assert exists is True
+    assert arn is not None
     assert "my-fn" in arn
 
 

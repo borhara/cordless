@@ -48,6 +48,7 @@ def test_member_permissions_missing():
 
 def test_role_permissions_wrapped():
     role = Role({"id": "1", "name": "Moderator", "permissions": "8589934592"})  # manage_events
+    assert role.permissions is not None
     assert role.permissions.manage_events
     assert not role.permissions.administrator
 
