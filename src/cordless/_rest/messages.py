@@ -27,6 +27,16 @@ def _to_dicts(components):
     return [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
 
 
+def _has_value(x):
+    """True when x is a real value to act on, not UNSET and not a clear-with-None."""
+    return x is not UNSET and x is not None
+
+
+def _or_none(x):
+    """UNSET collapsed to None, for validators that treat both as "not set"."""
+    return None if x is UNSET else x
+
+
 async def fetch_channel_messages(channel_id, *, around=None, before=None, after=None, limit=None, token=None):
     """Fetches a page of the channel's messages. around, before and after
     are mutually exclusive, each anchors the page around a different
@@ -68,30 +78,20 @@ async def create_message(
         _validate_uikit(content, embeds, components)
     else:
         _validate_content_length(content)
-    payload = {}
-    if content is not None:
-        payload["content"] = content
-    if embeds is not None:
-        payload["embeds"] = _to_dicts(embeds)
-    if components is not None:
-        payload["components"] = _to_dicts(components)
-    if tts is not None:
-        payload["tts"] = tts
-    if nonce is not None:
-        payload["nonce"] = nonce
-    if allowed_mentions is not None:
-        payload["allowed_mentions"] = allowed_mentions
-    if message_reference is not None:
-        payload["message_reference"] = message_reference
-    if sticker_ids is not None:
-        payload["sticker_ids"] = sticker_ids
-    if enforce_nonce is not None:
-        payload["enforce_nonce"] = enforce_nonce
-    if poll is not None:
-        payload["poll"] = poll
-    computed_flags = flags or 0
-    if is_uikit:
-        computed_flags |= _FLAG_UI_KIT
+
+    payload = _client.compact(
+        content=content,
+        embeds=_to_dicts(embeds) if embeds is not None else None,
+        components=_to_dicts(components) if components is not None else None,
+        tts=tts,
+        nonce=nonce,
+        allowed_mentions=allowed_mentions,
+        message_reference=message_reference,
+        sticker_ids=sticker_ids,
+        enforce_nonce=enforce_nonce,
+        poll=poll,
+    )
+    computed_flags = (flags or 0) | (_FLAG_UI_KIT if is_uikit else 0)
     if computed_flags:
         payload["flags"] = computed_flags
 
@@ -123,22 +123,23 @@ async def edit_channel_message(
     passing None. flags is a plain bitfield (0 and "leave untouched" have
     the same effect as each other), so it stays omit-unless-set rather than
     using the same None-clears convention as the others."""
-    has_uikit = components not in (UNSET, None) and _contains_uikit(components)
+    has_uikit = _has_value(components) and _contains_uikit(components)
     if has_uikit:
-        # UNSET normalizes to None here: leaving content/embeds untouched is
-        # not a conflict with setting Components v2, only explicitly setting
-        # either one in the same call is (see _validate_uikit's docstring)
-        _validate_uikit(content if content is not UNSET else None, embeds if embeds is not UNSET else None, components)
+        # only an explicit content/embeds in this same call conflicts with
+        # Components v2; leaving them untouched (UNSET) does not
+        _validate_uikit(_or_none(content), _or_none(embeds), components)
     elif content is not UNSET:
         _validate_content_length(content)
+
     if flags is not None or has_uikit:
         computed_flags = (flags or 0) | (_FLAG_UI_KIT if has_uikit else 0)
     else:
         computed_flags = UNSET
+
     payload = _client.payload(
         content=content,
-        embeds=_to_dicts(embeds) if embeds not in (UNSET, None) else embeds,
-        components=_to_dicts(components) if components not in (UNSET, None) else components,
+        embeds=_to_dicts(embeds) if _has_value(embeds) else embeds,
+        components=_to_dicts(components) if _has_value(components) else components,
         allowed_mentions=allowed_mentions,
         flags=computed_flags,
         attachments=attachments,

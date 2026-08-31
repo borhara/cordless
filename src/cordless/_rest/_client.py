@@ -348,3 +348,10 @@ def payload(**fields):
     a nullable field, e.g. nick=None or parent_id=None) still comes through
     instead of being silently dropped."""
     return {k: v for k, v in fields.items() if v is not UNSET}
+
+
+def compact(**fields):
+    """Like payload(), but drops None as well. For create-style endpoints
+    with no clear-with-null semantics, where an unset field just means "don't
+    send it"."""
+    return {k: v for k, v in fields.items() if v is not None}
