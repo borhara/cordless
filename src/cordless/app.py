@@ -755,9 +755,11 @@ class Cordless(RESTMixin):
         JSON), a status int, a `(status, body)` or `(status, body, headers)`
         tuple, or a full Lambda proxy dict.
 
-        Only works with `endpoint = "api_gateway"`, since a Function URL
-        serves a single path. `cordless deploy` syncs these routes onto the
-        API alongside the Discord commands.
+        Works on either endpoint. On the default Function URL every path
+        reaches the function and cordless does the matching. Setting
+        `endpoint = "api_gateway"` adds edge 404s for unknown paths and
+        makes `cordless deploy` sync these routes onto the API alongside the
+        Discord commands.
         """
 
         def decorator(func):

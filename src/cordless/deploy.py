@@ -732,20 +732,16 @@ def deploy(
 
     if endpoint is None:
         # keep whichever endpoint an existing function already has; only a
-        # brand new function gets the simpler, lower-latency default
+        # brand new function gets the simpler, lower-latency default.
+        # bot.route works on either: dispatch reads the same payload-format-2.0
+        # event either way. api_gateway just adds edge 404s for unknown paths
+        # and deploy-time route sync, so switching to it stays an opt-in.
         if _has_function_url(lam, function_name):
             endpoint = "function_url"
         elif _has_api_gateway(apigw, function_name):
             endpoint = "api_gateway"
-        elif routes:
-            endpoint = "api_gateway"
         else:
             endpoint = "function_url"
-
-    if routes and endpoint == "function_url":
-        raise SystemExit(
-            'bot.route() needs endpoint = "api_gateway" in cordless.toml; a Function URL serves a single path'
-        )
 
     print()
 
@@ -981,6 +977,12 @@ def _health_check(
                 checks.append((not missing, "API routes", detail))
         except Exception as exc:
             checks.append((False, "API Gateway", f"could not verify ({exc})"))
+
+    if routes and endpoint == "function_url":
+        # nothing to verify against AWS: on a Function URL every path reaches
+        # the handler and cordless does the matching, so just list them
+        listed = ", ".join(f"{method} {path}" for method, path in routes)
+        checks.append((True, "HTTP routes", f"{len(routes)} served on the function URL: {listed}"))
 
     if crons:
         target = defer_worker or function_name

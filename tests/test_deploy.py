@@ -588,6 +588,21 @@ def test_health_check_reports_missing_api_route(aws_clients, tmp_path):
     assert label_map["API routes"] == (False, "missing: POST /b")
 
 
+def test_health_check_lists_routes_on_function_url(aws_clients, tmp_path):
+    iam, lam, apigw, events = aws_clients["iam"], aws_clients["lam"], aws_clients["apigw"], aws_clients["events"]
+    role_arn = _make_role(iam)
+    _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+    _ensure_function_url(lam, "my-fn")
+
+    routes = [("GET", "/healthz"), ("POST", "/hook/{id}")]
+    checks = _health_check(lam, apigw, events, None, "my-fn", None, "function_url", None, False, False, None, routes)
+
+    label_map = {label: (ok, detail) for ok, label, detail in checks}
+    assert label_map["HTTP routes"][0] is True
+    assert "GET /healthz" in label_map["HTTP routes"][1]
+    assert "POST /hook/{id}" in label_map["HTTP routes"][1]
+
+
 def test_health_check_reports_ratelimit_table_status(aws_clients, tmp_path):
     iam, lam, apigw, events = aws_clients["iam"], aws_clients["lam"], aws_clients["apigw"], aws_clients["events"]
     dynamodb = boto3.client("dynamodb", region_name=REGION)
@@ -812,21 +827,34 @@ def test_deploy_keeps_existing_function_url_when_unspecified(deploy_patches, mon
 
 
 @mock_aws
-def test_deploy_defaults_to_api_gateway_when_routes_present(deploy_patches, monkeypatch):
+def test_deploy_keeps_function_url_default_when_routes_present(deploy_patches, monkeypatch):
+    """Adding a bot.route no longer forces api_gateway: an unset endpoint
+    stays on the default Function URL, where cordless does the path matching."""
     iam = boto3.client("iam", region_name=REGION)
     monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
     deploy(**_base_deploy_kwargs(deploy_patches, routes=[("POST", "/stripe/webhook")]))
+    lam = boto3.client("lambda", region_name=REGION)
+    assert lam.get_function_url_config(FunctionName="my-bot")["FunctionUrl"]
     apigw = boto3.client("apigatewayv2", region_name=REGION)
-    api_id = next(a["ApiId"] for a in apigw.get_apis()["Items"] if a["Name"] == "my-bot-api")
-    assert "POST /stripe/webhook" in {r["RouteKey"] for r in _list_all_routes(apigw, api_id)}
+    assert not any(a["Name"] == "my-bot-api" for a in apigw.get_apis()["Items"])
 
 
 @mock_aws
-def test_deploy_rejects_routes_on_function_url(deploy_patches, monkeypatch):
+def test_deploy_allows_routes_on_function_url(deploy_patches, monkeypatch):
     iam = boto3.client("iam", region_name=REGION)
     monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
-    with pytest.raises(SystemExit, match="api_gateway"):
-        deploy(**_base_deploy_kwargs(deploy_patches, endpoint="function_url", routes=[("POST", "/x")]))
+    url = deploy(**_base_deploy_kwargs(deploy_patches, endpoint="function_url", routes=[("POST", "/x")]))
+    assert ".lambda-url." in url
+
+
+@mock_aws
+def test_deploy_syncs_routes_on_explicit_api_gateway(deploy_patches, monkeypatch):
+    iam = boto3.client("iam", region_name=REGION)
+    monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
+    deploy(**_base_deploy_kwargs(deploy_patches, endpoint="api_gateway", routes=[("POST", "/stripe/webhook")]))
+    apigw = boto3.client("apigatewayv2", region_name=REGION)
+    api_id = next(a["ApiId"] for a in apigw.get_apis()["Items"] if a["Name"] == "my-bot-api")
+    assert "POST /stripe/webhook" in {r["RouteKey"] for r in _list_all_routes(apigw, api_id)}
 
 
 @mock_aws

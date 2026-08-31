@@ -35,9 +35,9 @@ The current feature surface, for orientation:
   the Discord interaction flow, for third-party webhooks (Stripe, GitHub),
   OAuth redirect callbacks, and health checks. The handler gets the raw
   event and the `bot` instance, so it can reuse `send_message`,
-  `execute_webhook`, and the rest. Paths take `{name}` segments. Requires
-  `endpoint = "api_gateway"`; `cordless deploy` diffs the routes onto the
-  API the same way it diffs Discord commands
+  `execute_webhook`, and the rest. Paths take `{name}` segments. Works on
+  either endpoint; `endpoint = "api_gateway"` additionally gives edge 404s
+  for unknown paths and deploy-time route sync
 - `cordless deploy`: Function URL or API Gateway (custom domain), IAM role,
   command registration, all in one command; `cordless destroy` to tear down
 - Environment-specific config (`--environment`/`--env`, overlay `.env` files)
