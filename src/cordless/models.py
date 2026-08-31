@@ -65,7 +65,7 @@ class Permissions:
     Keyword args set or clear individual named bits on top of that, e.g.
     `Permissions(manage_guild=True, kick_members=True)`."""
 
-    def __init__(self, raw=0, **flags):
+    def __init__(self, raw: str | int | None = 0, **flags):
         self.value = int(raw or 0)
         for name, on in flags.items():
             if name not in _PERMISSION_BITS:
