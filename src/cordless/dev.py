@@ -260,15 +260,17 @@ def _start_tunnel(port):
         stderr=subprocess.PIPE,
         text=True,
     )
+    assert proc.stderr is not None
+    stderr = proc.stderr
     url = None
     with Spinner("starting tunnel"):
-        for line in proc.stderr:
+        for line in stderr:
             match = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", line)
             if match:
                 url = match.group(0)
                 break
     # keep draining stderr so cloudflared doesn't block on a full pipe
-    threading.Thread(target=lambda: [None for _ in proc.stderr], daemon=True).start()
+    threading.Thread(target=lambda: [None for _ in stderr], daemon=True).start()
     return proc, url
 
 
