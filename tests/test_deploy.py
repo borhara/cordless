@@ -240,6 +240,35 @@ def test_ensure_api_gateway_syncs_bot_routes(aws_clients, tmp_path):
     assert {r["RouteKey"] for r in _list_all_routes(apigw, api_id)} == {"POST /", "POST /stripe/webhook"}
 
 
+def test_ensure_api_gateway_routes_none_leaves_synced_routes_alone(aws_clients, tmp_path):
+    iam, lam, apigw = aws_clients["iam"], aws_clients["lam"], aws_clients["apigw"]
+    role_arn = _make_role(iam)
+    fn_arn = _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+
+    _ensure_api_gateway(
+        apigw, lam, "my-fn", fn_arn, REGION, ACCOUNT_ID, routes=[("POST", "/stripe"), ("GET", "/gh/{repo}/hook")]
+    )
+    api_id = next(a["ApiId"] for a in apigw.get_apis()["Items"] if a["Name"] == "my-fn-api")
+
+    # routes=None (the bot could not be loaded) must not prune anything
+    _ensure_api_gateway(apigw, lam, "my-fn", fn_arn, REGION, ACCOUNT_ID, routes=None)
+    assert {r["RouteKey"] for r in _list_all_routes(apigw, api_id)} == {
+        "POST /",
+        "POST /stripe",
+        "GET /gh/{repo}/hook",
+    }
+
+
+def test_ensure_api_gateway_rewrites_greedy_param_to_proxy(aws_clients, tmp_path):
+    iam, lam, apigw = aws_clients["iam"], aws_clients["lam"], aws_clients["apigw"]
+    role_arn = _make_role(iam)
+    fn_arn = _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
+
+    _ensure_api_gateway(apigw, lam, "my-fn", fn_arn, REGION, ACCOUNT_ID, routes=[("GET", "/files/{rest+}")])
+    api_id = next(a["ApiId"] for a in apigw.get_apis()["Items"] if a["Name"] == "my-fn-api")
+    assert {r["RouteKey"] for r in _list_all_routes(apigw, api_id)} == {"POST /", "GET /files/{proxy+}"}
+
+
 def test_ensure_api_gateway_reuses_one_integration(aws_clients, tmp_path):
     iam, lam, apigw = aws_clients["iam"], aws_clients["lam"], aws_clients["apigw"]
     role_arn = _make_role(iam)

@@ -508,6 +508,14 @@ def _ensure_integration(apigw, api_id, function_arn):
     )["IntegrationId"]
 
 
+def _api_route_key(method, path):
+    """AWS HTTP APIs only accept {proxy+} for the greedy segment; cordless
+    allows any name and resolves it from its own matcher, so rewrite it
+    just for the wire key."""
+    wire_path = re.sub(r"\{[^/}]+\+\}", "{proxy+}", path)
+    return f"{method} {wire_path}"
+
+
 def _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id, routes=None):
     api_name = f"{function_name}-api"
 
@@ -528,13 +536,15 @@ def _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account
     target = f"integrations/{integration_id}"
 
     # POST / is Discord's interaction endpoint; the rest come from @bot.route.
-    # Sync them like slash commands: create the missing, drop the stale.
-    wanted = {"POST /"} | {f"{method} {path}" for method, path in (routes or [])}
+    # Sync them like slash commands: create the missing, drop the stale. When
+    # routes is None the bot never loaded, so ensure POST / but prune nothing.
+    wanted = {"POST /"} | {_api_route_key(method, path) for method, path in (routes or [])}
     present = {r["RouteKey"]: r["RouteId"] for r in _list_all_routes(apigw, api_id)}
     for key in wanted - set(present):
         apigw.create_route(ApiId=api_id, RouteKey=key, Target=target)
-    for key in set(present) - wanted:
-        apigw.delete_route(ApiId=api_id, RouteId=present[key])
+    if routes is not None:
+        for key in set(present) - wanted:
+            apigw.delete_route(ApiId=api_id, RouteId=present[key])
 
     # Always refresh the Lambda invoke permission for this API
     source_arn = f"arn:aws:execute-api:{region}:{account_id}:{api_id}/*/*"
@@ -971,7 +981,7 @@ def _health_check(
             checks.append((api is not None, "API Gateway", "present" if api else "not found"))
             if api is not None and routes:
                 have = {r["RouteKey"] for r in _list_all_routes(apigw, api["ApiId"])}
-                want = {"POST /"} | {f"{method} {path}" for method, path in routes}
+                want = {"POST /"} | {_api_route_key(method, path) for method, path in routes}
                 missing = want - have
                 detail = "all present" if not missing else f"missing: {', '.join(sorted(missing))}"
                 checks.append((not missing, "API routes", detail))
