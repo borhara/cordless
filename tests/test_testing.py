@@ -413,7 +413,11 @@ def test_autocomplete_nests_subcommand_path():
 def test_invoke_dispatches_autocomplete_and_filters_string_choices():
     bot = _bot()
 
-    @bot.command("shop", description="shop", options=[{"name": "item", "type": 3, "autocomplete": True}])
+    @bot.command(
+        "shop",
+        description="shop",
+        options=[{"name": "item", "type": 3, "description": "item to buy", "autocomplete": True}],
+    )
     async def shop(ctx, item: str):
         await ctx.send("bought")
 
@@ -430,7 +434,11 @@ def test_invoke_dispatches_autocomplete_and_filters_string_choices():
 def test_invoke_dispatches_autocomplete_with_dict_choices_unfiltered():
     bot = _bot()
 
-    @bot.command("shop", description="shop", options=[{"name": "item", "type": 3, "autocomplete": True}])
+    @bot.command(
+        "shop",
+        description="shop",
+        options=[{"name": "item", "type": 3, "description": "item to buy", "autocomplete": True}],
+    )
     async def shop(ctx, item: str):
         await ctx.send("bought")
 
@@ -445,7 +453,11 @@ def test_invoke_dispatches_autocomplete_with_dict_choices_unfiltered():
 def test_invoke_raises_for_unregistered_autocomplete_handler():
     bot = _bot()
 
-    @bot.command("shop", description="shop", options=[{"name": "item", "type": 3, "autocomplete": True}])
+    @bot.command(
+        "shop",
+        description="shop",
+        options=[{"name": "item", "type": 3, "description": "item to buy", "autocomplete": True}],
+    )
     async def shop(ctx, item: str):
         await ctx.send("bought")
 

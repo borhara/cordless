@@ -44,11 +44,58 @@ def _prewarm_defer():
         pass
 
 
+_MAX_OPTIONS = 25
+_MAX_CHOICES = 25
+
+
 def _validate_command_name(name):
     """Fail at decoration time instead of with a cryptic Discord API error at register time."""
     for part in name.split("/"):
         if not _NAME_RE.fullmatch(part):
             raise ValueError(f"Invalid command name {name!r}: Discord requires 1-32 lowercase letters, digits, - or _")
+
+
+def _check_description(where, text):
+    """Discord requires a 1 to 100 character description on chat-input
+    commands and every option. An empty or overlong one is otherwise only
+    caught by a positional Invalid Form Body error at register time."""
+    length = 0 if text is None else len(text)
+    if not 1 <= length <= 100:
+        raise ValueError(f"{where}: description must be 1 to 100 characters, got {length}")
+
+
+def _validate_command_shape(name, description, options, group_description=None):
+    """Decoration-time checks for the static limits that produce opaque
+    Discord errors: description lengths, option names, and the 25-item caps
+    on options and choices. Every message names the command."""
+    _check_description(f"Command {name!r}", description)
+    if group_description is not None:
+        _check_description(f"Command {name!r} group", group_description)
+
+    if len(options) > _MAX_OPTIONS:
+        raise ValueError(f"Command {name!r} has {len(options)} options, Discord allows at most {_MAX_OPTIONS}")
+
+    for opt in options:
+        opt_name = opt.get("name", "")
+        if not _NAME_RE.fullmatch(opt_name):
+            raise ValueError(
+                f"Command {name!r}: invalid option name {opt_name!r}, "
+                "Discord requires 1-32 lowercase letters, digits, - or _"
+            )
+        _check_description(f"Command {name!r} option {opt_name!r}", opt.get("description"))
+
+        choices = opt.get("choices") or []
+        if len(choices) > _MAX_CHOICES:
+            raise ValueError(
+                f"Command {name!r} option {opt_name!r} has {len(choices)} choices, "
+                f"Discord allows at most {_MAX_CHOICES}"
+            )
+        for ch in choices:
+            ch_name = ch.get("name")
+            if ch_name is None or not 1 <= len(str(ch_name)) <= 100:
+                raise ValueError(
+                    f"Command {name!r} option {opt_name!r}: choice name must be 1 to 100 characters, got {ch_name!r}"
+                )
 
 
 def _unwrap_optional(annotation):
@@ -249,6 +296,7 @@ class Cordless(RESTMixin):
 
         def decorator(func):
             _options = options if options is not None else options_from_signature(func)
+            _validate_command_shape(name, description, _options, group_description)
             if defer:
                 func._defer = True
                 if ephemeral:
@@ -857,6 +905,9 @@ class Cordless(RESTMixin):
                 resolved_options = kwargs["options"]
                 if resolved_options is None:
                     resolved_options = options_from_signature(func)
+                _validate_command_shape(
+                    kwargs["name"], kwargs["description"], resolved_options, kwargs.get("group_description")
+                )
                 self.router.register_command(
                     kwargs["name"],
                     func,
