@@ -520,11 +520,23 @@ def test_cold_container_discovers_a_bucket_keyed_block_via_the_route_mirror(dyna
 
 def test_shared_block_fails_open_when_table_missing(monkeypatch):
     monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, "does-not-exist")
+    monkeypatch.setattr(ratelimit, "_warned_degraded", False)
     with mock_aws():
         assert ratelimit._shared_block("POST /channels/1/messages") is None
 
 
 def test_put_shared_fails_open_when_table_missing(monkeypatch):
     monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, "does-not-exist")
+    monkeypatch.setattr(ratelimit, "_warned_degraded", False)
     with mock_aws():
         ratelimit._put_shared("POST /channels/1/messages", 123, confirmed=False)  # should not raise
+
+
+def test_degraded_dynamo_warns_once(monkeypatch, capsys):
+    monkeypatch.setenv(ratelimit._TABLE_ENV_VAR, "does-not-exist")
+    monkeypatch.setattr(ratelimit, "_warned_degraded", False)
+    with mock_aws():
+        ratelimit._put_shared("POST /channels/1/messages", 123, confirmed=False)
+        ratelimit._shared_block("POST /channels/1/messages")
+    out = capsys.readouterr().out
+    assert out.count("[cordless] ratelimit: shared state") == 1

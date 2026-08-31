@@ -229,6 +229,21 @@ def note_blocked(method, path, retry_after, headers=None):
 
 
 _tables = {}
+_warned_degraded = False
+
+
+def _warn_degraded(action, exc):
+    """Print once when a DynamoDB call fails. Shared state is a best-effort
+    optimisation, so a failure falls back to per-container state rather than
+    raising, but staying silent hides a missing table or IAM permission for
+    the whole life of the deployment."""
+    global _warned_degraded
+    if not _warned_degraded:
+        _warned_degraded = True
+        print(
+            f"[cordless] ratelimit: shared state {action} failed "
+            f"({type(exc).__name__}: {exc}); using per-container state only"
+        )
 
 
 def _table():
@@ -250,7 +265,8 @@ def _shared_block(key):
     the table is unreachable/unconfigured, see the fail-open note below)."""
     try:
         item = _table().get_item(Key={"pk": key}).get("Item")
-    except Exception:
+    except Exception as exc:
+        _warn_degraded("read", exc)
         return None  # fail-open: a DynamoDB hiccup should never block sending
     if not item:
         return None
@@ -269,5 +285,5 @@ def _put_shared(key, blocked_until, confirmed):
                 "ttl": int(blocked_until) + 60,
             }
         )
-    except Exception:
-        pass  # fail-open, same as above
+    except Exception as exc:
+        _warn_degraded("write", exc)  # fail-open, same as above
