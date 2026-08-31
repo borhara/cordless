@@ -39,29 +39,27 @@ class Thread(DiscordObject):
         return f"<#{self._data['id']}>"
 
     async def join(self, *, token=None):
-        """Join this thread as the bot. Requires `DISCORD_BOT_TOKEN`."""
+        """No-op if the bot is already a member."""
         await threads.join_thread(self.id, token=token)
 
     async def leave(self, *, token=None):
-        """Leave this thread. Requires `DISCORD_BOT_TOKEN`."""
+        """The bot stops receiving the thread's messages."""
         await threads.leave_thread(self.id, token=token)
 
     async def add_member(self, user_id, *, token=None):
-        """Add a member to this thread. Requires `DISCORD_BOT_TOKEN`."""
+        """Needs the bot in the thread; a private thread also needs SEND_MESSAGES_IN_THREADS."""
         await threads.add_thread_member(self.id, user_id, token=token)
 
     async def remove_member(self, user_id, *, token=None):
-        """Remove a member from this thread. Requires `DISCORD_BOT_TOKEN`."""
+        """Requires MANAGE_THREADS, or thread ownership for a private thread."""
         await threads.remove_thread_member(self.id, user_id, token=token)
 
     async def fetch_member(self, user_id, *, with_member=False, token=None):
-        """Fetch a single member of this thread, as a `ThreadMember`.
-        Requires `DISCORD_BOT_TOKEN`."""
+        """Fetch a single member of this thread, as a `ThreadMember`."""
         return await threads.fetch_thread_member(self.id, user_id, with_member=with_member, token=token)
 
     async def fetch_members(self, *, with_member=False, after=None, limit=None, token=None):
-        """List this thread's members, as a list of `ThreadMember`. Requires
-        `DISCORD_BOT_TOKEN`."""
+        """List this thread's members, as a list of `ThreadMember`."""
         return await threads.fetch_thread_members(
             self.id, with_member=with_member, after=after, limit=limit, token=token
         )
@@ -83,24 +81,21 @@ class Invite(DiscordObject):
         return await invites.fetch_invite(self.code, **kwargs)
 
     async def delete(self, **kwargs):
-        """Delete this invite. Returns the now-deleted `Invite`. Requires
-        `DISCORD_BOT_TOKEN` and `MANAGE_CHANNELS` (or `MANAGE_GUILD` to
+        """Delete this invite. Returns the now-deleted `Invite`. Requires `MANAGE_CHANNELS` (or `MANAGE_GUILD` to
         remove any invite in the guild)."""
         return await invites.delete_invite(self.code, **kwargs)
 
     async def fetch_target_users(self, **kwargs):
-        """Fetch this invite's target user allowlist, as raw CSV text.
-        Requires `DISCORD_BOT_TOKEN`."""
+        """Fetch this invite's target user allowlist, as raw CSV text."""
         return await invites.fetch_invite_target_users(self.code, **kwargs)
 
     async def edit_target_users(self, filename, file_bytes, **kwargs):
-        """Replace this invite's target user allowlist from a CSV file.
-        Requires `DISCORD_BOT_TOKEN`."""
+        """Replace this invite's target user allowlist from a CSV file."""
         await invites.edit_invite_target_users(self.code, filename, file_bytes, **kwargs)
 
     async def fetch_target_users_job_status(self, **kwargs):
         """Check the progress of a target user allowlist upload, as a
-        `TargetUsersJobStatus`. Requires `DISCORD_BOT_TOKEN`."""
+        `TargetUsersJobStatus`."""
         return await invites.fetch_invite_target_users_job_status(self.code, **kwargs)
 
 
@@ -212,11 +207,11 @@ class Webhook(DiscordObject):
     after `guild.create_webhook()`), and any other field Discord sends."""
 
     async def edit(self, **kwargs):
-        """Update this webhook. Requires `DISCORD_BOT_TOKEN` and `MANAGE_WEBHOOKS`."""
+        """Update this webhook. Requires `MANAGE_WEBHOOKS`."""
         return await webhooks.edit_webhook(self.id, **kwargs)
 
     async def delete(self, **kwargs):
-        """Delete this webhook. Requires `DISCORD_BOT_TOKEN` and `MANAGE_WEBHOOKS`."""
+        """Delete this webhook. Requires `MANAGE_WEBHOOKS`."""
         await webhooks.delete_webhook(self.id, **kwargs)
 
     async def execute(
@@ -282,7 +277,7 @@ class Emoji(DiscordObject):
     `.available`, and any other field Discord sends."""
 
     async def edit(self, **kwargs):
-        """Update this emoji. Requires `DISCORD_BOT_TOKEN`, and
+        """Update this emoji. Requires and
         `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS` for a guild
         emoji."""
         if "guild_id" in self._data:
@@ -290,7 +285,7 @@ class Emoji(DiscordObject):
         return await emojis.edit_application_emoji(self._data["application_id"], self.id, **kwargs)
 
     async def delete(self, **kwargs):
-        """Delete this emoji. Requires `DISCORD_BOT_TOKEN`, and
+        """Delete this emoji. Requires and
         `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS` for a guild
         emoji."""
         if "guild_id" in self._data:
@@ -316,13 +311,13 @@ class Sticker(DiscordObject):
     present on guild stickers, not standard (pack) ones."""
 
     async def edit(self, **kwargs):
-        """Update this guild sticker. Requires `DISCORD_BOT_TOKEN`, and
+        """Update this guild sticker. Requires and
         `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS`."""
         guild_id = _guild_id_or_raise(self._data, "can't edit a sticker pack sticker, only guild stickers")
         return await stickers.edit_guild_sticker(guild_id, self.id, **kwargs)
 
     async def delete(self, **kwargs):
-        """Delete this guild sticker. Requires `DISCORD_BOT_TOKEN`, and
+        """Delete this guild sticker. Requires and
         `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS`."""
         guild_id = _guild_id_or_raise(self._data, "can't delete a sticker pack sticker, only guild stickers")
         await stickers.delete_guild_sticker(guild_id, self.id, **kwargs)
@@ -335,15 +330,13 @@ class SoundboardSound(DiscordObject):
     only present on guild sounds, not default ones."""
 
     async def edit(self, **kwargs):
-        """Update this guild soundboard sound. Requires
-        `DISCORD_BOT_TOKEN` and `CREATE_GUILD_EXPRESSIONS`/
+        """Update this guild soundboard sound. Requires `CREATE_GUILD_EXPRESSIONS`/
         `MANAGE_GUILD_EXPRESSIONS`."""
         guild_id = _guild_id_or_raise(self._data, "can't edit a default soundboard sound, only guild sounds")
         return await soundboard.edit_guild_soundboard_sound(guild_id, self.sound_id, **kwargs)
 
     async def delete(self, **kwargs):
-        """Delete this guild soundboard sound. Requires
-        `DISCORD_BOT_TOKEN` and `CREATE_GUILD_EXPRESSIONS`/
+        """Delete this guild soundboard sound. Requires `CREATE_GUILD_EXPRESSIONS`/
         `MANAGE_GUILD_EXPRESSIONS`."""
         guild_id = _guild_id_or_raise(self._data, "can't delete a default soundboard sound, only guild sounds")
         await soundboard.delete_guild_soundboard_sound(guild_id, self.sound_id, **kwargs)
@@ -373,16 +366,16 @@ class GuildScheduledEvent(DiscordObject):
 
     async def edit(self, **kwargs):
         """Update this event. Set `status` to start/end it. Returns the
-        updated `GuildScheduledEvent`. Requires `DISCORD_BOT_TOKEN`."""
+        updated `GuildScheduledEvent`."""
         return await scheduled_events.edit_guild_scheduled_event(self.guild_id, self.id, **kwargs)
 
     async def delete(self, **kwargs):
-        """Delete this event. Requires `DISCORD_BOT_TOKEN`."""
+        """Requires MANAGE_EVENTS."""
         await scheduled_events.delete_guild_scheduled_event(self.guild_id, self.id, **kwargs)
 
     async def fetch_users(self, **kwargs):
         """List users subscribed to this event, as a list of
-        `GuildScheduledEventUser`. Requires `DISCORD_BOT_TOKEN`."""
+        `GuildScheduledEventUser`."""
         return await scheduled_events.fetch_guild_scheduled_event_users(self.guild_id, self.id, **kwargs)
 
 
@@ -394,11 +387,11 @@ class AutoModerationRule(DiscordObject):
 
     async def edit(self, **kwargs):
         """Update this rule. Returns the updated `AutoModerationRule`.
-        Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        Requires `MANAGE_GUILD`."""
         return await auto_moderation.edit_auto_moderation_rule(self.guild_id, self.id, **kwargs)
 
     async def delete(self, **kwargs):
-        """Delete this rule. Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        """Delete this rule. Requires `MANAGE_GUILD`."""
         await auto_moderation.delete_auto_moderation_rule(self.guild_id, self.id, **kwargs)
 
 
@@ -426,12 +419,11 @@ class StageInstance(DiscordObject):
 
     async def edit(self, **kwargs):
         """Update this Stage instance. Returns the updated `StageInstance`.
-        Requires `DISCORD_BOT_TOKEN` and Stage moderator permissions."""
+        Requires Stage moderator permissions."""
         return await stage_instances.edit_stage_instance(self.channel_id, **kwargs)
 
     async def delete(self, **kwargs):
-        """Delete this Stage instance. Requires `DISCORD_BOT_TOKEN` and
-        Stage moderator permissions."""
+        """Delete this Stage instance. Requires Stage moderator permissions."""
         await stage_instances.delete_stage_instance(self.channel_id, **kwargs)
 
 
@@ -449,18 +441,17 @@ class GuildTemplate(DiscordObject):
 
     async def sync(self, **kwargs):
         """Sync this template to its source guild's current state. Returns
-        the updated `GuildTemplate`. Requires `DISCORD_BOT_TOKEN` and
-        `MANAGE_GUILD`."""
+        the updated `GuildTemplate`. Requires `MANAGE_GUILD`."""
         return await templates.sync_guild_template(self.source_guild_id, self.code, **kwargs)
 
     async def edit(self, **kwargs):
         """Update this template's name/description. Returns the updated
-        `GuildTemplate`. Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        `GuildTemplate`. Requires `MANAGE_GUILD`."""
         return await templates.edit_guild_template(self.source_guild_id, self.code, **kwargs)
 
     async def delete(self, **kwargs):
         """Delete this template. Returns the deleted `GuildTemplate`.
-        Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        Requires `MANAGE_GUILD`."""
         return await templates.delete_guild_template(self.source_guild_id, self.code, **kwargs)
 
 
@@ -509,12 +500,11 @@ class Entitlement(DiscordObject):
     `.consumed`."""
 
     async def consume(self, **kwargs):
-        """Mark this one-time-purchase consumable entitlement as consumed.
-        Requires `DISCORD_BOT_TOKEN`."""
+        """Mark this one-time-purchase consumable entitlement as consumed."""
         await entitlements.consume_entitlement(self.application_id, self.id, **kwargs)
 
     async def delete(self, **kwargs):
-        """Delete this test entitlement. Requires `DISCORD_BOT_TOKEN`."""
+        """Test entitlements only; a real purchase can't be deleted this way."""
         await entitlements.delete_test_entitlement(self.application_id, self.id, **kwargs)
 
 
@@ -538,7 +528,7 @@ class Application(DiscordObject):
 
     async def edit(self, **kwargs):
         """Update the application's settings. Returns the updated
-        `Application`. Requires `DISCORD_BOT_TOKEN`."""
+        `Application`."""
         return await application.edit_current_application(**kwargs)
 
 
@@ -557,15 +547,14 @@ class ApplicationCommand(DiscordObject):
     field Discord sends."""
 
     async def edit(self, **kwargs):
-        """Update this command. Returns the updated `ApplicationCommand`.
-        Requires `DISCORD_BOT_TOKEN`."""
+        """Update this command. Returns the updated `ApplicationCommand`."""
         guild_id = self._data.get("guild_id")
         if guild_id:
             return await application_commands.edit_guild_command(self.application_id, guild_id, self.id, **kwargs)
         return await application_commands.edit_global_command(self.application_id, self.id, **kwargs)
 
     async def delete(self, **kwargs):
-        """Delete this command. Requires `DISCORD_BOT_TOKEN`."""
+        """Global commands take up to an hour to clear from every guild."""
         guild_id = self._data.get("guild_id")
         if guild_id:
             await application_commands.delete_guild_command(self.application_id, guild_id, self.id, **kwargs)
@@ -574,7 +563,7 @@ class ApplicationCommand(DiscordObject):
 
     async def fetch_permissions(self, **kwargs):
         """Fetch this guild command's permissions. Guild-scoped commands
-        only. Requires `DISCORD_BOT_TOKEN`."""
+        only."""
         return await application_commands.fetch_command_permissions(
             self.application_id, self._data["guild_id"], self.id, **kwargs
         )

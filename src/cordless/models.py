@@ -141,13 +141,12 @@ class User(DiscordObject):
         return _cdn_asset_url(f"banners/{user_id}/{{hash}}", banner) if user_id else None
 
     async def fetch(self, **kwargs):
-        """Re-fetch this user by id. Returns a fresh `User`. Requires
-        `DISCORD_BOT_TOKEN`."""
+        """Re-fetch this user by id. Returns a fresh `User`."""
         return await users.fetch_user(self.id, **kwargs)
 
     async def create_dm(self, **kwargs):
         """Open (or fetch the existing) DM channel with this user. Returns
-        the DM `Channel`. Requires `DISCORD_BOT_TOKEN`."""
+        the DM `Channel`."""
         return await users.create_dm(self.id, **kwargs)
 
 
@@ -181,26 +180,24 @@ class Member(DiscordObject):
 
     async def edit(self, **kwargs):
         """Update this member's nick, roles, mute/deaf, voice channel or
-        timeout. Returns the updated `Member`. Requires `DISCORD_BOT_TOKEN`."""
+        timeout. Returns the updated `Member`."""
         return await members.edit_guild_member(self._data["guild_id"], self._data["user"]["id"], **kwargs)
 
     async def add_role(self, role_id, **kwargs):
-        """Grant this member a role. Requires `DISCORD_BOT_TOKEN` and `MANAGE_ROLES`."""
+        """Grant this member a role. Requires `MANAGE_ROLES`."""
         await members.add_guild_member_role(self._data["guild_id"], self._data["user"]["id"], role_id, **kwargs)
 
     async def remove_role(self, role_id, **kwargs):
-        """Remove a role from this member. Requires `DISCORD_BOT_TOKEN` and `MANAGE_ROLES`."""
+        """Remove a role from this member. Requires `MANAGE_ROLES`."""
         await members.remove_guild_member_role(self._data["guild_id"], self._data["user"]["id"], role_id, **kwargs)
 
     async def kick(self, **kwargs):
-        """Remove this member from the guild. Requires `DISCORD_BOT_TOKEN`
-        and `KICK_MEMBERS`."""
+        """Remove this member from the guild. Requires `KICK_MEMBERS`."""
         await members.remove_guild_member(self._data["guild_id"], self._data["user"]["id"], **kwargs)
 
     async def timeout(self, until, **kwargs):
         """Time this member out until an ISO 8601 timestamp (up to 28 days
-        out), or pass `None` to clear an existing timeout. Requires
-        `DISCORD_BOT_TOKEN` and `MODERATE_MEMBERS`."""
+        out), or pass `None` to clear an existing timeout. Requires `MODERATE_MEMBERS`."""
         return await members.edit_guild_member(
             self._data["guild_id"], self._data["user"]["id"], communication_disabled_until=until, **kwargs
         )
@@ -218,52 +215,48 @@ class Message(DiscordObject):
         return User(author_data) if author_data is not None else None
 
     async def pin(self, **kwargs):
-        """Pin this message in its channel. Requires `DISCORD_BOT_TOKEN` and `PIN_MESSAGES`."""
+        """Pin this message in its channel. Requires `PIN_MESSAGES`."""
         await channels.pin_message(self._data["channel_id"], self.id, **kwargs)
 
     async def unpin(self, **kwargs):
-        """Unpin this message. Requires `DISCORD_BOT_TOKEN` and `PIN_MESSAGES`."""
+        """Unpin this message. Requires `PIN_MESSAGES`."""
         await channels.unpin_message(self._data["channel_id"], self.id, **kwargs)
 
     async def fetch(self, **kwargs):
-        """Re-fetch this message's full object from Discord. Requires
-        `DISCORD_BOT_TOKEN`."""
+        """`ctx.message` is partial; this returns the complete `Message`."""
         return await messages.fetch_message(self._data["channel_id"], self.id, **kwargs)
 
     async def edit(self, **kwargs):
         """Edit this message (only the original author can change
         content/embeds/components; anyone with `MANAGE_MESSAGES` can change
         `flags`). Nullable fields can be cleared by passing `None`. Returns
-        the updated `Message`. Requires `DISCORD_BOT_TOKEN`."""
+        the updated `Message`."""
         return await messages.edit_channel_message(self._data["channel_id"], self.id, **kwargs)
 
     async def delete(self, **kwargs):
-        """Delete this message. Requires `DISCORD_BOT_TOKEN`."""
+        """Anyone else's message needs MANAGE_MESSAGES."""
         await messages.delete_channel_message(self._data["channel_id"], self.id, **kwargs)
 
     async def crosspost(self, **kwargs):
         """Publish this message from an announcement channel to its
-        following channels. Returns the updated `Message`. Requires
-        `DISCORD_BOT_TOKEN`."""
+        following channels. Returns the updated `Message`."""
         return await messages.crosspost_message(self._data["channel_id"], self.id, **kwargs)
 
     async def reply(self, **kwargs):
         """Send a new message that replies to this one. Same fields as
-        `channel.send()`. Returns the sent `Message`. Requires
-        `DISCORD_BOT_TOKEN`."""
+        `channel.send()`. Returns the sent `Message`."""
         reference = {"message_id": self.id}
         return await messages.create_message(self._data["channel_id"], message_reference=reference, **kwargs)
 
     async def add_reaction(self, emoji, **kwargs):
         """React to this message as the bot. `emoji` is a unicode emoji, or
-        `name:id` for a custom one. Requires `DISCORD_BOT_TOKEN` and (unless
+        `name:id` for a custom one. Requires (unless
         someone already reacted with it) `ADD_REACTIONS`."""
         await messages.create_reaction(self._data["channel_id"], self.id, emoji, **kwargs)
 
     async def remove_reaction(self, emoji, user_id=None, **kwargs):
         """Remove a reaction. Removes the bot's own by default; pass
-        `user_id` to remove someone else's, which needs `MANAGE_MESSAGES`.
-        Requires `DISCORD_BOT_TOKEN`."""
+        `user_id` to remove someone else's, which needs `MANAGE_MESSAGES`."""
         if user_id is None:
             await messages.delete_own_reaction(self._data["channel_id"], self.id, emoji, **kwargs)
         else:
@@ -271,13 +264,12 @@ class Message(DiscordObject):
 
     async def fetch_reactions(self, emoji, **kwargs):
         """List the users who reacted with a given emoji, as a list of
-        `User`. Requires `DISCORD_BOT_TOKEN`."""
+        `User`."""
         return await messages.fetch_reactions(self._data["channel_id"], self.id, emoji, **kwargs)
 
     async def clear_reactions(self, emoji=None, **kwargs):
         """Remove every reaction from this message, or every reaction for
-        one emoji if `emoji` is given. Requires `DISCORD_BOT_TOKEN` and
-        `MANAGE_MESSAGES`."""
+        one emoji if `emoji` is given. Requires `MANAGE_MESSAGES`."""
         if emoji is None:
             await messages.delete_all_reactions(self._data["channel_id"], self.id, **kwargs)
         else:
@@ -285,13 +277,12 @@ class Message(DiscordObject):
 
     async def fetch_poll_answer_voters(self, answer_id, **kwargs):
         """List the users who voted for one answer on this message's poll,
-        as a list of `User`. Requires `DISCORD_BOT_TOKEN`."""
+        as a list of `User`."""
         return await messages.fetch_poll_answer_voters(self._data["channel_id"], self.id, answer_id, **kwargs)
 
     async def expire_poll(self, **kwargs):
         """End this message's poll now, instead of waiting for its normal
-        expiry. Returns the updated `Message`. Requires
-        `DISCORD_BOT_TOKEN`."""
+        expiry. Returns the updated `Message`."""
         return await messages.expire_poll(self._data["channel_id"], self.id, **kwargs)
 
 
@@ -307,147 +298,138 @@ class Channel(DiscordObject):
 
     async def start_thread_from_message(self, message_id, name, **kwargs):
         """Start a thread off an existing message in this channel. Returns
-        a `Thread`. Requires `DISCORD_BOT_TOKEN`."""
+        a `Thread`."""
         return await threads.start_thread_from_message(self.id, message_id, name, **kwargs)
 
     async def start_thread_without_message(self, name, **kwargs):
         """Start a thread not attached to any message in this channel.
-        Returns a `Thread`. Requires `DISCORD_BOT_TOKEN`."""
+        Returns a `Thread`."""
         return await threads.start_thread_without_message(self.id, name, **kwargs)
 
     async def start_thread_from_forum(self, name, *, message, **kwargs):
         """Start a forum post (a thread with its first message) in this
-        forum channel. Returns a `Thread`. Requires `DISCORD_BOT_TOKEN`."""
+        forum channel. Returns a `Thread`."""
         return await threads.start_thread_from_forum(self.id, name, message=message, **kwargs)
 
     async def fetch_public_archived_threads(self, **kwargs):
         """List this channel's public archived threads, as a list of
-        `Thread`. Requires `DISCORD_BOT_TOKEN`."""
+        `Thread`."""
         return await threads.fetch_public_archived_threads(self.id, **kwargs)
 
     async def fetch_private_archived_threads(self, **kwargs):
         """List this channel's private archived threads, as a list of
-        `Thread`. Requires `DISCORD_BOT_TOKEN` and `MANAGE_THREADS`."""
+        `Thread`. Requires `MANAGE_THREADS`."""
         return await threads.fetch_private_archived_threads(self.id, **kwargs)
 
     async def fetch_joined_private_archived_threads(self, **kwargs):
         """List this channel's private archived threads the bot has joined,
-        as a list of `Thread`. Requires `DISCORD_BOT_TOKEN`."""
+        as a list of `Thread`."""
         return await threads.fetch_joined_private_archived_threads(self.id, **kwargs)
 
     async def fetch(self, **kwargs):
         """Re-fetch this channel's full object from Discord - `ctx.channel`
-        only carries a partial payload. Requires `DISCORD_BOT_TOKEN`."""
+        only carries a partial payload."""
         return await channels.fetch_channel(self.id, **kwargs)
 
     async def edit(self, **kwargs):
         """Update this channel's settings. See `_rest.channels.edit_channel`
-        for the full field list. Returns the updated `Channel`. Requires
-        `DISCORD_BOT_TOKEN`."""
+        for the full field list. Returns the updated `Channel`."""
         return await channels.edit_channel(self.id, **kwargs)
 
     async def delete(self, **kwargs):
         """Delete this channel, close this DM, or delete this thread.
-        Returns the now-deleted `Channel`. Requires `DISCORD_BOT_TOKEN`."""
+        Returns the now-deleted `Channel`."""
         return await channels.delete_channel(self.id, **kwargs)
 
     async def set_permissions(self, overwrite_id, *, type, **kwargs):
         """Add or edit a permission overwrite for a role or member.
-        `type` is 0 for a role, 1 for a member. Requires `DISCORD_BOT_TOKEN`."""
+        `type` is 0 for a role, 1 for a member."""
         await channels.edit_channel_permissions(self.id, overwrite_id, type=type, **kwargs)
 
     async def delete_permission(self, overwrite_id, **kwargs):
-        """Remove a permission overwrite. Requires `DISCORD_BOT_TOKEN`."""
+        """Requires MANAGE_ROLES."""
         await channels.delete_channel_permission(self.id, overwrite_id, **kwargs)
 
     async def fetch_invites(self, **kwargs):
-        """List this channel's invites, as a list of `Invite`. Requires
-        `DISCORD_BOT_TOKEN`."""
+        """List this channel's invites, as a list of `Invite`."""
         return await channels.fetch_channel_invites(self.id, **kwargs)
 
     async def create_invite(self, **kwargs):
-        """Create an invite to this channel. Returns an `Invite`. Requires
-        `DISCORD_BOT_TOKEN`."""
+        """Create an invite to this channel. Returns an `Invite`."""
         return await channels.create_channel_invite(self.id, **kwargs)
 
     async def follow_announcement(self, webhook_channel_id, **kwargs):
         """Mirror this announcement channel's posts into webhook_channel_id.
-        Returns a `FollowedChannel`. Requires `DISCORD_BOT_TOKEN`."""
+        Returns a `FollowedChannel`."""
         return await channels.follow_announcement_channel(self.id, webhook_channel_id, **kwargs)
 
     async def trigger_typing(self, **kwargs):
         """Show the typing indicator in this channel for ~10 seconds, or
-        until a message is sent. Requires `DISCORD_BOT_TOKEN`."""
+        until a message is sent."""
         await channels.trigger_typing(self.id, **kwargs)
 
     async def set_voice_status(self, status=None, **kwargs):
-        """Set (or, with `status=None`, clear) this voice channel's status.
-        Requires `DISCORD_BOT_TOKEN`."""
+        """Set (or, with `status=None`, clear) this voice channel's status."""
         await channels.set_voice_channel_status(self.id, status, **kwargs)
 
     async def add_recipient(self, user_id, access_token, **kwargs):
         """Add a user to this group DM, given an OAuth2 token with the
-        `gdm.join` scope. Requires `DISCORD_BOT_TOKEN`."""
+        `gdm.join` scope."""
         await channels.add_group_dm_recipient(self.id, user_id, access_token, **kwargs)
 
     async def remove_recipient(self, user_id, **kwargs):
-        """Remove a user from this group DM. Requires `DISCORD_BOT_TOKEN`."""
+        """Group DMs only."""
         await channels.remove_group_dm_recipient(self.id, user_id, **kwargs)
 
     async def fetch_pins(self, **kwargs):
-        """List this channel's pinned messages, as a list of `MessagePin`.
-        Requires `DISCORD_BOT_TOKEN`."""
+        """List this channel's pinned messages, as a list of `MessagePin`."""
         return await channels.fetch_channel_pins(self.id, **kwargs)
 
     async def pin_message(self, message_id, **kwargs):
-        """Pin a message in this channel. Requires `DISCORD_BOT_TOKEN` and `PIN_MESSAGES`."""
+        """Pin a message in this channel. Requires `PIN_MESSAGES`."""
         await channels.pin_message(self.id, message_id, **kwargs)
 
     async def unpin_message(self, message_id, **kwargs):
-        """Unpin a message in this channel. Requires `DISCORD_BOT_TOKEN` and `PIN_MESSAGES`."""
+        """Unpin a message in this channel. Requires `PIN_MESSAGES`."""
         await channels.unpin_message(self.id, message_id, **kwargs)
 
     async def fetch_messages(self, **kwargs):
         """List recent messages in this channel, newest first, as a list
-        of `Message`. Requires `DISCORD_BOT_TOKEN`."""
+        of `Message`."""
         return await messages.fetch_channel_messages(self.id, **kwargs)
 
     async def fetch_message(self, message_id, **kwargs):
-        """Fetch a single `Message` by id. Requires `DISCORD_BOT_TOKEN`."""
+        """Fetch a single `Message` by id."""
         return await messages.fetch_message(self.id, message_id, **kwargs)
 
     async def send(self, **kwargs):
         """Send a message with the full Create Message field set (replies
         via `message_reference`, `poll`, `sticker_ids`, `tts`, `nonce`, ...),
-        unlike the simpler `bot.send_message()`. Returns the sent `Message`.
-        Requires `DISCORD_BOT_TOKEN`."""
+        unlike the simpler `bot.send_message()`. Returns the sent `Message`."""
         return await messages.create_message(self.id, **kwargs)
 
     async def bulk_delete_messages(self, message_ids, **kwargs):
         """Delete 2-100 messages at once, none older than two weeks.
-        Guild channels only. Requires `DISCORD_BOT_TOKEN` and `MANAGE_MESSAGES`."""
+        Guild channels only. Requires `MANAGE_MESSAGES`."""
         await messages.bulk_delete_messages(self.id, message_ids, **kwargs)
 
     async def fetch_webhooks(self, **kwargs):
-        """List this channel's webhooks, as a list of `Webhook`. Requires
-        `DISCORD_BOT_TOKEN` and `MANAGE_WEBHOOKS`."""
+        """List this channel's webhooks, as a list of `Webhook`. Requires `MANAGE_WEBHOOKS`."""
         return await webhooks.fetch_channel_webhooks(self.id, **kwargs)
 
     async def create_stage_instance(self, topic, **kwargs):
         """Start a live Stage on this Stage channel. Returns the new
-        `StageInstance`. Requires `DISCORD_BOT_TOKEN` and Stage moderator
+        `StageInstance`. Requires Stage moderator
         permissions."""
         return await stage_instances.create_stage_instance(self.id, topic, **kwargs)
 
     async def fetch_stage_instance(self, **kwargs):
-        """Fetch this Stage channel's live `StageInstance`, if it has one.
-        Requires `DISCORD_BOT_TOKEN`."""
+        """Fetch this Stage channel's live `StageInstance`, if it has one."""
         return await stage_instances.fetch_stage_instance(self.id, **kwargs)
 
     async def send_soundboard_sound(self, sound_id, **kwargs):
         """Play a soundboard sound in this channel's voice channel. Bot
-        must already be connected to it. Requires `DISCORD_BOT_TOKEN`,
-        `SPEAK` and `USE_SOUNDBOARD`."""
+        must already be connected to it. Requires `SPEAK` and `USE_SOUNDBOARD`."""
         await soundboard.send_soundboard_sound(self.id, sound_id, **kwargs)
 
 
@@ -486,12 +468,11 @@ class Role(DiscordObject):
         return Permissions(raw) if raw is not None else None
 
     async def edit(self, **kwargs):
-        """Update this role. Returns the updated `Role`. Requires
-        `DISCORD_BOT_TOKEN` and `MANAGE_ROLES`."""
+        """Update this role. Returns the updated `Role`. Requires `MANAGE_ROLES`."""
         return await members.edit_guild_role(self._data["guild_id"], self.id, **kwargs)
 
     async def delete(self, **kwargs):
-        """Delete this role. Requires `DISCORD_BOT_TOKEN` and `MANAGE_ROLES`."""
+        """Delete this role. Requires `MANAGE_ROLES`."""
         await members.delete_guild_role(self._data["guild_id"], self.id, **kwargs)
 
 
@@ -538,31 +519,29 @@ class Guild(DiscordObject):
 
     async def fetch_active_threads(self, **kwargs):
         """List every active thread in this guild (public and private), as
-        a list of `Thread`. Requires `DISCORD_BOT_TOKEN`."""
+        a list of `Thread`."""
         return await threads.fetch_active_guild_threads(self.id, **kwargs)
 
     async def create_channel(self, name, **kwargs):
         """Create a channel in this guild. `type` picks the kind (0 text,
         2 voice, 4 category, 5 announcement, 13 stage, 15 forum, 16 media,
         ...); see `_rest.channels.create_guild_channel` for the full field
-        list. Returns the new `Channel`. Requires `DISCORD_BOT_TOKEN`."""
+        list. Returns the new `Channel`."""
         return await channels.create_guild_channel(self.id, name, **kwargs)
 
     async def fetch_channels(self, **kwargs):
-        """List this guild's channels, as a list of `Channel`. Requires
-        `DISCORD_BOT_TOKEN`."""
+        """List this guild's channels, as a list of `Channel`."""
         return await channels.fetch_guild_channels(self.id, **kwargs)
 
     async def edit_channel_positions(self, positions, **kwargs):
         """Reorder this guild's channels. `positions` is a list of
-        `{"id": channel_id, "position": int, ...}` dicts. Requires
-        `DISCORD_BOT_TOKEN`."""
+        `{"id": channel_id, "position": int, ...}` dicts."""
         await channels.edit_guild_channel_positions(self.id, positions, **kwargs)
 
     async def fetch(self, **kwargs):
         """Re-fetch this guild's full object from Discord - `ctx.guild`
         only carries `.id`, `.locale`, `.features`. Pass `with_counts=True`
-        for approximate member/presence counts. Requires `DISCORD_BOT_TOKEN`."""
+        for approximate member/presence counts."""
         return await guilds.fetch_guild(self.id, **kwargs)
 
     async def fetch_preview(self, **kwargs):
@@ -572,97 +551,89 @@ class Guild(DiscordObject):
 
     async def edit(self, **kwargs):
         """Update this guild's settings. See `_rest.guilds.edit_guild` for
-        the full field list. Returns the updated `Guild`. Requires
-        `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        the full field list. Returns the updated `Guild`. Requires `MANAGE_GUILD`."""
         return await guilds.edit_guild(self.id, **kwargs)
 
     async def fetch_bans(self, **kwargs):
-        """List this guild's bans, as a list of `Ban`. Requires
-        `DISCORD_BOT_TOKEN` and `BAN_MEMBERS`."""
+        """List this guild's bans, as a list of `Ban`. Requires `BAN_MEMBERS`."""
         return await guilds.fetch_guild_bans(self.id, **kwargs)
 
     async def fetch_ban(self, user_id, **kwargs):
-        """Fetch a single `Ban` by user id. Requires `DISCORD_BOT_TOKEN`
-        and `BAN_MEMBERS`."""
+        """Fetch a single `Ban` by user id. Requires `BAN_MEMBERS`."""
         return await guilds.fetch_guild_ban(self.id, user_id, **kwargs)
 
     async def ban(self, user_id, **kwargs):
         """Ban a user, optionally deleting their recent messages via
-        `delete_message_seconds`. Requires `DISCORD_BOT_TOKEN` and
-        `BAN_MEMBERS`."""
+        `delete_message_seconds`. Requires `BAN_MEMBERS`."""
         await guilds.create_guild_ban(self.id, user_id, **kwargs)
 
     async def unban(self, user_id, **kwargs):
-        """Remove a ban. Requires `DISCORD_BOT_TOKEN` and `BAN_MEMBERS`."""
+        """Remove a ban. Requires `BAN_MEMBERS`."""
         await guilds.remove_guild_ban(self.id, user_id, **kwargs)
 
     async def bulk_ban(self, user_ids, **kwargs):
-        """Ban up to 200 users at once. Returns a `BulkBanResult`. Requires
-        `DISCORD_BOT_TOKEN`, `BAN_MEMBERS` and `MANAGE_GUILD`."""
+        """Ban up to 200 users at once. Returns a `BulkBanResult`. Requires `BAN_MEMBERS` and `MANAGE_GUILD`."""
         return await guilds.bulk_guild_ban(self.id, user_ids, **kwargs)
 
     async def fetch_prune_count(self, **kwargs):
         """Preview how many inactive members a prune would remove, without
-        removing them. Requires `DISCORD_BOT_TOKEN`, `MANAGE_GUILD` and
+        removing them. Requires `MANAGE_GUILD` and
         `KICK_MEMBERS`."""
         return await guilds.fetch_guild_prune_count(self.id, **kwargs)
 
     async def prune(self, **kwargs):
         """Kick inactive members. Returns the number removed, or `None`
-        if `compute_prune_count=False`. Requires `DISCORD_BOT_TOKEN`,
-        `MANAGE_GUILD` and `KICK_MEMBERS`."""
+        if `compute_prune_count=False`. Requires `MANAGE_GUILD` and `KICK_MEMBERS`."""
         return await guilds.begin_guild_prune(self.id, **kwargs)
 
     async def fetch_voice_regions(self, **kwargs):
         """List this guild's available voice regions, as a list of
-        `VoiceRegion`. Requires `DISCORD_BOT_TOKEN`."""
+        `VoiceRegion`."""
         return await guilds.fetch_guild_voice_regions(self.id, **kwargs)
 
     async def fetch_voice_state(self, **kwargs):
         """Fetch the bot's own voice state in this guild, as a
-        `VoiceState`. Requires `DISCORD_BOT_TOKEN`."""
+        `VoiceState`."""
         return await voice.fetch_current_user_voice_state(self.id, **kwargs)
 
     async def fetch_member_voice_state(self, user_id, **kwargs):
-        """Fetch a member's voice state in this guild, as a `VoiceState`.
-        Requires `DISCORD_BOT_TOKEN`."""
+        """Fetch a member's voice state in this guild, as a `VoiceState`."""
         return await voice.fetch_user_voice_state(self.id, user_id, **kwargs)
 
     async def edit_voice_state(self, **kwargs):
         """Update the bot's own voice state - move it with `channel_id`,
         or request/cancel a Stage speaker request with
-        `request_to_speak_timestamp`. Requires `DISCORD_BOT_TOKEN`."""
+        `request_to_speak_timestamp`."""
         await voice.edit_current_user_voice_state(self.id, **kwargs)
 
     async def edit_member_voice_state(self, user_id, **kwargs):
         """Move a member on a Stage channel - `suppress=False` invites them
         to speak, `suppress=True` moves them back to the audience.
-        Requires `DISCORD_BOT_TOKEN` and `MUTE_MEMBERS`."""
+        Requires `MUTE_MEMBERS`."""
         await voice.edit_user_voice_state(self.id, user_id, **kwargs)
 
     async def fetch_invites(self, **kwargs):
         """List every invite across this guild, as a list of `Invite`.
-        Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD` or `VIEW_AUDIT_LOG`."""
+        Requires `MANAGE_GUILD` or `VIEW_AUDIT_LOG`."""
         return await guilds.fetch_guild_invites(self.id, **kwargs)
 
     async def fetch_integrations(self, **kwargs):
         """List this guild's integrations, as a list of `Integration`.
-        Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        Requires `MANAGE_GUILD`."""
         return await guilds.fetch_guild_integrations(self.id, **kwargs)
 
     async def delete_integration(self, integration_id, **kwargs):
         """Delete an integration, its webhooks, and kick its bot if it has
-        one. Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        one. Requires `MANAGE_GUILD`."""
         await guilds.delete_guild_integration(self.id, integration_id, **kwargs)
 
     async def fetch_widget_settings(self, **kwargs):
-        """Fetch this guild's widget settings. Requires `DISCORD_BOT_TOKEN`
-        and `MANAGE_GUILD`."""
+        """Fetch this guild's widget settings. Requires `MANAGE_GUILD`."""
         return await guilds.fetch_guild_widget_settings(self.id, **kwargs)
 
     async def edit_widget(self, **kwargs):
         """Update this guild's widget settings (`enabled`, `channel_id`).
-        Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        Requires `MANAGE_GUILD`."""
         return await guilds.edit_guild_widget(self.id, **kwargs)
 
     async def fetch_widget(self, **kwargs):
@@ -672,213 +643,195 @@ class Guild(DiscordObject):
 
     async def fetch_vanity_url(self, **kwargs):
         """Fetch this guild's vanity invite, as a partial `Invite` (`.code`
-        is `None` if unset). Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        is `None` if unset). Requires `MANAGE_GUILD`."""
         return await guilds.fetch_guild_vanity_url(self.id, **kwargs)
 
     async def fetch_welcome_screen(self, **kwargs):
-        """Fetch this guild's welcome screen. Requires `DISCORD_BOT_TOKEN`
-        and `MANAGE_GUILD` unless the welcome screen is enabled."""
+        """Fetch this guild's welcome screen. Requires `MANAGE_GUILD` unless the welcome screen is enabled."""
         return await guilds.fetch_guild_welcome_screen(self.id, **kwargs)
 
     async def edit_welcome_screen(self, **kwargs):
-        """Update this guild's welcome screen. Requires `DISCORD_BOT_TOKEN`
-        and `MANAGE_GUILD`."""
+        """Update this guild's welcome screen. Requires `MANAGE_GUILD`."""
         return await guilds.edit_guild_welcome_screen(self.id, **kwargs)
 
     async def fetch_onboarding(self, **kwargs):
-        """Fetch this guild's onboarding configuration. Requires
-        `DISCORD_BOT_TOKEN`."""
+        """The prompts new members see to pick roles and channels."""
         return await guilds.fetch_guild_onboarding(self.id, **kwargs)
 
     async def edit_onboarding(self, **kwargs):
-        """Update this guild's onboarding configuration. Requires
-        `DISCORD_BOT_TOKEN`, `MANAGE_GUILD` and `MANAGE_ROLES`."""
+        """Update this guild's onboarding configuration. Requires `MANAGE_GUILD` and `MANAGE_ROLES`."""
         return await guilds.edit_guild_onboarding(self.id, **kwargs)
 
     async def edit_incident_actions(self, **kwargs):
         """Pause invites and/or DMs for up to 24 hours (raid protection).
-        Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        Requires `MANAGE_GUILD`."""
         return await guilds.edit_guild_incident_actions(self.id, **kwargs)
 
     async def fetch_member(self, user_id, **kwargs):
-        """Fetch a single guild `Member` by user id. Requires `DISCORD_BOT_TOKEN`."""
+        """Fetch a single guild `Member` by user id."""
         return await members.fetch_guild_member(self.id, user_id, **kwargs)
 
     async def fetch_members(self, **kwargs):
         """List this guild's members, as a list of `Member`. Requires the
-        `GUILD_MEMBERS` privileged intent and `DISCORD_BOT_TOKEN`."""
+        `GUILD_MEMBERS` privileged intent."""
         return await members.fetch_guild_members(self.id, **kwargs)
 
     async def search_members(self, query, **kwargs):
         """Find members whose username or nickname starts with query, as a
-        list of `Member`. Requires `DISCORD_BOT_TOKEN`."""
+        list of `Member`."""
         return await members.search_guild_members(self.id, query, **kwargs)
 
     async def add_member(self, user_id, access_token, **kwargs):
         """Add a user to this guild via an OAuth2 token with the
         `guilds.join` scope. Returns the new `Member`, or `None` if they
-        were already a member. Requires `DISCORD_BOT_TOKEN`."""
+        were already a member."""
         return await members.add_guild_member(self.id, user_id, access_token, **kwargs)
 
     async def edit_member(self, user_id, **kwargs):
         """Update a member's nick, roles, mute/deaf, voice channel or
-        timeout. Returns the updated `Member`. Requires `DISCORD_BOT_TOKEN`."""
+        timeout. Returns the updated `Member`."""
         return await members.edit_guild_member(self.id, user_id, **kwargs)
 
     async def edit_current_member(self, **kwargs):
-        """Update the bot's own nick, banner, avatar or bio in this guild.
-        Requires `DISCORD_BOT_TOKEN`."""
+        """Update the bot's own nick, banner, avatar or bio in this guild."""
         return await members.edit_current_member(self.id, **kwargs)
 
     async def add_member_role(self, user_id, role_id, **kwargs):
-        """Grant a role to a member. Requires `DISCORD_BOT_TOKEN` and `MANAGE_ROLES`."""
+        """Grant a role to a member. Requires `MANAGE_ROLES`."""
         await members.add_guild_member_role(self.id, user_id, role_id, **kwargs)
 
     async def remove_member_role(self, user_id, role_id, **kwargs):
-        """Remove a role from a member. Requires `DISCORD_BOT_TOKEN` and `MANAGE_ROLES`."""
+        """Remove a role from a member. Requires `MANAGE_ROLES`."""
         await members.remove_guild_member_role(self.id, user_id, role_id, **kwargs)
 
     async def kick(self, user_id, **kwargs):
-        """Remove a member from this guild. Requires `DISCORD_BOT_TOKEN` and
-        `KICK_MEMBERS`."""
+        """Remove a member from this guild. Requires `KICK_MEMBERS`."""
         await members.remove_guild_member(self.id, user_id, **kwargs)
 
     async def fetch_roles(self, **kwargs):
-        """List this guild's roles, as a list of `Role`. Requires
-        `DISCORD_BOT_TOKEN`."""
+        """List this guild's roles, as a list of `Role`."""
         return await members.fetch_guild_roles(self.id, **kwargs)
 
     async def fetch_role(self, role_id, **kwargs):
-        """Fetch a single `Role` by id. Requires `DISCORD_BOT_TOKEN`."""
+        """Fetch a single `Role` by id."""
         return await members.fetch_guild_role(self.id, role_id, **kwargs)
 
     async def fetch_role_member_counts(self, **kwargs):
-        """Map of role id to member count, excluding @everyone. Requires
-        `DISCORD_BOT_TOKEN`."""
+        """Map of role id to member count, excluding @everyone."""
         return await members.fetch_guild_role_member_counts(self.id, **kwargs)
 
     async def create_role(self, **kwargs):
-        """Create a role in this guild. Returns the new `Role`. Requires
-        `DISCORD_BOT_TOKEN` and `MANAGE_ROLES`."""
+        """Create a role in this guild. Returns the new `Role`. Requires `MANAGE_ROLES`."""
         return await members.create_guild_role(self.id, **kwargs)
 
     async def edit_role_positions(self, positions, **kwargs):
         """Reorder this guild's roles. `positions` is a list of
         `{"id": role_id, "position": int}` dicts. Returns every `Role` in
-        the guild. Requires `DISCORD_BOT_TOKEN` and `MANAGE_ROLES`."""
+        the guild. Requires `MANAGE_ROLES`."""
         return await members.edit_guild_role_positions(self.id, positions, **kwargs)
 
     async def search_messages(self, **kwargs):
         """Full text search across this guild's messages. Returns a
-        `MessageSearchResult`. Requires `DISCORD_BOT_TOKEN`,
-        `READ_MESSAGE_HISTORY`, and possibly the `MESSAGE_CONTENT`
+        `MessageSearchResult`. Requires `READ_MESSAGE_HISTORY`, and possibly the `MESSAGE_CONTENT`
         privileged intent."""
         return await messages.search_guild_messages(self.id, **kwargs)
 
     async def fetch_webhooks(self, **kwargs):
-        """List this guild's webhooks, as a list of `Webhook`. Requires
-        `DISCORD_BOT_TOKEN` and `MANAGE_WEBHOOKS`."""
+        """List this guild's webhooks, as a list of `Webhook`. Requires `MANAGE_WEBHOOKS`."""
         return await webhooks.fetch_guild_webhooks(self.id, **kwargs)
 
     async def fetch_emojis(self, **kwargs):
-        """List this guild's custom emojis, as a list of `Emoji`. Requires
-        `DISCORD_BOT_TOKEN`."""
+        """List this guild's custom emojis, as a list of `Emoji`."""
         return await emojis.fetch_guild_emojis(self.id, **kwargs)
 
     async def fetch_emoji(self, emoji_id, **kwargs):
-        """Fetch a single custom emoji by id. Requires `DISCORD_BOT_TOKEN`."""
+        """Fetch a single custom emoji by id."""
         return await emojis.fetch_guild_emoji(self.id, emoji_id, **kwargs)
 
     async def create_emoji(self, name, image, **kwargs):
         """Upload a new custom emoji (128x128, up to 256 KiB). `image` is
-        base64 image data. Returns the new `Emoji`. Requires
-        `DISCORD_BOT_TOKEN` and `CREATE_GUILD_EXPRESSIONS`."""
+        base64 image data. Returns the new `Emoji`. Requires `CREATE_GUILD_EXPRESSIONS`."""
         return await emojis.create_guild_emoji(self.id, name, image, **kwargs)
 
     async def fetch_stickers(self, **kwargs):
-        """List this guild's stickers, as a list of `Sticker`. Requires
-        `DISCORD_BOT_TOKEN`."""
+        """List this guild's stickers, as a list of `Sticker`."""
         return await stickers.fetch_guild_stickers(self.id, **kwargs)
 
     async def fetch_sticker(self, sticker_id, **kwargs):
-        """Fetch a single guild sticker by id. Requires `DISCORD_BOT_TOKEN`."""
+        """Fetch a single guild sticker by id."""
         return await stickers.fetch_guild_sticker(self.id, sticker_id, **kwargs)
 
     async def create_sticker(self, name, description, tags, filename, file_bytes, **kwargs):
         """Upload a new sticker (PNG, APNG, GIF, or Lottie JSON, up to 512 KiB,
         320x320, animated ones under 5 seconds). Returns the new `Sticker`.
-        Requires `DISCORD_BOT_TOKEN` and `CREATE_GUILD_EXPRESSIONS`."""
+        Requires `CREATE_GUILD_EXPRESSIONS`."""
         return await stickers.create_guild_sticker(self.id, name, description, tags, filename, file_bytes, **kwargs)
 
     async def fetch_soundboard_sounds(self, **kwargs):
         """List this guild's soundboard sounds, as a list of
-        `SoundboardSound`. Requires `DISCORD_BOT_TOKEN`."""
+        `SoundboardSound`."""
         return await soundboard.fetch_guild_soundboard_sounds(self.id, **kwargs)
 
     async def fetch_soundboard_sound(self, sound_id, **kwargs):
-        """Fetch a single soundboard sound from this guild. Requires
-        `DISCORD_BOT_TOKEN`."""
+        """Fetch a single soundboard sound from this guild."""
         return await soundboard.fetch_guild_soundboard_sound(self.id, sound_id, **kwargs)
 
     async def create_soundboard_sound(self, name, sound, **kwargs):
         """Add a soundboard sound to this guild. `sound` is a base64 data
         URI, same convention as `create_emoji`'s `image`. Returns the new
-        `SoundboardSound`. Requires `DISCORD_BOT_TOKEN` and
-        `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS`."""
+        `SoundboardSound`. Requires `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS`."""
         return await soundboard.create_guild_soundboard_sound(self.id, name, sound, **kwargs)
 
     async def fetch_scheduled_events(self, **kwargs):
         """List this guild's scheduled events, as a list of
-        `GuildScheduledEvent`. Requires `DISCORD_BOT_TOKEN`."""
+        `GuildScheduledEvent`."""
         return await scheduled_events.fetch_guild_scheduled_events(self.id, **kwargs)
 
     async def create_scheduled_event(self, name, privacy_level, scheduled_start_time, entity_type, **kwargs):
         """Create a scheduled event. `entity_type` picks the kind (1 stage,
         2 voice, 3 external); external events also need `channel_id=None`,
         `entity_metadata={"location": ...}` and `scheduled_end_time`. Returns
-        the new `GuildScheduledEvent`. Requires `DISCORD_BOT_TOKEN`."""
+        the new `GuildScheduledEvent`."""
         return await scheduled_events.create_guild_scheduled_event(
             self.id, name, privacy_level, scheduled_start_time, entity_type, **kwargs
         )
 
     async def fetch_scheduled_event(self, event_id, **kwargs):
-        """Fetch a single scheduled event by id. Requires `DISCORD_BOT_TOKEN`."""
+        """Fetch a single scheduled event by id."""
         return await scheduled_events.fetch_guild_scheduled_event(self.id, event_id, **kwargs)
 
     async def fetch_auto_moderation_rules(self, **kwargs):
         """List this guild's auto moderation rules, as a list of
-        `AutoModerationRule`. Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        `AutoModerationRule`. Requires `MANAGE_GUILD`."""
         return await auto_moderation.fetch_auto_moderation_rules(self.id, **kwargs)
 
     async def fetch_auto_moderation_rule(self, rule_id, **kwargs):
-        """Fetch a single auto moderation rule by id. Requires
-        `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        """Fetch a single auto moderation rule by id. Requires `MANAGE_GUILD`."""
         return await auto_moderation.fetch_auto_moderation_rule(self.id, rule_id, **kwargs)
 
     async def create_auto_moderation_rule(self, name, event_type, trigger_type, actions, **kwargs):
         """Create an auto moderation rule. Returns the new
-        `AutoModerationRule`. Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        `AutoModerationRule`. Requires `MANAGE_GUILD`."""
         return await auto_moderation.create_auto_moderation_rule(
             self.id, name, event_type, trigger_type, actions, **kwargs
         )
 
     async def fetch_templates(self, **kwargs):
         """List this guild's templates, as a list of `GuildTemplate`.
-        Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        Requires `MANAGE_GUILD`."""
         return await templates.fetch_guild_templates(self.id, **kwargs)
 
     async def create_template(self, name, **kwargs):
         """Create a template from this guild's current state. Returns the
-        new `GuildTemplate`. Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
+        new `GuildTemplate`. Requires `MANAGE_GUILD`."""
         return await templates.create_guild_template(self.id, name, **kwargs)
 
     async def fetch_audit_log(self, **kwargs):
-        """Fetch this guild's audit log, as an `AuditLog`. Requires
-        `DISCORD_BOT_TOKEN` and `VIEW_AUDIT_LOG`."""
+        """Fetch this guild's audit log, as an `AuditLog`. Requires `VIEW_AUDIT_LOG`."""
         return await audit_log.fetch_audit_log(self.id, **kwargs)
 
     async def leave(self, **kwargs):
-        """Leave this guild. Requires `DISCORD_BOT_TOKEN`."""
+        """Irreversible without a fresh invite."""
         await users.leave_guild(self.id, **kwargs)
 
 
