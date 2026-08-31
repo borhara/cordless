@@ -1,5 +1,6 @@
 import base64
 import json
+from typing import Any
 
 from ._multipart import build_multipart_body
 from ._payload import (
@@ -110,7 +111,7 @@ class Context:
 
     def __init__(self, interaction, *, _worker_mode=False):
         self.interaction = interaction
-        self.response = None
+        self.response: dict[str, Any] | None = None
         self._response_kind = None
         self._worker_mode = _worker_mode
 
