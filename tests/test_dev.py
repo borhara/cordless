@@ -226,6 +226,59 @@ def test_dev_unmatched_route_is_404(route_dev_server):
         assert exc.code == 404
 
 
+def _serve_route_bot(tmp_path, module_src):
+    (tmp_path / "rbot.py").write_text(module_src)
+    sys.path.insert(0, str(tmp_path))
+    reloader = Reloader("rbot:bot", str(tmp_path))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _make_handler(reloader))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    def cleanup():
+        server.shutdown()
+        server.server_close()
+        sys.path.remove(str(tmp_path))
+        sys.modules.pop("rbot", None)
+
+    return f"http://127.0.0.1:{server.server_address[1]}", cleanup
+
+
+def test_dev_route_gets_non_utf8_body_as_base64(tmp_path):
+    url, cleanup = _serve_route_bot(
+        tmp_path,
+        "import base64\n"
+        "from cordless import Cordless\n"
+        "bot = Cordless()\n"
+        "@bot.route('POST', '/raw')\n"
+        "async def raw(event, bot):\n"
+        "    assert event['isBase64Encoded'] is True\n"
+        "    return base64.b64decode(event['body']).hex()\n",
+    )
+    try:
+        req = urllib.request.Request(f"{url}/raw", data=b"\x80\x81\x82", method="POST")
+        with urllib.request.urlopen(req) as resp:
+            assert resp.read() == b"808182"
+    finally:
+        cleanup()
+
+
+def test_dev_route_returning_proxy_dict_with_bytes_body(tmp_path):
+    url, cleanup = _serve_route_bot(
+        tmp_path,
+        "from cordless import Cordless\n"
+        "bot = Cordless()\n"
+        "@bot.route('GET', '/bin')\n"
+        "async def binroute(event, bot):\n"
+        "    return {'statusCode': 200, 'body': b'raw-bytes'}\n",
+    )
+    try:
+        with urllib.request.urlopen(f"{url}/bin") as resp:
+            assert resp.status == 200
+            assert resp.read() == b"raw-bytes"
+    finally:
+        cleanup()
+
+
 def test_post_interaction_with_files_round_trips_raw_bytes(bot_project):
     """isBase64Encoded responses (multipart file attachments) must be decoded
     back to raw bytes before hitting the socket, same as real API Gateway."""

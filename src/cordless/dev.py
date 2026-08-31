@@ -172,22 +172,27 @@ def _make_handler(reloader, verbose=False):
             method = self.command
             bot = reloader.get()
 
-            # keep the friendly landing page when nothing claims GET /
-            if method == "GET" and path == "/" and bot.router.match_route("GET", "/") is None:
+            # keep the friendly landing page for GET / and, on a bot with no
+            # HTTP routes at all, for any other unclaimed GET path too
+            banner_get = path == "/" or not bot.router.routes
+            if method == "GET" and banner_get and bot.router.match_route("GET", path) is None:
                 body = b"cordless dev is running \xe2\x9c\x93"
                 self.send_response(200)
                 self.send_header("Content-Type", "text/plain; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
+                _log_request(f"{method} {path}", 200, 0.0, "", verbose=verbose)
                 return
 
             length = int(self.headers.get("Content-Length", 0))
             raw = self.rfile.read(length) if length else b""
             try:
                 body = raw.decode()
+                encoded = False
             except UnicodeDecodeError:
                 body = base64.b64encode(raw).decode()
+                encoded = True
             query = {k: v[-1] for k, v in urllib.parse.parse_qs(split.query).items()}
             event = {
                 "body": body,
@@ -196,7 +201,7 @@ def _make_handler(reloader, verbose=False):
                 "rawQueryString": split.query,
                 "queryStringParameters": query or None,
                 "requestContext": {"http": {"method": method, "path": path}},
-                "isBase64Encoded": False,
+                "isBase64Encoded": encoded,
             }
 
             start = time.perf_counter()
@@ -216,7 +221,12 @@ def _make_handler(reloader, verbose=False):
             body_out = result.get("body", "")
             # mirrors API Gateway's Lambda proxy integration: a base64Encoded
             # body carries binary data (e.g. multipart file attachments)
-            payload = base64.b64decode(body_out) if result.get("isBase64Encoded") else body_out.encode()
+            if result.get("isBase64Encoded"):
+                payload = base64.b64decode(body_out)
+            elif isinstance(body_out, (bytes, bytearray)):
+                payload = bytes(body_out)
+            else:
+                payload = body_out.encode()
             self.send_response(result["statusCode"])
             for key, value in result.get("headers", {}).items():
                 self.send_header(key, value)
