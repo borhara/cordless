@@ -13,6 +13,8 @@ than silently dropping the method.
 """
 
 import functools
+from collections.abc import Callable, Coroutine
+from typing import Any, Concatenate, ParamSpec, TypeVar
 
 from . import (
     application,
@@ -39,8 +41,13 @@ from . import (
     webhooks,
 )
 
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
 
-def _delegate(fn):
+
+def _delegate(
+    fn: Callable[_P, Coroutine[Any, Any, _R]],
+) -> Callable[Concatenate[Any, _P], Coroutine[Any, Any, _R]]:
     """An async method that forwards straight to ``fn``. ``self`` is dropped;
     every argument goes through unchanged."""
 
