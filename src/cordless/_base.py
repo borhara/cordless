@@ -25,5 +25,18 @@ class DiscordObject:
             return self._data == other
         return NotImplemented
 
+    def __hash__(self):
+        # Defining __eq__ drops the default __hash__, which leaves every model
+        # unhashable (no set(), no dict key). Hash on the id, or the nested
+        # user id for a member payload, which carries none of its own. Equal
+        # objects share these, so this stays consistent with __eq__; anything
+        # without either just collides and falls back to __eq__.
+        ident = self._data.get("id")
+        if ident is None:
+            user = self._data.get("user")
+            if isinstance(user, dict):
+                ident = user.get("id")
+        return hash(ident)
+
     def __repr__(self):
         return f"{type(self).__name__}(id={self._data.get('id')!r})"
