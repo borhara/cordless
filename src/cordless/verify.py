@@ -1,8 +1,9 @@
+# pyright: strict
 from nacl.exceptions import BadSignatureError
 from nacl.signing import VerifyKey
 
 
-def verify_signature(public_key, signature, timestamp, body):
+def verify_signature(public_key: str | None, signature: str | None, timestamp: str | None, body: str) -> bool:
     """Verify a Discord interaction request using Ed25519.
 
     See: https://discord.com/developers/docs/interactions/receiving-and-responding#security-and-authorization
