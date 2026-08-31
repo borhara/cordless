@@ -16,8 +16,7 @@ async def fetch_guild_members(guild_id, *, limit=None, after=None, token=None):
     """Fetches a page of the guild's members, ordered by user id. Requires
     the Server Members intent."""
     qs = _client.query_string(limit=limit, after=after)
-    data = await _client.request("GET", f"/guilds/{guild_id}/members{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/guilds/{guild_id}/members{qs}", token=token)
     return [Member(_with_guild_id(m, guild_id)) for m in data]
 
 
@@ -26,8 +25,7 @@ async def search_guild_members(guild_id, query, *, limit=None, token=None):
     query. Unlike fetch_guild_members, this doesn't need the Server
     Members intent."""
     qs = _client.query_string(query=query, limit=limit)
-    data = await _client.request("GET", f"/guilds/{guild_id}/members/search{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/guilds/{guild_id}/members/search{qs}", token=token)
     return [Member(_with_guild_id(m, guild_id)) for m in data]
 
 
@@ -95,8 +93,7 @@ async def remove_guild_member(guild_id, user_id, *, reason=None, token=None):
 
 async def fetch_guild_roles(guild_id, *, token=None):
     """Fetches every role in the guild."""
-    data = await _client.request("GET", f"/guilds/{guild_id}/roles", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/guilds/{guild_id}/roles", token=token)
     return [Role(_with_guild_id(r, guild_id)) for r in data]
 
 
@@ -108,8 +105,7 @@ async def fetch_guild_role(guild_id, role_id, *, token=None):
 
 async def fetch_guild_role_member_counts(guild_id, *, token=None):
     """Maps role id to member count. Doesn't include @everyone."""
-    data = await _client.request("GET", f"/guilds/{guild_id}/roles/member-counts", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/guilds/{guild_id}/roles/member-counts", token=token)
     return data
 
 
@@ -148,8 +144,7 @@ async def edit_guild_role_positions(guild_id, positions, *, reason=None, token=N
     """Reorders roles in the guild. positions is a list of
     {"id": role_id, "position": int} dicts; roles left out keep their
     current position."""
-    data = await _client.request("PATCH", f"/guilds/{guild_id}/roles", positions, token=token, reason=reason)
-    assert data is not None, "PATCH always returns a body here"
+    data = await _client.request_json("PATCH", f"/guilds/{guild_id}/roles", positions, token=token, reason=reason)
     return [Role(_with_guild_id(r, guild_id)) for r in data]
 
 

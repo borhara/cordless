@@ -42,8 +42,7 @@ async def fetch_channel_messages(channel_id, *, around=None, before=None, after=
     are mutually exclusive, each anchors the page around a different
     message id."""
     qs = _client.query_string(around=around, before=before, after=after, limit=limit)
-    data = await _client.request("GET", f"/channels/{channel_id}/messages{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/channels/{channel_id}/messages{qs}", token=token)
     return [Message(m) for m in data]
 
 
@@ -185,10 +184,9 @@ async def fetch_reactions(channel_id, message_id, emoji, *, type=None, after=Non
     """Fetches the users who reacted to a message with a given emoji.
     type distinguishes a normal reaction from a super reaction (burst)."""
     qs = _client.query_string(type=type, after=after, limit=limit)
-    data = await _client.request(
+    data = await _client.request_json(
         "GET", f"/channels/{channel_id}/messages/{message_id}/reactions/{_quote_emoji(emoji)}{qs}", token=token
     )
-    assert data is not None, "GET always returns a body"
     return [User(u) for u in data]
 
 
@@ -208,8 +206,7 @@ async def fetch_poll_answer_voters(channel_id, message_id, answer_id, *, after=N
     """Fetches the users who voted for one answer on a poll."""
     qs = _client.query_string(after=after, limit=limit)
     path = f"/channels/{channel_id}/polls/{message_id}/answers/{answer_id}{qs}"
-    data = await _client.request("GET", path, token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", path, token=token)
     return [User(u) for u in data["users"]]
 
 

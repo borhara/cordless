@@ -36,8 +36,7 @@ async def fetch_entitlements(
     if exclude_deleted is not None:
         parts.append(f"exclude_deleted={'true' if exclude_deleted else 'false'}")
     qs = _client.join_query_parts(parts)
-    data = await _client.request("GET", f"/applications/{application_id}/entitlements{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/applications/{application_id}/entitlements{qs}", token=token)
     return [Entitlement(e) for e in data]
 
 

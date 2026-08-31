@@ -12,8 +12,7 @@ async def fetch_sku_subscriptions(sku_id, *, before=None, after=None, limit=None
     """Fetches a page of subscriptions to a SKU. Filtering by user_id is
     mandatory unless the request carries an OAuth2 token for that user."""
     qs = _client.query_string(before=before, after=after, limit=limit, user_id=user_id)
-    data = await _client.request("GET", f"/skus/{sku_id}/subscriptions{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/skus/{sku_id}/subscriptions{qs}", token=token)
     return [Subscription(s) for s in data]
 
 

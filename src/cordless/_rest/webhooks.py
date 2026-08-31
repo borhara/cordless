@@ -14,15 +14,13 @@ from .models import Webhook
 
 async def fetch_channel_webhooks(channel_id, *, token=None):
     """Fetches every webhook attached to the channel."""
-    data = await _client.request("GET", f"/channels/{channel_id}/webhooks", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/channels/{channel_id}/webhooks", token=token)
     return [Webhook(w) for w in data]
 
 
 async def fetch_guild_webhooks(guild_id, *, token=None):
     """Fetches every webhook in the guild, across all its channels."""
-    data = await _client.request("GET", f"/guilds/{guild_id}/webhooks", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/guilds/{guild_id}/webhooks", token=token)
     return [Webhook(w) for w in data]
 
 

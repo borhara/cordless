@@ -7,8 +7,7 @@ from .models import AutoModerationRule
 
 async def fetch_auto_moderation_rules(guild_id, *, token=None):
     """Fetches every auto moderation rule configured for the guild."""
-    data = await _client.request("GET", f"/guilds/{guild_id}/auto-moderation/rules", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/guilds/{guild_id}/auto-moderation/rules", token=token)
     return [AutoModerationRule(r) for r in data]
 
 

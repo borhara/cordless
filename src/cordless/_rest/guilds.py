@@ -108,8 +108,7 @@ async def edit_guild(
 async def fetch_guild_bans(guild_id, *, limit=None, before=None, after=None, token=None):
     """Fetches a page of the guild's bans."""
     qs = _client.query_string(limit=limit, before=before, after=after)
-    data = await _client.request("GET", f"/guilds/{guild_id}/bans{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/guilds/{guild_id}/bans{qs}", token=token)
     return [Ban(b) for b in data]
 
 
@@ -150,8 +149,7 @@ async def fetch_guild_prune_count(guild_id, *, days=None, include_roles=None, to
     actually removing them. Members with a role in include_roles are
     counted even though they'd normally be exempt."""
     qs = _client.query_string(days=days, include_roles=",".join(include_roles) if include_roles else None)
-    data = await _client.request("GET", f"/guilds/{guild_id}/prune{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/guilds/{guild_id}/prune{qs}", token=token)
     return data["pruned"]
 
 
@@ -163,32 +161,28 @@ async def begin_guild_prune(
     compute_prune_count=False on a large guild to skip counting the
     removed members and speed up the request."""
     payload = _client.payload(days=days, compute_prune_count=compute_prune_count, include_roles=include_roles)
-    data = await _client.request("POST", f"/guilds/{guild_id}/prune", payload, token=token, reason=reason)
-    assert data is not None, "POST always returns a body here"
+    data = await _client.request_json("POST", f"/guilds/{guild_id}/prune", payload, token=token, reason=reason)
     return data["pruned"]
 
 
 async def fetch_guild_voice_regions(guild_id, *, token=None):
     """Fetches the voice regions available to this guild, ordered by how
     close they are to it (VIP regions first if the guild has them)."""
-    data = await _client.request("GET", f"/guilds/{guild_id}/regions", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/guilds/{guild_id}/regions", token=token)
     return [VoiceRegion(r) for r in data]
 
 
 async def fetch_guild_invites(guild_id, *, token=None):
     """Fetches every invite for the guild, across all its channels, each
     with its own use count."""
-    data = await _client.request("GET", f"/guilds/{guild_id}/invites", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/guilds/{guild_id}/invites", token=token)
     return [Invite(i) for i in data]
 
 
 async def fetch_guild_integrations(guild_id, *, token=None):
     """Fetches the guild's third-party integrations, Twitch, YouTube and
     the like."""
-    data = await _client.request("GET", f"/guilds/{guild_id}/integrations", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/guilds/{guild_id}/integrations", token=token)
     return [Integration(i) for i in data]
 
 

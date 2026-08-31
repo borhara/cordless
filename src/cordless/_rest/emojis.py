@@ -21,8 +21,7 @@ def _with_application_id(data, application_id):
 
 async def fetch_guild_emojis(guild_id, *, token=None):
     """Fetches every custom emoji in the guild."""
-    data = await _client.request("GET", f"/guilds/{guild_id}/emojis", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/guilds/{guild_id}/emojis", token=token)
     return [Emoji(_with_guild_id(e, guild_id)) for e in data]
 
 
@@ -56,8 +55,7 @@ async def delete_guild_emoji(guild_id, emoji_id, *, token=None):
 async def fetch_application_emojis(application_id, *, token=None):
     """Fetches every emoji owned by the application, usable in messages
     from any guild the bot can see."""
-    data = await _client.request("GET", f"/applications/{application_id}/emojis", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/applications/{application_id}/emojis", token=token)
     return [Emoji(_with_application_id(e, application_id)) for e in data["items"]]
 
 

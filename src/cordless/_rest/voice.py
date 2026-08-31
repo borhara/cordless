@@ -14,8 +14,7 @@ from .models import VoiceRegion, VoiceState
 async def fetch_voice_regions(*, token=None):
     """Fetches every voice region Discord offers, not scoped to any one
     guild."""
-    data = await _client.request("GET", "/voice/regions", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", "/voice/regions", token=token)
     return [VoiceRegion(r) for r in data]
 
 

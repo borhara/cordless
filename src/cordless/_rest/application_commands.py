@@ -36,8 +36,7 @@ def _command_payload(
 async def fetch_global_commands(application_id, *, with_localizations=False, token=None):
     """Fetches every global command registered for the application."""
     qs = "?with_localizations=true" if with_localizations else ""
-    data = await _client.request("GET", f"/applications/{application_id}/commands{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/applications/{application_id}/commands{qs}", token=token)
     return [ApplicationCommand(c) for c in data]
 
 
@@ -111,8 +110,7 @@ async def bulk_overwrite_global_commands(application_id, commands, *, token=None
     Commands left out of the list are deleted; ones that match an existing
     command by name and type keep their id, so any per-command state such
     as guild permission overrides survives the overwrite."""
-    data = await _client.request("PUT", f"/applications/{application_id}/commands", commands, token=token)
-    assert data is not None, "PUT always returns a body"
+    data = await _client.request_json("PUT", f"/applications/{application_id}/commands", commands, token=token)
     return [ApplicationCommand(c) for c in data]
 
 
@@ -120,8 +118,9 @@ async def fetch_guild_commands(application_id, guild_id, *, with_localizations=F
     """Fetches every command registered for the application in a specific
     guild."""
     qs = "?with_localizations=true" if with_localizations else ""
-    data = await _client.request("GET", f"/applications/{application_id}/guilds/{guild_id}/commands{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json(
+        "GET", f"/applications/{application_id}/guilds/{guild_id}/commands{qs}", token=token
+    )
     return [ApplicationCommand(c) for c in data]
 
 
@@ -204,20 +203,18 @@ async def bulk_overwrite_guild_commands(application_id, guild_id, commands, *, t
     """Replaces every command in the guild with the given list in one
     call, the same as bulk_overwrite_global_commands but scoped to a
     single guild."""
-    data = await _client.request(
+    data = await _client.request_json(
         "PUT", f"/applications/{application_id}/guilds/{guild_id}/commands", commands, token=token
     )
-    assert data is not None, "PUT always returns a body"
     return [ApplicationCommand(c) for c in data]
 
 
 async def fetch_guild_command_permissions(application_id, guild_id, *, token=None):
     """Fetches the permission overrides for every command in the guild
     that has any set."""
-    data = await _client.request(
+    data = await _client.request_json(
         "GET", f"/applications/{application_id}/guilds/{guild_id}/commands/permissions", token=token
     )
-    assert data is not None, "GET always returns a body"
     return [GuildApplicationCommandPermissions(p) for p in data]
 
 

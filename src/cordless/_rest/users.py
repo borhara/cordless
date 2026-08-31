@@ -45,8 +45,7 @@ async def fetch_current_user_guilds(*, before=None, after=None, limit=None, with
         if p
     ]
     qs = ("?" + "&".join(params)) if params else ""
-    data = await _client.request("GET", f"/users/@me/guilds{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/users/@me/guilds{qs}", token=token)
     return [Guild(g) for g in data]
 
 

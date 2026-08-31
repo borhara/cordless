@@ -14,8 +14,7 @@ async def fetch_sticker(sticker_id, *, token=None):
 
 async def fetch_sticker_packs(*, token=None):
     """Fetches every sticker pack Discord offers as a Nitro perk."""
-    data = await _client.request("GET", "/sticker-packs", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", "/sticker-packs", token=token)
     return [StickerPack(p) for p in data["sticker_packs"]]
 
 
@@ -27,8 +26,7 @@ async def fetch_sticker_pack(pack_id, *, token=None):
 
 async def fetch_guild_stickers(guild_id, *, token=None):
     """Fetches every custom sticker uploaded to the guild."""
-    data = await _client.request("GET", f"/guilds/{guild_id}/stickers", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/guilds/{guild_id}/stickers", token=token)
     return [Sticker(s) for s in data]
 
 

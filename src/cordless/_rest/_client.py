@@ -288,6 +288,17 @@ async def request(method, path, payload=None, files=None, token=None, raw_body=N
     return json.loads(data) if data else None
 
 
+async def request_json(method, path, payload=None, files=None, token=None, raw_body=None, reason=None, idempotent=None):
+    """Like request(), for the endpoints that always answer with a body.
+    Asserts it, so callers that then index or iterate the result don't each
+    repeat the check to satisfy the type checker."""
+    data = await request(
+        method, path, payload, files, token=token, raw_body=raw_body, reason=reason, idempotent=idempotent
+    )
+    assert data is not None, f"{method} {path} returned an empty body"
+    return data
+
+
 def join_query_parts(parts):
     """Shared '?'-or-'&' joiner for a list of already-formatted key=value
     query string parts, so a future fix to how they get combined only has

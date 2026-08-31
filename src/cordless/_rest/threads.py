@@ -83,8 +83,7 @@ async def fetch_thread_member(channel_id, user_id, *, with_member=False, token=N
     """Fetches a single thread member. with_member also attaches that
     user's guild member object."""
     qs = "?with_member=true" if with_member else ""
-    data = await _client.request("GET", f"/channels/{channel_id}/thread-members/{user_id}{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/channels/{channel_id}/thread-members/{user_id}{qs}", token=token)
     return ThreadMember(data)
 
 
@@ -92,8 +91,7 @@ async def fetch_thread_members(channel_id, *, with_member=False, after=None, lim
     """after/limit only take effect when with_member=True - Discord ignores
     them otherwise and always returns every member in one page."""
     qs = _client.query_string(with_member=with_member, after=after, limit=limit)
-    data = await _client.request("GET", f"/channels/{channel_id}/thread-members{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/channels/{channel_id}/thread-members{qs}", token=token)
     return [ThreadMember(m) for m in data]
 
 
@@ -101,8 +99,7 @@ async def fetch_public_archived_threads(channel_id, *, before=None, limit=None, 
     """Fetches a page of the channel's archived public threads, newest
     archived first."""
     qs = _client.pagination_qs(before=before, limit=limit)
-    data = await _client.request("GET", f"/channels/{channel_id}/threads/archived/public{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/channels/{channel_id}/threads/archived/public{qs}", token=token)
     return [Thread(t) for t in data["threads"]]
 
 
@@ -111,8 +108,7 @@ async def fetch_private_archived_threads(channel_id, *, before=None, limit=None,
     MANAGE_THREADS, unless fetching only threads the bot has joined via
     fetch_joined_private_archived_threads instead."""
     qs = _client.pagination_qs(before=before, limit=limit)
-    data = await _client.request("GET", f"/channels/{channel_id}/threads/archived/private{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/channels/{channel_id}/threads/archived/private{qs}", token=token)
     return [Thread(t) for t in data["threads"]]
 
 
@@ -121,16 +117,16 @@ async def fetch_joined_private_archived_threads(channel_id, *, before=None, limi
     has joined. Unlike fetch_private_archived_threads, this doesn't need
     MANAGE_THREADS."""
     qs = _client.pagination_qs(before=before, limit=limit)
-    data = await _client.request("GET", f"/channels/{channel_id}/users/@me/threads/archived/private{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json(
+        "GET", f"/channels/{channel_id}/users/@me/threads/archived/private{qs}", token=token
+    )
     return [Thread(t) for t in data["threads"]]
 
 
 async def fetch_active_guild_threads(guild_id, *, token=None):
     """Fetches every active (non-archived) thread in the guild, across
     every channel."""
-    data = await _client.request("GET", f"/guilds/{guild_id}/threads/active", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/guilds/{guild_id}/threads/active", token=token)
     return [Thread(t) for t in data["threads"]]
 
 
@@ -172,6 +168,5 @@ async def search_channel_threads(
     if tag is not None:
         parts += [f"tag={t}" for t in (tag if isinstance(tag, (list, tuple)) else [tag])]
     qs = _client.join_query_parts(parts)
-    data = await _client.request("GET", f"/channels/{channel_id}/threads/search{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/channels/{channel_id}/threads/search{qs}", token=token)
     return [Thread(t) for t in data["threads"]]

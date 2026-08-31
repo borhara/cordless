@@ -12,8 +12,7 @@ async def fetch_guild_join_requests(guild_id, *, status=None, before=None, after
     """Fetches the guild's pending membership screening requests,
     optionally filtered by status."""
     qs = _client.query_string(status=status, before=before, after=after, limit=limit)
-    data = await _client.request("GET", f"/guilds/{guild_id}/requests{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/guilds/{guild_id}/requests{qs}", token=token)
     return [GuildJoinRequest(r) for r in data.get("guild_join_requests", [])]
 
 

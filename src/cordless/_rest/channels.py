@@ -104,8 +104,7 @@ async def delete_channel_permission(channel_id, overwrite_id, *, reason=None, to
 async def fetch_channel_invites(channel_id, *, token=None):
     """Fetches every invite pointing at this channel, each with its own
     use count."""
-    data = await _client.request("GET", f"/channels/{channel_id}/invites", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/channels/{channel_id}/invites", token=token)
     return [Invite(i) for i in data]
 
 
@@ -172,8 +171,7 @@ async def remove_group_dm_recipient(channel_id, user_id, *, token=None):
 async def fetch_channel_pins(channel_id, *, before=None, limit=None, token=None):
     """Fetches the channel's pinned messages, newest first."""
     qs = _client.pagination_qs(before=before, limit=limit)
-    data = await _client.request("GET", f"/channels/{channel_id}/messages/pins{qs}", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/channels/{channel_id}/messages/pins{qs}", token=token)
     return [MessagePin(p) for p in data["items"]]
 
 
@@ -194,8 +192,7 @@ async def unpin_message(channel_id, message_id, *, token=None):
 async def fetch_guild_channels(guild_id, *, token=None):
     """Fetches every top-level channel in the guild. Threads aren't
     included, use the thread listing endpoints for those."""
-    data = await _client.request("GET", f"/guilds/{guild_id}/channels", token=token)
-    assert data is not None, "GET always returns a body"
+    data = await _client.request_json("GET", f"/guilds/{guild_id}/channels", token=token)
     return [Channel(c) for c in data]
 
 
