@@ -66,24 +66,9 @@ dev = [
 ]
 
 [tool.pyright]
-# Scoped to the REST layer and whatever else has been touched while building
-# it, not the whole codebase - the rest of cordless predates pyright and
-# isn't annotated for it. Add a path here whenever a file outside this list
-# gets touched, and fix what pyright flags in it before moving on.
-include = [
-    "src/cordless/_rest",
-    "src/cordless/context.py",
-    "src/cordless/models.py",
-    "src/cordless/app.py",
-    "src/cordless/router.py",
-    "src/cordless/routes.py",
-    "src/cordless/webhook.py",
-    "src/cordless/_multipart.py",
-    "src/cordless/errors.py",
-    "src/cordless/ratelimit.py",
-]
 pythonVersion = "3.11"
 typeCheckingMode = "basic"
+extraPaths = ["tests/fixtures"]
 
 [tool.ruff]
 line-length = 120
