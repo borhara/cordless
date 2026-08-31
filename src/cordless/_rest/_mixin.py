@@ -282,7 +282,6 @@ class RESTMixin:
     fetch_private_archived_threads = _delegate(threads.fetch_private_archived_threads)
     fetch_joined_private_archived_threads = _delegate(threads.fetch_joined_private_archived_threads)
     fetch_active_guild_threads = _delegate(threads.fetch_active_guild_threads)
-    search_channel_threads = _delegate(threads.search_channel_threads)
 
     # -- voice --
     fetch_voice_regions = _delegate(voice.fetch_voice_regions)
