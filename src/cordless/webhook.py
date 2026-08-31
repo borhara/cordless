@@ -20,6 +20,15 @@ from .ratelimit import retry_after_wait
 
 _TIMEOUT = 10
 
+# Backstop on total time spent sleeping across 429 retries, matching
+# _rest/_client.py's _MAX_RETRY_SECONDS. A single retry_after is still
+# honoured in full (retrying early just draws more 429s), but once that
+# budget is spent the next attempt gives up rather than stacking another
+# long sleep onto an invocation that is very likely already past its own
+# Lambda timeout. A caller doing bursty webhook sends from the default 10s
+# function should raise `timeout` in cordless.toml or move to defer_worker.
+_MAX_RETRY_SECONDS = 30.0
+
 # Same rationale, and same values, as _rest/_client.py's _IDEMPOTENT_METHODS:
 # duplicated rather than imported for the same reason UNSET is below, since
 # this module stays dependency-free from _rest/_client.py on purpose (see
@@ -119,14 +128,21 @@ def _request(method, path, body=None, content_type=None):
     if content_type is not None:
         headers["Content-Type"] = content_type
 
+    deadline = time.monotonic() + _MAX_RETRY_SECONDS
     status, data = 0, b""
     for attempt in range(3):
         status, data = _send(method, path, body, headers)
 
         if status == 429 and attempt < 2:
+            # already spent the retry budget on a previous wait? stop rather
+            # than stacking another full retry_after sleep. Checked after the
+            # sleep, not before, so a single large retry_after is still
+            # honoured in full.
+            if time.monotonic() >= deadline:
+                break
             try:
                 retry_after = float(json.loads(data).get("retry_after", 1))
-            except (ValueError, AttributeError):
+            except (TypeError, ValueError, AttributeError):
                 retry_after = 1.0
             time.sleep(retry_after_wait(retry_after))
             continue

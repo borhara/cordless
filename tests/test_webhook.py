@@ -319,6 +319,31 @@ def test_execute_gives_up_after_retries(fake_conn, monkeypatch):
     assert len(fake_conn.requests) == 3
 
 
+def test_execute_stops_retrying_once_the_retry_budget_is_spent(fake_conn, monkeypatch):
+    """A single large retry_after is slept in full, but the next 429 gives up
+    rather than stacking a second long sleep past _MAX_RETRY_SECONDS."""
+    clock = [0.0]
+    sleeps = []
+    monkeypatch.setattr(cordless.webhook.time, "monotonic", lambda: clock[0])
+
+    def fake_sleep(seconds):
+        sleeps.append(seconds)
+        clock[0] += seconds
+
+    monkeypatch.setattr(cordless.webhook.time, "sleep", fake_sleep)
+    fake_conn.responses = [
+        (429, json.dumps({"retry_after": 30}).encode()),
+        (429, json.dumps({"retry_after": 30}).encode()),
+        (200, b"{}"),
+    ]
+
+    with pytest.raises(DiscordHTTPError, match="Discord API error 429"):
+        cordless.webhook.execute("123", "abc", {"content": "hi"})
+
+    assert len(sleeps) == 1  # only the first retry_after, not both
+    assert len(fake_conn.requests) == 2  # never made the third attempt
+
+
 # --- Cordless.execute_webhook / edit_webhook_message / delete_webhook_message ---
 
 
