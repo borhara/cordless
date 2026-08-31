@@ -319,6 +319,20 @@ def test_handle_route_unexpected_error_is_500():
     assert result["statusCode"] == 500
 
 
+def test_handle_route_unusable_return_value_is_500_not_unhandled():
+    """A handler returning something build_response can't coerce (a bool)
+    used to let the ValueError escape handle() as an unhandled 502."""
+    bot = Cordless()
+
+    @bot.route("GET", "/health")
+    async def health(event, bot):
+        return True
+
+    result = bot.handle(_event("GET", "/health"))
+    assert result["statusCode"] == 500
+    assert "bool" in json.loads(result["body"])["error"]
+
+
 def test_bot_without_routes_is_untouched():
     bot = Cordless()
 

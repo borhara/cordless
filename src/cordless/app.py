@@ -857,7 +857,15 @@ class Cordless(RESTMixin):
 
             traceback.print_exc()
             return _json_response(500, {"error": "route handler raised an exception"})
-        return build_response(result)
+
+        try:
+            return build_response(result)
+        except ValueError as exc:
+            # the handler ran fine but returned something build_response can't
+            # coerce (a bool, a wrong-length tuple). Surface that message
+            # rather than letting it escape handle() as an unhandled 502.
+            print(f"[cordless] route handler returned an unusable value: {exc}")
+            return _json_response(500, {"error": str(exc)})
 
     def load_extension(self, name: str) -> None:
         """Load a cog module by dotted path (e.g. 'cogs.game').
