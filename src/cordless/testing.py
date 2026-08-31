@@ -13,6 +13,7 @@ import base64
 import collections
 import json
 import urllib.parse
+from typing import Any
 
 from ._multipart import parse_multipart_payload
 from .context import Context
@@ -355,7 +356,9 @@ def autocomplete(
     )
 
 
-async def invoke(bot, interaction_or_name, options=None, *, worker_mode=False, **kwargs):
+async def invoke(
+    bot, interaction_or_name, options=None, *, worker_mode=False, **kwargs
+) -> tuple[dict[str, Any] | None, Context]:
     """Dispatch an interaction through `bot`'s real router - the same
     dispatch call a deployed Lambda makes - and return `(response, ctx)`:
     the decoded response Discord would receive (e.g. `{"type": 4, "data":
