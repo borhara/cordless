@@ -10,10 +10,15 @@ Import the module and use it as a namespace, e.g.:
 """
 
 import base64
+import collections
 import json
+import urllib.parse
 
 from ._multipart import parse_multipart_payload
 from .context import Context
+from .routes import build_response, normalize_path
+
+RouteResponse = collections.namedtuple("RouteResponse", ["status", "body", "headers"])
 
 _APPLICATION_COMMAND = 2
 _MESSAGE_COMPONENT = 3
@@ -395,3 +400,42 @@ async def invoke(bot, interaction_or_name, options=None, *, worker_mode=False, *
     if raw.get("isBase64Encoded"):
         return parse_multipart_payload(base64.b64decode(raw["body"])), ctx
     return json.loads(raw["body"]), ctx
+
+
+async def invoke_route(bot, method, path, *, body="", headers=None, query=None):
+    """Dispatch a `@bot.route` handler and return a
+    `RouteResponse(status, body, headers)`.
+
+    The handler runs against the bot's real router, the same match a
+    deployed Lambda makes, with no HTTP layer or signature check. `body` is
+    decoded from JSON when the response content type is JSON, otherwise
+    returned as text. An unmatched route yields a 404, matching the
+    deployed behaviour.
+    """
+    method = method.upper()
+    norm = normalize_path(path)
+    match = bot.router.match_route(method, norm)
+    if match is None:
+        return RouteResponse(404, {"error": f"no route for {method} {norm}"}, {})
+
+    handler, params = match
+    query = dict(query or {})
+    event = {
+        "body": body,
+        "headers": dict(headers or {}),
+        "rawPath": norm,
+        "rawQueryString": urllib.parse.urlencode(query),
+        "queryStringParameters": query or None,
+        "pathParameters": params,
+        "requestContext": {"http": {"method": method, "path": norm}},
+        "isBase64Encoded": False,
+    }
+    result = build_response(await handler(event, bot))
+    out_headers = result.get("headers", {})
+    raw = result.get("body", "")
+    if result.get("isBase64Encoded"):
+        decoded = base64.b64decode(raw)
+    else:
+        content_type = next((v for k, v in out_headers.items() if k.lower() == "content-type"), "")
+        decoded = json.loads(raw) if raw and "application/json" in content_type else raw
+    return RouteResponse(result["statusCode"], decoded, out_headers)

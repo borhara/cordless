@@ -102,6 +102,15 @@ class Cog:
 
         return decorator
 
+    def route(self, method, path):
+        """Same as `Cordless.route`."""
+
+        def decorator(func):
+            self._handlers.append(("route", func, {"method": method, "path": path}))
+            return func
+
+        return decorator
+
     def autocomplete(self, cmd_name, option_name):
         """Same as `Cordless.autocomplete`."""
 

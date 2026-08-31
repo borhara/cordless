@@ -691,6 +691,33 @@ class Cordless(RESTMixin):
 
         return decorator
 
+    def route(self, method, path):
+        """Register a raw HTTP handler on the same Lambda, outside the
+        Discord interaction flow.
+
+        Use it for requests that must reach this function without Discord
+        signature verification: third-party webhooks (Stripe, GitHub),
+        OAuth redirect callbacks, health checks. The handler is called as
+        `handler(event, bot)` with the raw Lambda event and this instance,
+        so it can reuse `send_message`, `execute_webhook`, and the rest.
+
+        `path` may contain `{name}` segments; matched values arrive on
+        `event["pathParameters"]`. A trailing `{name+}` captures the rest of
+        the path. The handler may return a string, a dict or list (sent as
+        JSON), a status int, a `(status, body)` or `(status, body, headers)`
+        tuple, or a full Lambda proxy dict.
+
+        Only works with `endpoint = "api_gateway"`, since a Function URL
+        serves a single path. `cordless deploy` syncs these routes onto the
+        API alongside the Discord commands.
+        """
+
+        def decorator(func):
+            self.router.register_route(method, path, func)
+            return func
+
+        return decorator
+
     def error(self, func):
         """Register the error handler, called as `(ctx, exc)`. If it sends a
         response (or returns one), that becomes the interaction's response;
@@ -716,6 +743,11 @@ class Cordless(RESTMixin):
         `handler()` instead, which wraps this plus keep-warm pings and
         `@bot.cron` dispatch, call this directly only if you're building a
         custom Lambda entrypoint."""
+        if self.router.routes:
+            response = self._try_route(event)
+            if response is not None:
+                return response
+
         body = _extract_body(event)
 
         # None means verification is deliberately off (local/testing); an empty
@@ -743,6 +775,35 @@ class Cordless(RESTMixin):
         except CordlessError as exc:
             print(f"[cordless] {exc.__class__.__name__}: {exc}")
             return _json_response(400, {"error": str(exc)})
+
+    def _try_route(self, event):
+        """Dispatch `event` to a matching `@bot.route` handler. Returns the
+        response dict, or `None` when the event is a Discord interaction and
+        should fall through to the normal path."""
+        from .routes import build_response, request_method_path
+
+        method, path = request_method_path(event)
+        if method is None or (method == "POST" and path == "/"):
+            return None
+
+        match = self.router.match_route(method, path)
+        if match is None:
+            return _json_response(404, {"error": f"no route for {method} {path}"})
+
+        handler, params = match
+        route_event = dict(event)
+        route_event["pathParameters"] = {**(event.get("pathParameters") or {}), **params}
+        try:
+            result = asyncio.run(handler(route_event, self))
+        except CordlessError as exc:
+            print(f"[cordless] {exc.__class__.__name__}: {exc}")
+            return _json_response(400, {"error": str(exc)})
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+            return _json_response(500, {"error": "route handler raised an exception"})
+        return build_response(result)
 
     def load_extension(self, name: str) -> None:
         """Load a cog module by dotted path (e.g. 'cogs.game').
@@ -830,6 +891,8 @@ class Cordless(RESTMixin):
                 self.router.register_modal(kwargs["custom_id"], func)
             elif ctype == "autocomplete":
                 self.router.register_autocomplete(kwargs["cmd_name"], kwargs["option_name"], func)
+            elif ctype == "route":
+                self.router.register_route(kwargs["method"], kwargs["path"], func)
             elif ctype == "user_command":
                 self.router.register_command(
                     kwargs["name"],
