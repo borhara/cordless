@@ -34,7 +34,7 @@ def _command_payload(
 
 
 async def fetch_global_commands(application_id, *, with_localizations=False, token=None):
-    """Fetches every global command registered for the application."""
+    """Every global command. with_localizations adds the per-locale name/description dicts."""
     qs = "?with_localizations=true" if with_localizations else ""
     data = await _client.request_json("GET", f"/applications/{application_id}/commands{qs}", token=token)
     return [ApplicationCommand(c) for c in data]
@@ -65,7 +65,7 @@ async def create_global_command(
 
 
 async def fetch_global_command(application_id, command_id, *, token=None):
-    """Fetches a single global command by id."""
+    """A single global `ApplicationCommand` by id."""
     data = await _client.request("GET", f"/applications/{application_id}/commands/{command_id}", token=token)
     return ApplicationCommand(data)
 
@@ -84,8 +84,7 @@ async def edit_global_command(
     handler=UNSET,
     token=None,
 ):
-    """Edits an existing global command. Only the fields passed are
-    changed, everything else keeps its current value."""
+    """Partial update: pass only the fields to change. Global changes take up to an hour to propagate."""
     payload = _client.payload(
         name=name,
         description=description,
@@ -101,7 +100,7 @@ async def edit_global_command(
 
 
 async def delete_global_command(application_id, command_id, *, token=None):
-    """Deletes a global command."""
+    """Removes a global command; up to an hour to clear from every guild."""
     await _client.request("DELETE", f"/applications/{application_id}/commands/{command_id}", token=token)
 
 
@@ -115,8 +114,7 @@ async def bulk_overwrite_global_commands(application_id, commands, *, token=None
 
 
 async def fetch_guild_commands(application_id, guild_id, *, with_localizations=False, token=None):
-    """Fetches every command registered for the application in a specific
-    guild."""
+    """Every command registered to one guild."""
     qs = "?with_localizations=true" if with_localizations else ""
     data = await _client.request_json(
         "GET", f"/applications/{application_id}/guilds/{guild_id}/commands{qs}", token=token
@@ -156,7 +154,7 @@ async def create_guild_command(
 
 
 async def fetch_guild_command(application_id, guild_id, command_id, *, token=None):
-    """Fetches a single guild command by id."""
+    """A single guild `ApplicationCommand` by id."""
     data = await _client.request(
         "GET", f"/applications/{application_id}/guilds/{guild_id}/commands/{command_id}", token=token
     )
@@ -176,8 +174,7 @@ async def edit_guild_command(
     handler=UNSET,
     token=None,
 ):
-    """Edits an existing guild command. Only the fields passed are
-    changed, everything else keeps its current value."""
+    """Partial update: pass only the fields to change."""
     payload = _client.payload(
         name=name,
         description=description,
@@ -193,7 +190,7 @@ async def edit_guild_command(
 
 
 async def delete_guild_command(application_id, guild_id, command_id, *, token=None):
-    """Deletes a guild command."""
+    """Removes a guild command; effective immediately, unlike global commands."""
     await _client.request(
         "DELETE", f"/applications/{application_id}/guilds/{guild_id}/commands/{command_id}", token=token
     )
@@ -210,8 +207,7 @@ async def bulk_overwrite_guild_commands(application_id, guild_id, commands, *, t
 
 
 async def fetch_guild_command_permissions(application_id, guild_id, *, token=None):
-    """Fetches the permission overrides for every command in the guild
-    that has any set."""
+    """The permission overrides for every command in the guild that has any set."""
     data = await _client.request_json(
         "GET", f"/applications/{application_id}/guilds/{guild_id}/commands/permissions", token=token
     )
@@ -219,8 +215,7 @@ async def fetch_guild_command_permissions(application_id, guild_id, *, token=Non
 
 
 async def fetch_command_permissions(application_id, guild_id, command_id, *, token=None):
-    """Fetches the permission overrides for a single command in the
-    guild."""
+    """The permission overrides for one command. NotFound if none are set."""
     data = await _client.request(
         "GET",
         f"/applications/{application_id}/guilds/{guild_id}/commands/{command_id}/permissions",

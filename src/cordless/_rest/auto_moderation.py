@@ -1,4 +1,4 @@
-"""Auto moderation REST endpoints (Discord API v10)."""
+"""Auto moderation REST endpoints (Discord API v10). Every call needs MANAGE_GUILD."""
 
 from . import _client
 from ._client import UNSET
@@ -6,13 +6,13 @@ from .models import AutoModerationRule
 
 
 async def fetch_auto_moderation_rules(guild_id, *, token=None):
-    """Fetches every auto moderation rule configured for the guild."""
+    """Every rule in the guild, as `AutoModerationRule` objects."""
     data = await _client.request_json("GET", f"/guilds/{guild_id}/auto-moderation/rules", token=token)
     return [AutoModerationRule(r) for r in data]
 
 
 async def fetch_auto_moderation_rule(guild_id, rule_id, *, token=None):
-    """Fetches a single auto moderation rule by id."""
+    """One `AutoModerationRule` by id; NotFound if it was deleted."""
     data = await _client.request("GET", f"/guilds/{guild_id}/auto-moderation/rules/{rule_id}", token=token)
     return AutoModerationRule(data)
 
@@ -30,9 +30,8 @@ async def create_auto_moderation_rule(
     exempt_channels=UNSET,
     token=None,
 ):
-    """Creates a new auto moderation rule. trigger_metadata's shape
-    depends on trigger_type, a keyword filter needs keyword_filter,
-    a mention spam rule needs mention_total_limit, and so on."""
+    """trigger_metadata's shape follows trigger_type: a keyword filter wants
+    keyword_filter, a mention-spam rule wants mention_total_limit, etc."""
     payload = _client.payload(
         name=name,
         event_type=event_type,
@@ -60,8 +59,7 @@ async def edit_auto_moderation_rule(
     exempt_channels=UNSET,
     token=None,
 ):
-    """Edits an existing auto moderation rule. Only the fields passed are
-    changed, everything else keeps its current value."""
+    """Pass only the fields to change."""
     payload = _client.payload(
         name=name,
         event_type=event_type,
@@ -76,5 +74,5 @@ async def edit_auto_moderation_rule(
 
 
 async def delete_auto_moderation_rule(guild_id, rule_id, *, token=None):
-    """Deletes an auto moderation rule."""
+    """Permanent. To pause a rule without losing it, edit(enabled=False) instead."""
     await _client.request("DELETE", f"/guilds/{guild_id}/auto-moderation/rules/{rule_id}", token=token)

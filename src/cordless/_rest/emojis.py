@@ -20,13 +20,13 @@ def _with_application_id(data, application_id):
 
 
 async def fetch_guild_emojis(guild_id, *, token=None):
-    """Fetches every custom emoji in the guild."""
+    """Every custom `Emoji` in the guild."""
     data = await _client.request_json("GET", f"/guilds/{guild_id}/emojis", token=token)
     return [Emoji(_with_guild_id(e, guild_id)) for e in data]
 
 
 async def fetch_guild_emoji(guild_id, emoji_id, *, token=None):
-    """Fetches a single guild emoji by id."""
+    """One guild `Emoji` by id."""
     data = await _client.request("GET", f"/guilds/{guild_id}/emojis/{emoji_id}", token=token)
     return Emoji(_with_guild_id(data, guild_id))
 
@@ -48,7 +48,7 @@ async def edit_guild_emoji(guild_id, emoji_id, *, name=UNSET, roles=UNSET, token
 
 
 async def delete_guild_emoji(guild_id, emoji_id, *, token=None):
-    """Deletes a custom emoji from the guild."""
+    """Requires MANAGE_GUILD_EXPRESSIONS, or being the emoji's creator."""
     await _client.request("DELETE", f"/guilds/{guild_id}/emojis/{emoji_id}", token=token)
 
 
@@ -60,7 +60,7 @@ async def fetch_application_emojis(application_id, *, token=None):
 
 
 async def fetch_application_emoji(application_id, emoji_id, *, token=None):
-    """Fetches a single application emoji by id."""
+    """One application `Emoji` by id."""
     data = await _client.request("GET", f"/applications/{application_id}/emojis/{emoji_id}", token=token)
     return Emoji(_with_application_id(data, application_id))
 
@@ -75,12 +75,12 @@ async def create_application_emoji(application_id, name, image, *, token=None):
 
 
 async def edit_application_emoji(application_id, emoji_id, *, name=UNSET, token=None):
-    """Renames an application emoji."""
+    """Application emojis carry no role restriction, so the name is all that can change."""
     payload = _client.payload(name=name)
     data = await _client.request("PATCH", f"/applications/{application_id}/emojis/{emoji_id}", payload, token=token)
     return Emoji(_with_application_id(data, application_id))
 
 
 async def delete_application_emoji(application_id, emoji_id, *, token=None):
-    """Deletes an application emoji."""
+    """Frees the emoji's name for reuse by the app."""
     await _client.request("DELETE", f"/applications/{application_id}/emojis/{emoji_id}", token=token)

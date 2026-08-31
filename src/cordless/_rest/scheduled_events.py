@@ -48,7 +48,7 @@ async def create_guild_scheduled_event(
 
 
 async def fetch_guild_scheduled_event(guild_id, event_id, *, with_user_count=False, token=None):
-    """Fetches a single scheduled event by id."""
+    """One `GuildScheduledEvent` by id."""
     qs = _client.query_string(with_user_count=with_user_count)
     data = await _client.request("GET", f"/guilds/{guild_id}/scheduled-events/{event_id}{qs}", token=token)
     return GuildScheduledEvent(data)
@@ -92,14 +92,14 @@ async def edit_guild_scheduled_event(
 
 
 async def delete_guild_scheduled_event(guild_id, event_id, *, token=None):
-    """Deletes a scheduled event."""
+    """Requires MANAGE_EVENTS."""
     await _client.request("DELETE", f"/guilds/{guild_id}/scheduled-events/{event_id}", token=token)
 
 
 async def fetch_guild_scheduled_event_users(
     guild_id, event_id, *, limit=None, with_member=False, before=None, after=None, token=None
 ):
-    """Fetches the users subscribed to a scheduled event."""
+    """The `GuildScheduledEventUser` list, paginated by user id."""
     qs = _client.query_string(limit=limit, with_member=with_member, before=before, after=after)
     data = await _client.request_json("GET", f"/guilds/{guild_id}/scheduled-events/{event_id}/users{qs}", token=token)
     return [GuildScheduledEventUser(_with_guild_id(u, guild_id)) for u in data]

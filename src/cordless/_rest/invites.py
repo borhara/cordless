@@ -35,7 +35,7 @@ async def fetch_invite(code, *, with_counts=None, guild_scheduled_event_id=None,
 
 
 async def delete_invite(code, *, token=None):
-    """Deletes an invite, revoking it immediately."""
+    """Requires MANAGE_CHANNELS on the channel, or MANAGE_GUILD. Returns the deleted `Invite`."""
     data = await _client.request("DELETE", f"/invites/{code}", token=token)
     return Invite(data)
 

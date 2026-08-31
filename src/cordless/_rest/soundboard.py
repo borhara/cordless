@@ -27,7 +27,7 @@ async def fetch_guild_soundboard_sounds(guild_id, *, token=None):
 
 
 async def fetch_guild_soundboard_sound(guild_id, sound_id, *, token=None):
-    """Fetches a single guild soundboard sound by id."""
+    """One guild `SoundboardSound` by id."""
     data = await _client.request("GET", f"/guilds/{guild_id}/soundboard-sounds/{sound_id}", token=token)
     return SoundboardSound(data)
 
@@ -55,5 +55,5 @@ async def edit_guild_soundboard_sound(
 
 
 async def delete_guild_soundboard_sound(guild_id, sound_id, *, reason=None, token=None):
-    """Deletes a guild soundboard sound."""
+    """Requires MANAGE_GUILD_EXPRESSIONS, or being the sound's creator."""
     await _client.request("DELETE", f"/guilds/{guild_id}/soundboard-sounds/{sound_id}", reason=reason, token=token)

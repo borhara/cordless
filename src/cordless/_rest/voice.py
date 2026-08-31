@@ -1,9 +1,8 @@
 """Voice REST endpoints (Discord API v10).
 
-List Voice Regions is the one endpoint here that isn't guild scoped -
-guild.fetch_voice_regions() (guilds.py) hits /guilds/{guild.id}/regions
-instead, a separate, guild-specific endpoint Discord happens to keep under
-the same Voice category in its docs.
+List Voice Regions is the only non-guild-scoped call here.
+guild.fetch_voice_regions() (guilds.py) hits the separate
+/guilds/{guild.id}/regions endpoint instead.
 """
 
 from . import _client
@@ -12,20 +11,19 @@ from .models import VoiceRegion, VoiceState
 
 
 async def fetch_voice_regions(*, token=None):
-    """Fetches every voice region Discord offers, not scoped to any one
-    guild."""
+    """Every voice region Discord offers globally. For a guild's own list use guild.fetch_voice_regions()."""
     data = await _client.request_json("GET", "/voice/regions", token=token)
     return [VoiceRegion(r) for r in data]
 
 
 async def fetch_current_user_voice_state(guild_id, *, token=None):
-    """Fetches the bot's own voice state in the guild."""
+    """The bot's `VoiceState` in this guild; NotFound if it isn't connected."""
     data = await _client.request("GET", f"/guilds/{guild_id}/voice-states/@me", token=token)
     return VoiceState(data)
 
 
 async def fetch_user_voice_state(guild_id, user_id, *, token=None):
-    """Fetches a user's voice state in the guild."""
+    """A member's `VoiceState` in this guild; NotFound if they aren't connected."""
     data = await _client.request("GET", f"/guilds/{guild_id}/voice-states/{user_id}", token=token)
     return VoiceState(data)
 
@@ -33,8 +31,8 @@ async def fetch_user_voice_state(guild_id, user_id, *, token=None):
 async def edit_current_user_voice_state(
     guild_id, *, channel_id=UNSET, suppress=UNSET, request_to_speak_timestamp=UNSET, token=None
 ):
-    """channel_id must already be set (i.e. the bot is connected to a Stage
-    channel) before this can change suppress/request_to_speak_timestamp."""
+    """The bot must already be connected to a stage channel before suppress or
+    request_to_speak_timestamp will take."""
     payload = _client.payload(
         channel_id=channel_id, suppress=suppress, request_to_speak_timestamp=request_to_speak_timestamp
     )
@@ -42,8 +40,7 @@ async def edit_current_user_voice_state(
 
 
 async def edit_user_voice_state(guild_id, user_id, *, channel_id=UNSET, suppress=UNSET, token=None):
-    """channel_id must already be set to a Stage channel; suppress=False
-    invites/moves the user to speaker, suppress=True moves them back to
-    the audience."""
+    """Stage channels only. suppress=False moves the user to speaker,
+    suppress=True back to the audience. Requires MUTE_MEMBERS."""
     payload = _client.payload(channel_id=channel_id, suppress=suppress)
     await _client.request("PATCH", f"/guilds/{guild_id}/voice-states/{user_id}", payload, token=token)

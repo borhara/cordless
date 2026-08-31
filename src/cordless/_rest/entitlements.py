@@ -41,7 +41,7 @@ async def fetch_entitlements(
 
 
 async def fetch_entitlement(application_id, entitlement_id, *, token=None):
-    """Fetches a single entitlement by id."""
+    """One `Entitlement` by id."""
     data = await _client.request("GET", f"/applications/{application_id}/entitlements/{entitlement_id}", token=token)
     return Entitlement(data)
 
@@ -62,5 +62,5 @@ async def create_test_entitlement(application_id, sku_id, owner_id, owner_type, 
 
 
 async def delete_test_entitlement(application_id, entitlement_id, *, token=None):
-    """Deletes a test entitlement created with create_test_entitlement."""
+    """Test entitlements only; a real purchase can't be deleted this way."""
     await _client.request("DELETE", f"/applications/{application_id}/entitlements/{entitlement_id}", token=token)

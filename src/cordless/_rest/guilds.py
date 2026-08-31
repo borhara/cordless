@@ -105,7 +105,7 @@ async def edit_guild(
 
 
 async def fetch_guild_bans(guild_id, *, limit=None, before=None, after=None, token=None):
-    """Fetches a page of the guild's bans."""
+    """A page of `Ban` objects. Requires BAN_MEMBERS."""
     qs = _client.query_string(limit=limit, before=before, after=after)
     data = await _client.request_json("GET", f"/guilds/{guild_id}/bans{qs}", token=token)
     return [Ban(b) for b in data]
@@ -130,7 +130,7 @@ async def create_guild_ban(
 
 
 async def remove_guild_ban(guild_id, user_id, *, reason=None, token=None):
-    """Unbans a user."""
+    """Requires BAN_MEMBERS."""
     await _client.request("DELETE", f"/guilds/{guild_id}/bans/{user_id}", token=token, reason=reason)
 
 

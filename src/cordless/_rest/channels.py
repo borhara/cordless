@@ -97,7 +97,7 @@ async def edit_channel_permissions(channel_id, overwrite_id, *, type, allow=UNSE
 
 
 async def delete_channel_permission(channel_id, overwrite_id, *, reason=None, token=None):
-    """Removes a permission overwrite for a role or member."""
+    """Requires MANAGE_ROLES."""
     await _client.request("DELETE", f"/channels/{channel_id}/permissions/{overwrite_id}", token=token, reason=reason)
 
 
@@ -164,7 +164,7 @@ async def add_group_dm_recipient(channel_id, user_id, access_token, *, nick=UNSE
 
 
 async def remove_group_dm_recipient(channel_id, user_id, *, token=None):
-    """Removes a user from a group DM."""
+    """Group DMs only."""
     await _client.request("DELETE", f"/channels/{channel_id}/recipients/{user_id}", token=token)
 
 

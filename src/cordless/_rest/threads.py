@@ -60,22 +60,22 @@ async def start_thread_from_forum(
 
 
 async def join_thread(channel_id, *, token=None):
-    """Adds the bot to a thread it isn't already in."""
+    """No-op if the bot is already in the thread."""
     await _client.request("PUT", f"/channels/{channel_id}/thread-members/@me", token=token)
 
 
 async def leave_thread(channel_id, *, token=None):
-    """Removes the bot from a thread."""
+    """The bot stops receiving the thread's messages."""
     await _client.request("DELETE", f"/channels/{channel_id}/thread-members/@me", token=token)
 
 
 async def add_thread_member(channel_id, user_id, *, token=None):
-    """Adds another user to a thread."""
+    """Needs the bot to be in the thread, and SEND_MESSAGES_IN_THREADS for a private one."""
     await _client.request("PUT", f"/channels/{channel_id}/thread-members/{user_id}", token=token)
 
 
 async def remove_thread_member(channel_id, user_id, *, token=None):
-    """Removes another user from a thread."""
+    """Requires MANAGE_THREADS, or thread ownership for a private thread."""
     await _client.request("DELETE", f"/channels/{channel_id}/thread-members/{user_id}", token=token)
 
 

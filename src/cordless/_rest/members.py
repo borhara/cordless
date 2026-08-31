@@ -7,7 +7,7 @@ from ._client import UNSET
 
 
 async def fetch_guild_member(guild_id, user_id, *, token=None):
-    """Fetches a single guild member by user id."""
+    """One `Member`; NotFound if the user isn't in the guild."""
     data = await _client.request("GET", f"/guilds/{guild_id}/members/{user_id}", token=token)
     return Member(_with_guild_id(data, guild_id))
 
@@ -77,28 +77,28 @@ async def edit_current_member(guild_id, *, nick=UNSET, banner=UNSET, avatar=UNSE
 
 
 async def add_guild_member_role(guild_id, user_id, role_id, *, reason=None, token=None):
-    """Gives a member a role."""
+    """Requires MANAGE_ROLES and a higher role than the one being granted."""
     await _client.request("PUT", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}", token=token, reason=reason)
 
 
 async def remove_guild_member_role(guild_id, user_id, role_id, *, reason=None, token=None):
-    """Takes a role away from a member."""
+    """Requires MANAGE_ROLES."""
     await _client.request("DELETE", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}", token=token, reason=reason)
 
 
 async def remove_guild_member(guild_id, user_id, *, reason=None, token=None):
-    """Kicks a member."""
+    """Requires KICK_MEMBERS. The member can rejoin with a new invite."""
     await _client.request("DELETE", f"/guilds/{guild_id}/members/{user_id}", token=token, reason=reason)
 
 
 async def fetch_guild_roles(guild_id, *, token=None):
-    """Fetches every role in the guild."""
+    """Every `Role` in the guild, including @everyone."""
     data = await _client.request_json("GET", f"/guilds/{guild_id}/roles", token=token)
     return [Role(_with_guild_id(r, guild_id)) for r in data]
 
 
 async def fetch_guild_role(guild_id, role_id, *, token=None):
-    """Fetches a single role by id."""
+    """One `Role` by id."""
     data = await _client.request("GET", f"/guilds/{guild_id}/roles/{role_id}", token=token)
     return Role(_with_guild_id(data, guild_id))
 
@@ -163,7 +163,7 @@ async def edit_guild_role(
     reason=None,
     token=None,
 ):
-    """Edits an existing role. Only the fields passed are changed."""
+    """Partial update: pass only the fields to change."""
     payload = _client.payload(
         name=name,
         permissions=permissions,
@@ -179,5 +179,5 @@ async def edit_guild_role(
 
 
 async def delete_guild_role(guild_id, role_id, *, reason=None, token=None):
-    """Deletes a role, removing it from every member who has it."""
+    """Requires MANAGE_ROLES. Every member loses the role."""
     await _client.request("DELETE", f"/guilds/{guild_id}/roles/{role_id}", token=token, reason=reason)
