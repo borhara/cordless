@@ -1,7 +1,8 @@
+import json
 from unittest.mock import patch
 
 import pytest
-from conftest import FakeDiscordResponse
+from conftest import FakeDiscordResponse, make_http_error
 
 from cordless.app import Cordless, choice, option
 from cordless.register import sync_commands
@@ -376,6 +377,48 @@ def test_bot_sync_commands_skips_guild_calls_when_none_registered():
         bot.sync_commands(bot_token="bot-token")
 
     mock_sync.assert_called_once()
+
+
+def test_sync_commands_error_names_the_command_and_option():
+    commands = [
+        {
+            "name": "buy",
+            "description": "Buy an item",
+            "type": 1,
+            "options": [{"name": "qty", "description": "", "type": 4}],
+        }
+    ]
+    form_error = json.dumps(
+        {
+            "message": "Invalid Form Body",
+            "code": 50035,
+            "errors": {
+                "0": {
+                    "options": {
+                        "0": {"description": {"_errors": [{"message": "Must be between 1 and 100 in length."}]}}
+                    }
+                }
+            },
+        }
+    ).encode()
+    responses = [FakeDiscordResponse({"id": "app-id"}), make_http_error(400, body=form_error)]
+
+    with patch("cordless.register.urllib.request.urlopen", side_effect=responses):
+        with pytest.raises(RuntimeError) as exc:
+            sync_commands(commands, bot_token="bot-token")
+
+    message = str(exc.value)
+    assert "command 'buy'" in message
+    assert "option 'qty'" in message
+    assert "Must be between 1 and 100 in length." in message
+
+
+def test_sync_commands_error_falls_back_to_raw_body():
+    responses = [FakeDiscordResponse({"id": "app-id"}), make_http_error(401, body=b"Unauthorized")]
+
+    with patch("cordless.register.urllib.request.urlopen", side_effect=responses):
+        with pytest.raises(RuntimeError, match="Unauthorized"):
+            sync_commands([], bot_token="bot-token")
 
 
 def _basic(client_id, client_secret):
