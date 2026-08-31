@@ -1,11 +1,7 @@
-"""Bot-token webhook REST endpoints (Discord API v10).
-
-The token-authenticated ones (Execute Webhook, Get/Edit/Delete Webhook
-Message, Slack/GitHub-compatible execute, ...) live in cordless/webhook.py
-instead, not here - that module is deliberately dependency-free (no _rest
-import) so it stays cheap to import on the direct interaction-response path.
-This module is the bot-token half: managing webhooks themselves rather than
-firing messages through one."""
+"""Bot-token webhook management (Discord API v10). Token-authenticated
+webhook execution (execute, edit/delete message, Slack/GitHub) is in
+cordless/webhook.py, kept dependency-free for the response path.
+"""
 
 from . import _client
 from ._client import UNSET

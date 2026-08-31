@@ -1,9 +1,5 @@
 """Shared low-level HTTP plumbing for cordless's REST layer.
 
-Extracted from what used to be Cordless._discord_request so it works without a
-Cordless instance - every _rest/<resource>.py module awaits request()/request_raw()
-directly. Cordless._discord_request is now a thin async shim over request_raw().
-
 request()/request_raw() are async, matching every other public REST call in
 cordless, but the actual urllib work is blocking - each call runs the whole
 retry loop in a worker thread via run_in_executor, the same one-executor-call-

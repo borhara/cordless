@@ -1,11 +1,7 @@
 """User REST endpoints (Discord API v10).
 
-Only the endpoints a bot token can actually call. Create Group DM, Get
-Current User Connections, Get Current User Guild Member, and the
-application role connection endpoints all require an OAuth2 user access
-token with a scope a bot token doesn't carry - this client only ever sends
-`Authorization: Bot <token>`, so those would just 401/403 - and are left out
-rather than shipped as REST calls that can never succeed.
+Only the calls a bot token can make. Group DM creation, connections, and
+current-user guild member need an OAuth2 user token, so they're omitted.
 """
 
 from ..models import Channel, Guild, User

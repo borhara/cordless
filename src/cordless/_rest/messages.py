@@ -66,8 +66,8 @@ async def create_message(
     poll=None,
     token=None,
 ):
-    """The raw Create Message call. Prefer channel.send(), which adds reply
-    and retained-attachment handling on top."""
+    """The raw Create Message endpoint. channel.send() wraps it with the
+    conveniences most callers want."""
     is_uikit = _contains_uikit(components)
     if is_uikit:
         _validate_uikit(content, embeds, components)

@@ -1,14 +1,8 @@
-"""Standalone Invite REST endpoints (Discord API v10).
+"""Invite endpoints keyed by code alone (Discord API v10). Channel- and
+guild-scoped invite listing and creation are in channels.py and guilds.py.
 
-Fetching/creating invites scoped to a particular channel or guild live in
-channels.py and guilds.py instead (they're documented there in Discord's own
-API reference too) - this module only covers the endpoints keyed by invite
-code alone.
-
-Target users (fetch_invite_target_users/edit_invite_target_users/
-fetch_invite_target_users_job_status) manage a CSV allowlist of users an
-invite is restricted to - a fairly niche feature, and the only one here that
-trades Discord's usual JSON body for a raw CSV upload/download.
+The target-users endpoints manage a CSV allowlist restricting who can use an
+invite; they send and return raw CSV rather than JSON.
 """
 
 from .._multipart import build_form_multipart_body

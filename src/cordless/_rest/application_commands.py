@@ -1,15 +1,9 @@
-"""Application command REST endpoints (Discord API v10).
+"""Application command endpoints for inspecting and editing commands from a
+running bot (Discord API v10). For deploy-time bulk registration use
+register.sync_commands().
 
-For bulk deploy-time registration, see `register.sync_commands()` (used by
-`Cordless.sync_commands()`) instead - it is a separate, synchronous tool
-built for that one job. This module is for inspecting/editing commands from
-a running bot.
-
-Editing and batch-editing command permissions are both left out: editing
-requires a Bearer token authorised by the guild owner, which this bot-token-
-only client can't send, and batch editing has been disabled outright on
-Discord's side (see the "Batch Edit Application Command Permissions" notice
-in Discord's docs).
+Editing command permissions is omitted: it needs a guild-owner Bearer token,
+and batch editing is disabled by Discord.
 """
 
 from . import _client

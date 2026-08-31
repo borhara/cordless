@@ -23,8 +23,7 @@ async def fetch_guild_templates(guild_id, *, token=None):
 
 
 async def create_guild_template(guild_id, name, *, description=UNSET, token=None):
-    """Snapshots the guild's current settings, roles and channels. Requires
-    MANAGE_GUILD."""
+    """A one-off snapshot of the guild, not a live mirror. Requires MANAGE_GUILD."""
     payload = _client.payload(name=name, description=description)
     data = await _client.request("POST", f"/guilds/{guild_id}/templates", payload, token=token)
     return GuildTemplate(data)

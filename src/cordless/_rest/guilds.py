@@ -1,21 +1,8 @@
 """Guild management REST endpoints (Discord API v10).
 
-Members and roles live in members.py, not here, despite technically sharing
-the /guilds/{guild.id}/... path prefix - they are big enough resources on
-their own to warrant a separate module and a separate rollout phase.
-
-Create Guild and Delete Guild are both left out on purpose. Discord blocked
-bot tokens from Create Guild outright in 2025 (existing bot-owned guilds
-even had ownership transferred away), so it can no longer succeed for any
-bot regardless of guild count, despite what Discord's own docs still say.
-Delete Guild only works for the guild's owner, and with Create Guild gone
-there's no remaining way for a bot to become one - Modify Guild's owner_id
-transfer field silently no-ops when the target is a bot account too.
-
-Modify Guild MFA Level (POST /guilds/{guild.id}/mfa) is left out for the
-same reason: it also requires guild ownership, so it's equally dead for
-every bot. discord.py deprecated its own equivalent for this exact reason
-once bots stopped being able to own guilds at all."""
+Members and roles are in members.py. Create Guild, Delete Guild and Modify
+MFA Level are omitted: all three need guild ownership, which a bot can't have.
+"""
 
 from ..models import Guild
 from . import _client

@@ -13,9 +13,8 @@ from .models import Emoji
 
 
 def _with_application_id(data, application_id):
-    """Every call site gets data from a GET/POST/PATCH that always returns a
-    body, unlike _with_guild_id's ctx.member (None in DMs), so no None guard
-    is needed here."""
+    # data always comes from a body-returning GET/POST/PATCH here, so unlike
+    # _with_guild_id there's no None case to guard.
     return {**data, "application_id": application_id}
 
 
