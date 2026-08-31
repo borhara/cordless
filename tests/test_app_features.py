@@ -6,7 +6,7 @@ from typing import Literal
 from unittest.mock import patch
 
 import pytest
-from conftest import FakeDiscordResponse, make_http_error
+from conftest import FakeDiscordResponse, make_http_error, send_patch
 
 from cordless import Cog
 from cordless.app import Cordless, options_from_signature
@@ -701,10 +701,6 @@ def test_edit_message_over_content_limit_raises_without_request():
     fake_request.assert_not_called()
 
 
-def _urlopen(responses):
-    return patch("cordless._rest._client._send", side_effect=responses)
-
-
 def test_unset_repr_is_readable():
     from cordless._rest._client import UNSET
 
@@ -714,7 +710,7 @@ def test_unset_repr_is_readable():
 def test_discord_request_attaches_files_metadata_and_builds_multipart():
     import os
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen([FakeDiscordResponse({})]) as urlopen:
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch([FakeDiscordResponse({})]) as urlopen:
         bot = Cordless()
         asyncio.run(
             bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}, [("board.png", b"\x89PNG...")])
@@ -735,7 +731,7 @@ def test_discord_request_checks_ratelimit_before_sending(monkeypatch):
     calls = []
     monkeypatch.setattr(ratelimit, "wait_if_needed", lambda method, path: calls.append((method, path)))
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen([FakeDiscordResponse({})]):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch([FakeDiscordResponse({})]):
         bot = Cordless()
         asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
@@ -752,7 +748,7 @@ def test_discord_request_records_response_headers_on_success(monkeypatch):
     resp = FakeDiscordResponse({})
     resp.headers = {"X-RateLimit-Remaining": "4", "X-RateLimit-Reset-After": "1"}
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen([resp]):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch([resp]):
         bot = Cordless()
         asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
@@ -775,7 +771,7 @@ def test_discord_request_retries_once_on_429_then_succeeds(monkeypatch):
         FakeDiscordResponse({}),
     ]
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch(responses):
         bot = Cordless()
         result = asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
@@ -799,7 +795,7 @@ def test_discord_request_sleeps_at_least_retry_after_on_429(monkeypatch):
         FakeDiscordResponse({}),
     ]
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch(responses):
         bot = Cordless()
         asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
@@ -824,7 +820,7 @@ def test_discord_request_passes_the_429_response_headers_to_note_blocked(monkeyp
         FakeDiscordResponse({}),
     ]
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch(responses):
         bot = Cordless()
         asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
@@ -841,7 +837,7 @@ def test_discord_request_retries_once_on_transient_network_error(monkeypatch):
 
     responses = [OSError("connection reset by peer"), FakeDiscordResponse({})]
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch(responses):
         bot = Cordless()
         result = asyncio.run(bot._discord_request("GET", "/channels/123/messages", None))
 
@@ -855,7 +851,7 @@ def test_discord_request_only_retries_network_error_once(monkeypatch):
 
     with (
         patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
-        _urlopen(responses),
+        send_patch(responses),
         pytest.raises(OSError),
     ):
         bot = Cordless()
@@ -874,7 +870,7 @@ def test_discord_request_does_not_retry_a_post_after_network_error(monkeypatch):
 
     with (
         patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
-        _urlopen(responses),
+        send_patch(responses),
         pytest.raises(OSError),
     ):
         bot = Cordless()
@@ -893,7 +889,7 @@ def test_request_raw_idempotent_override_prevents_retry_for_a_normally_safe_meth
 
     with (
         patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
-        _urlopen(responses),
+        send_patch(responses),
         pytest.raises(OSError),
     ):
         asyncio.run(_client.request_raw("GET", "/gateway", idempotent=False))
@@ -909,7 +905,7 @@ def test_request_raw_idempotent_override_allows_retry_for_a_normally_unsafe_meth
 
     responses = [OSError("connection reset by peer"), FakeDiscordResponse({})]
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch(responses):
         result = asyncio.run(_client.request_raw("POST", "/gateway", idempotent=True))
 
     assert result == b"{}"
@@ -931,7 +927,7 @@ def test_discord_request_defaults_retry_after_when_429_body_is_not_json(monkeypa
         FakeDiscordResponse({}),
     ]
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch(responses):
         bot = Cordless()
         result = asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
@@ -958,7 +954,7 @@ def test_discord_request_defaults_retry_after_when_body_has_explicit_null(monkey
         FakeDiscordResponse({}),
     ]
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch(responses):
         bot = Cordless()
         result = asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
@@ -983,7 +979,7 @@ def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(monkeypatch):
         FakeDiscordResponse({}),
     ]
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), _urlopen(responses):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch(responses):
         bot = Cordless()
         asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
@@ -1013,7 +1009,7 @@ def test_discord_request_gives_up_after_retry_budget_exhausted(monkeypatch):
 
     with (
         patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
-        _urlopen(responses),
+        send_patch(responses),
         pytest.raises(DiscordHTTPError, match="429"),
     ):
         bot = Cordless()
@@ -1041,7 +1037,7 @@ def test_discord_request_does_not_sleep_past_the_retry_deadline(monkeypatch):
 
     with (
         patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
-        _urlopen(responses),
+        send_patch(responses),
         pytest.raises(DiscordHTTPError, match="429"),
     ):
         bot = Cordless()

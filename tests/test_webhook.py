@@ -1,21 +1,15 @@
 """Webhook support: URL parsing, payload building, and the execute/edit/delete/manage flows."""
 
 import json
-from unittest.mock import patch
 
 import pytest
-from conftest import FakeDiscordResponse
+from conftest import FakeDiscordResponse, send_patch
 
 import cordless.models
 import cordless.webhook
 from cordless._rest.models import Webhook
 from cordless.app import Cordless
 from cordless.errors import DiscordHTTPError, NotFound
-
-
-def _urlopen(responses):
-    return patch("cordless._rest._client._send", side_effect=responses)
-
 
 # --- parse_webhook_url ---
 
@@ -640,7 +634,7 @@ def test_create_webhook_posts_to_channel_webhooks_endpoint(monkeypatch):
 
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "bot-tok")
 
-    with _urlopen([FakeDiscordResponse({"id": "wh-1", "token": "wh-tok"})]) as urlopen:
+    with send_patch([FakeDiscordResponse({"id": "wh-1", "token": "wh-tok"})]) as urlopen:
         bot = Cordless()
         result = asyncio.run(bot.create_webhook("chan-1", "Alerts"))
 
@@ -656,7 +650,7 @@ def test_create_webhook_sends_audit_log_reason(monkeypatch):
 
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "bot-tok")
 
-    with _urlopen([FakeDiscordResponse({"id": "wh-1", "token": "wh-tok"})]) as urlopen:
+    with send_patch([FakeDiscordResponse({"id": "wh-1", "token": "wh-tok"})]) as urlopen:
         bot = Cordless()
         asyncio.run(bot.create_webhook("chan-1", "Alerts", reason="rebranding"))
 
@@ -668,7 +662,7 @@ def test_get_channel_webhooks_lists_channel_webhooks(monkeypatch):
 
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "bot-tok")
 
-    with _urlopen([FakeDiscordResponse([{"id": "wh-1"}, {"id": "wh-2"}])]) as urlopen:
+    with send_patch([FakeDiscordResponse([{"id": "wh-1"}, {"id": "wh-2"}])]) as urlopen:
         bot = Cordless()
         result = asyncio.run(bot.get_channel_webhooks("chan-1"))
 
@@ -681,7 +675,7 @@ def test_delete_webhook_without_token_uses_bot_auth(monkeypatch):
 
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "bot-tok")
 
-    with _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with send_patch([FakeDiscordResponse(None)]) as urlopen:
         bot = Cordless()
         asyncio.run(bot.delete_webhook("wh-1"))
 
@@ -695,7 +689,7 @@ def test_delete_webhook_without_token_sends_audit_log_reason(monkeypatch):
 
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "bot-tok")
 
-    with _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with send_patch([FakeDiscordResponse(None)]) as urlopen:
         bot = Cordless()
         asyncio.run(bot.delete_webhook("wh-1", reason="compromised"))
 

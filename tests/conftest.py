@@ -1,6 +1,14 @@
 import io
 import json
 import urllib.error
+from unittest.mock import patch
+
+BOT_ENV = {"DISCORD_BOT_TOKEN": "tok"}
+
+
+def send_patch(responses):
+    """Patch the REST transport so calls yield these fake responses in order."""
+    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 class FakeDiscordResponse:

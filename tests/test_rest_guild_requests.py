@@ -6,13 +6,11 @@ import os
 from asyncio import run
 from unittest.mock import patch
 
-from conftest import FakeDiscordResponse
+from conftest import BOT_ENV, FakeDiscordResponse, send_patch
 
 from cordless._rest import guild_requests
 from cordless._rest.models import GuildJoinRequest
 from cordless.app import Cordless
-
-_ENV = {"DISCORD_BOT_TOKEN": "tok"}
 
 _REQUEST_PAYLOAD = {
     "id": "1",
@@ -23,16 +21,12 @@ _REQUEST_PAYLOAD = {
 }
 
 
-def _urlopen(responses):
-    return patch("cordless._rest._client._send", side_effect=responses)
-
-
 # --- _rest/guild_requests.py ---
 
 
 def test_fetch_guild_join_requests_returns_request_list():
     payload = {"total": 1, "guild_join_requests": [_REQUEST_PAYLOAD]}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         result = run(guild_requests.fetch_guild_join_requests("10"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/requests"
@@ -41,7 +35,7 @@ def test_fetch_guild_join_requests_returns_request_list():
 
 def test_fetch_guild_join_requests_passes_query_params():
     payload = {"total": 0, "guild_join_requests": []}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         run(guild_requests.fetch_guild_join_requests("10", status="SUBMITTED", limit=5))
 
     url = urlopen.call_args.args[0].full_url
@@ -50,7 +44,7 @@ def test_fetch_guild_join_requests_passes_query_params():
 
 
 def test_edit_guild_join_request_approves():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_REQUEST_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_REQUEST_PAYLOAD)]) as urlopen:
         result = run(guild_requests.edit_guild_join_request("10", "1", "APPROVED"))
 
     req = urlopen.call_args.args[0]
@@ -61,7 +55,7 @@ def test_edit_guild_join_request_approves():
 
 
 def test_edit_guild_join_request_rejects_with_reason():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_REQUEST_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_REQUEST_PAYLOAD)]) as urlopen:
         run(guild_requests.edit_guild_join_request("10", "1", "REJECTED", rejection_reason="not a fit"))
 
     assert json.loads(urlopen.call_args.args[0].data) == {"action": "REJECTED", "rejection_reason": "not a fit"}
@@ -73,13 +67,13 @@ def test_edit_guild_join_request_rejects_with_reason():
 def test_bot_fetch_guild_join_requests_delegates_to_rest_module():
     bot = Cordless()
     payload = {"total": 1, "guild_join_requests": [_REQUEST_PAYLOAD]}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]):
         assert run(bot.fetch_guild_join_requests("10")) == [GuildJoinRequest(_REQUEST_PAYLOAD)]
 
 
 def test_bot_edit_guild_join_request_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_REQUEST_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_REQUEST_PAYLOAD)]):
         assert isinstance(run(bot.edit_guild_join_request("10", "1", "APPROVED")), GuildJoinRequest)
 
 
@@ -98,7 +92,7 @@ def test_request_user_returns_user_when_present():
 
 def test_request_approve_delegates_to_rest_module():
     request = GuildJoinRequest(_REQUEST_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_REQUEST_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_REQUEST_PAYLOAD)]) as urlopen:
         result = run(request.approve())
 
     req = urlopen.call_args.args[0]
@@ -109,7 +103,7 @@ def test_request_approve_delegates_to_rest_module():
 
 def test_request_reject_delegates_to_rest_module():
     request = GuildJoinRequest(_REQUEST_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_REQUEST_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_REQUEST_PAYLOAD)]) as urlopen:
         result = run(request.reject(rejection_reason="not a fit"))
 
     req = urlopen.call_args.args[0]

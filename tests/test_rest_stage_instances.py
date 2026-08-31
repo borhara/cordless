@@ -6,14 +6,12 @@ import os
 from asyncio import run
 from unittest.mock import patch
 
-from conftest import FakeDiscordResponse
+from conftest import BOT_ENV, FakeDiscordResponse, send_patch
 
 from cordless._rest import stage_instances
 from cordless._rest.models import StageInstance
 from cordless.app import Cordless
 from cordless.models import Channel
-
-_ENV = {"DISCORD_BOT_TOKEN": "tok"}
 
 _STAGE_PAYLOAD = {
     "id": "1",
@@ -24,15 +22,11 @@ _STAGE_PAYLOAD = {
 }
 
 
-def _urlopen(responses):
-    return patch("cordless._rest._client._send", side_effect=responses)
-
-
 # --- _rest/stage_instances.py ---
 
 
 def test_create_stage_instance_posts_required_and_optional_fields():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_STAGE_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_STAGE_PAYLOAD)]) as urlopen:
         result = run(stage_instances.create_stage_instance("20", "shiv's stage", privacy_level=2))
 
     req = urlopen.call_args.args[0]
@@ -42,7 +36,7 @@ def test_create_stage_instance_posts_required_and_optional_fields():
 
 
 def test_fetch_stage_instance_returns_stage_instance():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_STAGE_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_STAGE_PAYLOAD)]) as urlopen:
         result = run(stage_instances.fetch_stage_instance("20"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/stage-instances/20"
@@ -50,7 +44,7 @@ def test_fetch_stage_instance_returns_stage_instance():
 
 
 def test_edit_stage_instance_only_sends_fields_that_were_set():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_STAGE_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_STAGE_PAYLOAD)]) as urlopen:
         result = run(stage_instances.edit_stage_instance("20", topic="new topic"))
 
     assert json.loads(urlopen.call_args.args[0].data) == {"topic": "new topic"}
@@ -58,7 +52,7 @@ def test_edit_stage_instance_only_sends_fields_that_were_set():
 
 
 def test_delete_stage_instance_deletes_stage():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(stage_instances.delete_stage_instance("20"))
 
     req = urlopen.call_args.args[0]
@@ -71,25 +65,25 @@ def test_delete_stage_instance_deletes_stage():
 
 def test_bot_create_stage_instance_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_STAGE_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_STAGE_PAYLOAD)]):
         assert isinstance(run(bot.create_stage_instance("20", "shiv's stage")), StageInstance)
 
 
 def test_bot_fetch_stage_instance_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_STAGE_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_STAGE_PAYLOAD)]):
         assert isinstance(run(bot.fetch_stage_instance("20")), StageInstance)
 
 
 def test_bot_edit_stage_instance_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_STAGE_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_STAGE_PAYLOAD)]):
         assert isinstance(run(bot.edit_stage_instance("20", topic="new topic")), StageInstance)
 
 
 def test_bot_delete_stage_instance_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(bot.delete_stage_instance("20"))
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/stage-instances/20"
 
@@ -99,7 +93,7 @@ def test_bot_delete_stage_instance_delegates_to_rest_module():
 
 def test_channel_create_stage_instance_delegates_to_rest_module():
     channel = Channel({"id": "20"})
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_STAGE_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_STAGE_PAYLOAD)]) as urlopen:
         result = run(channel.create_stage_instance("shiv's stage"))
 
     req = urlopen.call_args.args[0]
@@ -110,7 +104,7 @@ def test_channel_create_stage_instance_delegates_to_rest_module():
 
 def test_channel_fetch_stage_instance_delegates_to_rest_module():
     channel = Channel({"id": "20"})
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_STAGE_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_STAGE_PAYLOAD)]) as urlopen:
         result = run(channel.fetch_stage_instance())
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/stage-instances/20"
@@ -122,7 +116,7 @@ def test_channel_fetch_stage_instance_delegates_to_rest_module():
 
 def test_stage_instance_edit_delegates_to_rest_module():
     stage = StageInstance(_STAGE_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_STAGE_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_STAGE_PAYLOAD)]) as urlopen:
         result = run(stage.edit(topic="new topic"))
 
     req = urlopen.call_args.args[0]
@@ -133,7 +127,7 @@ def test_stage_instance_edit_delegates_to_rest_module():
 
 def test_stage_instance_delete_delegates_to_rest_module():
     stage = StageInstance(_STAGE_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(stage.delete())
 
     req = urlopen.call_args.args[0]

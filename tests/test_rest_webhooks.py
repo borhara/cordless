@@ -8,27 +8,21 @@ import os
 from asyncio import run
 from unittest.mock import patch
 
-from conftest import FakeDiscordResponse
+from conftest import BOT_ENV, FakeDiscordResponse, send_patch
 
 from cordless._rest import webhooks
 from cordless._rest.models import Webhook
 from cordless.app import Cordless
 from cordless.models import Channel, Guild
 
-_ENV = {"DISCORD_BOT_TOKEN": "tok"}
-
 _WEBHOOK_PAYLOAD = {"id": "99", "name": "shiv's alerts", "channel_id": "20", "token": "wh-tok"}
-
-
-def _urlopen(responses):
-    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 # --- _rest/webhooks.py (bot token) ---
 
 
 def test_fetch_channel_webhooks_returns_webhook_list():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_WEBHOOK_PAYLOAD])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_WEBHOOK_PAYLOAD])]) as urlopen:
         result = run(webhooks.fetch_channel_webhooks("20"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/webhooks"
@@ -36,7 +30,7 @@ def test_fetch_channel_webhooks_returns_webhook_list():
 
 
 def test_fetch_guild_webhooks_returns_webhook_list():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_WEBHOOK_PAYLOAD])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_WEBHOOK_PAYLOAD])]) as urlopen:
         result = run(webhooks.fetch_guild_webhooks("10"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/webhooks"
@@ -44,7 +38,7 @@ def test_fetch_guild_webhooks_returns_webhook_list():
 
 
 def test_fetch_webhook_returns_single_webhook():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
         result = run(webhooks.fetch_webhook("99"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/webhooks/99"
@@ -52,7 +46,7 @@ def test_fetch_webhook_returns_single_webhook():
 
 
 def test_create_webhook_only_sends_fields_that_were_set():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
         result = run(webhooks.create_webhook("20", "shiv's alerts"))
 
     req = urlopen.call_args.args[0]
@@ -62,14 +56,14 @@ def test_create_webhook_only_sends_fields_that_were_set():
 
 
 def test_create_webhook_sends_audit_log_reason():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
         run(webhooks.create_webhook("20", "shiv's alerts", reason="rebranding"))
 
     assert urlopen.call_args.args[0].get_header("X-audit-log-reason") == "rebranding"
 
 
 def test_edit_webhook_only_sends_fields_that_were_set():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
         result = run(webhooks.edit_webhook("99", name="renamed"))
 
     req = urlopen.call_args.args[0]
@@ -79,21 +73,21 @@ def test_edit_webhook_only_sends_fields_that_were_set():
 
 
 def test_edit_webhook_can_move_channel():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
         run(webhooks.edit_webhook("99", channel_id="30"))
 
     assert json.loads(urlopen.call_args.args[0].data) == {"channel_id": "30"}
 
 
 def test_edit_webhook_sends_audit_log_reason():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
         run(webhooks.edit_webhook("99", name="renamed", reason="rebranding"))
 
     assert urlopen.call_args.args[0].get_header("X-audit-log-reason") == "rebranding"
 
 
 def test_delete_webhook_deletes_webhook():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(webhooks.delete_webhook("99"))
 
     req = urlopen.call_args.args[0]
@@ -102,7 +96,7 @@ def test_delete_webhook_deletes_webhook():
 
 
 def test_delete_webhook_sends_audit_log_reason():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(webhooks.delete_webhook("99", reason="compromised"))
 
     assert urlopen.call_args.args[0].get_header("X-audit-log-reason") == "compromised"
@@ -113,25 +107,25 @@ def test_delete_webhook_sends_audit_log_reason():
 
 def test_bot_fetch_channel_webhooks_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_WEBHOOK_PAYLOAD])]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_WEBHOOK_PAYLOAD])]):
         assert run(bot.fetch_channel_webhooks("20")) == [Webhook(_WEBHOOK_PAYLOAD)]
 
 
 def test_bot_fetch_guild_webhooks_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_WEBHOOK_PAYLOAD])]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_WEBHOOK_PAYLOAD])]):
         assert run(bot.fetch_guild_webhooks("10")) == [Webhook(_WEBHOOK_PAYLOAD)]
 
 
 def test_bot_fetch_webhook_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]):
         assert isinstance(run(bot.fetch_webhook("99")), Webhook)
 
 
 def test_bot_edit_webhook_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
         result = run(bot.edit_webhook("99", name="renamed"))
 
     assert json.loads(urlopen.call_args.args[0].data) == {"name": "renamed"}
@@ -143,7 +137,7 @@ def test_bot_edit_webhook_delegates_to_rest_module():
 
 def test_channel_fetch_webhooks_delegates_to_rest_module():
     channel = Channel({"id": "20"})
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_WEBHOOK_PAYLOAD])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_WEBHOOK_PAYLOAD])]) as urlopen:
         result = run(channel.fetch_webhooks())
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/webhooks"
@@ -152,7 +146,7 @@ def test_channel_fetch_webhooks_delegates_to_rest_module():
 
 def test_guild_fetch_webhooks_delegates_to_rest_module():
     guild = Guild({"id": "10"})
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_WEBHOOK_PAYLOAD])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_WEBHOOK_PAYLOAD])]) as urlopen:
         result = run(guild.fetch_webhooks())
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/webhooks"
@@ -164,7 +158,7 @@ def test_guild_fetch_webhooks_delegates_to_rest_module():
 
 def test_webhook_edit_delegates_to_rest_module():
     webhook = Webhook(_WEBHOOK_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_WEBHOOK_PAYLOAD)]) as urlopen:
         result = run(webhook.edit(name="renamed"))
 
     req = urlopen.call_args.args[0]
@@ -175,7 +169,7 @@ def test_webhook_edit_delegates_to_rest_module():
 
 def test_webhook_delete_delegates_to_rest_module():
     webhook = Webhook(_WEBHOOK_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(webhook.delete())
 
     req = urlopen.call_args.args[0]

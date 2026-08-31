@@ -6,14 +6,12 @@ import os
 from asyncio import run
 from unittest.mock import patch
 
-from conftest import FakeDiscordResponse
+from conftest import BOT_ENV, FakeDiscordResponse, send_patch
 
 from cordless._rest import scheduled_events
 from cordless._rest.models import GuildScheduledEvent, GuildScheduledEventException, GuildScheduledEventUser
 from cordless.app import Cordless
 from cordless.models import Guild, Member, User
-
-_ENV = {"DISCORD_BOT_TOKEN": "tok"}
 
 _EVENT_PAYLOAD = {
     "id": "1",
@@ -34,15 +32,11 @@ _EXCEPTION_PAYLOAD = {
 }
 
 
-def _urlopen(responses):
-    return patch("cordless._rest._client._send", side_effect=responses)
-
-
 # --- _rest/scheduled_events.py ---
 
 
 def test_fetch_guild_scheduled_events_returns_event_list():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_EVENT_PAYLOAD])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_EVENT_PAYLOAD])]) as urlopen:
         result = run(scheduled_events.fetch_guild_scheduled_events("10"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/scheduled-events"
@@ -50,14 +44,14 @@ def test_fetch_guild_scheduled_events_returns_event_list():
 
 
 def test_fetch_guild_scheduled_events_with_user_count_adds_query_string():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([])]) as urlopen:
         run(scheduled_events.fetch_guild_scheduled_events("10", with_user_count=True))
 
     assert urlopen.call_args.args[0].full_url.endswith("?with_user_count=true")
 
 
 def test_create_guild_scheduled_event_posts_required_and_optional_fields():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_EVENT_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_EVENT_PAYLOAD)]) as urlopen:
         result = run(
             scheduled_events.create_guild_scheduled_event(
                 "10",
@@ -84,7 +78,7 @@ def test_create_guild_scheduled_event_posts_required_and_optional_fields():
 
 
 def test_fetch_guild_scheduled_event_returns_single_event():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_EVENT_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_EVENT_PAYLOAD)]) as urlopen:
         result = run(scheduled_events.fetch_guild_scheduled_event("10", "1"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/scheduled-events/1"
@@ -92,7 +86,7 @@ def test_fetch_guild_scheduled_event_returns_single_event():
 
 
 def test_edit_guild_scheduled_event_only_sends_fields_that_were_set():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_EVENT_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_EVENT_PAYLOAD)]) as urlopen:
         result = run(scheduled_events.edit_guild_scheduled_event("10", "1", status=2))
 
     assert json.loads(urlopen.call_args.args[0].data) == {"status": 2}
@@ -100,14 +94,14 @@ def test_edit_guild_scheduled_event_only_sends_fields_that_were_set():
 
 
 def test_edit_guild_scheduled_event_can_clear_channel_id_for_external():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_EVENT_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_EVENT_PAYLOAD)]) as urlopen:
         run(scheduled_events.edit_guild_scheduled_event("10", "1", channel_id=None, entity_type=3))
 
     assert json.loads(urlopen.call_args.args[0].data) == {"channel_id": None, "entity_type": 3}
 
 
 def test_delete_guild_scheduled_event_deletes_event():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(scheduled_events.delete_guild_scheduled_event("10", "1"))
 
     req = urlopen.call_args.args[0]
@@ -116,7 +110,7 @@ def test_delete_guild_scheduled_event_deletes_event():
 
 
 def test_fetch_guild_scheduled_event_users_returns_user_list():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_EVENT_USER_PAYLOAD])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_EVENT_USER_PAYLOAD])]) as urlopen:
         result = run(scheduled_events.fetch_guild_scheduled_event_users("10", "1"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/scheduled-events/1/users"
@@ -125,7 +119,7 @@ def test_fetch_guild_scheduled_event_users_returns_user_list():
 
 
 def test_fetch_guild_scheduled_event_users_passes_query_params():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([])]) as urlopen:
         run(scheduled_events.fetch_guild_scheduled_event_users("10", "1", limit=5, with_member=True, before="90"))
 
     url = urlopen.call_args.args[0].full_url
@@ -136,7 +130,7 @@ def test_fetch_guild_scheduled_event_users_passes_query_params():
 
 def test_fetch_guild_scheduled_event_user_counts_returns_raw_body():
     payload = {"guild_scheduled_event_count": 3, "guild_scheduled_event_exception_counts": {"2": 1}}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         result = run(scheduled_events.fetch_guild_scheduled_event_user_counts("10", "1"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/scheduled-events/1/users/counts"
@@ -144,7 +138,7 @@ def test_fetch_guild_scheduled_event_user_counts_returns_raw_body():
 
 
 def test_fetch_guild_scheduled_event_user_counts_passes_exception_ids():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse({})]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse({})]) as urlopen:
         run(scheduled_events.fetch_guild_scheduled_event_user_counts("10", "1", exception_ids=["2", "3"]))
 
     url = urlopen.call_args.args[0].full_url
@@ -153,7 +147,7 @@ def test_fetch_guild_scheduled_event_user_counts_passes_exception_ids():
 
 
 def test_create_guild_scheduled_event_exception_stitches_in_guild_id():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_EXCEPTION_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_EXCEPTION_PAYLOAD)]) as urlopen:
         result = run(
             scheduled_events.create_guild_scheduled_event_exception("10", "1", "2024-01-08T00:00:00Z", is_canceled=True)
         )
@@ -165,7 +159,7 @@ def test_create_guild_scheduled_event_exception_stitches_in_guild_id():
 
 
 def test_edit_guild_scheduled_event_exception_only_sends_fields_that_were_set():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_EXCEPTION_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_EXCEPTION_PAYLOAD)]) as urlopen:
         result = run(scheduled_events.edit_guild_scheduled_event_exception("10", "1", "2", is_canceled=True))
 
     req = urlopen.call_args.args[0]
@@ -175,7 +169,7 @@ def test_edit_guild_scheduled_event_exception_only_sends_fields_that_were_set():
 
 
 def test_delete_guild_scheduled_event_exception_deletes_exception():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(scheduled_events.delete_guild_scheduled_event_exception("10", "1", "2"))
 
     req = urlopen.call_args.args[0]
@@ -184,7 +178,7 @@ def test_delete_guild_scheduled_event_exception_deletes_exception():
 
 
 def test_fetch_guild_scheduled_event_exception_users_returns_user_list():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_EVENT_USER_PAYLOAD])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_EVENT_USER_PAYLOAD])]) as urlopen:
         result = run(scheduled_events.fetch_guild_scheduled_event_exception_users("10", "1", "2"))
 
     assert (
@@ -199,13 +193,13 @@ def test_fetch_guild_scheduled_event_exception_users_returns_user_list():
 
 def test_bot_fetch_guild_scheduled_events_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_EVENT_PAYLOAD])]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_EVENT_PAYLOAD])]):
         assert run(bot.fetch_guild_scheduled_events("10")) == [GuildScheduledEvent(_EVENT_PAYLOAD)]
 
 
 def test_bot_create_guild_scheduled_event_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_EVENT_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_EVENT_PAYLOAD)]):
         result = run(bot.create_guild_scheduled_event("10", "shiv's game night", 2, "2024-01-01T00:00:00Z", 3))
 
     assert isinstance(result, GuildScheduledEvent)
@@ -213,26 +207,26 @@ def test_bot_create_guild_scheduled_event_delegates_to_rest_module():
 
 def test_bot_fetch_guild_scheduled_event_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_EVENT_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_EVENT_PAYLOAD)]):
         assert isinstance(run(bot.fetch_guild_scheduled_event("10", "1")), GuildScheduledEvent)
 
 
 def test_bot_edit_guild_scheduled_event_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_EVENT_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_EVENT_PAYLOAD)]):
         assert isinstance(run(bot.edit_guild_scheduled_event("10", "1", status=2)), GuildScheduledEvent)
 
 
 def test_bot_delete_guild_scheduled_event_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(bot.delete_guild_scheduled_event("10", "1"))
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/scheduled-events/1"
 
 
 def test_bot_fetch_guild_scheduled_event_users_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_EVENT_USER_PAYLOAD])]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_EVENT_USER_PAYLOAD])]):
         assert run(bot.fetch_guild_scheduled_event_users("10", "1")) == [
             GuildScheduledEventUser(dict(_EVENT_USER_PAYLOAD, guild_id="10"))
         ]
@@ -241,13 +235,13 @@ def test_bot_fetch_guild_scheduled_event_users_delegates_to_rest_module():
 def test_bot_fetch_guild_scheduled_event_user_counts_delegates_to_rest_module():
     bot = Cordless()
     payload = {"guild_scheduled_event_count": 3, "guild_scheduled_event_exception_counts": {}}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]):
         assert run(bot.fetch_guild_scheduled_event_user_counts("10", "1")) == payload
 
 
 def test_bot_create_guild_scheduled_event_exception_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_EXCEPTION_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_EXCEPTION_PAYLOAD)]):
         result = run(bot.create_guild_scheduled_event_exception("10", "1", "2024-01-08T00:00:00Z"))
 
     assert isinstance(result, GuildScheduledEventException)
@@ -255,7 +249,7 @@ def test_bot_create_guild_scheduled_event_exception_delegates_to_rest_module():
 
 def test_bot_edit_guild_scheduled_event_exception_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_EXCEPTION_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_EXCEPTION_PAYLOAD)]):
         assert isinstance(
             run(bot.edit_guild_scheduled_event_exception("10", "1", "2", is_canceled=True)),
             GuildScheduledEventException,
@@ -264,14 +258,14 @@ def test_bot_edit_guild_scheduled_event_exception_delegates_to_rest_module():
 
 def test_bot_delete_guild_scheduled_event_exception_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(bot.delete_guild_scheduled_event_exception("10", "1", "2"))
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/scheduled-events/1/exceptions/2"
 
 
 def test_bot_fetch_guild_scheduled_event_exception_users_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_EVENT_USER_PAYLOAD])]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_EVENT_USER_PAYLOAD])]):
         assert run(bot.fetch_guild_scheduled_event_exception_users("10", "1", "2")) == [
             GuildScheduledEventUser(dict(_EVENT_USER_PAYLOAD, guild_id="10"))
         ]
@@ -282,7 +276,7 @@ def test_bot_fetch_guild_scheduled_event_exception_users_delegates_to_rest_modul
 
 def test_guild_fetch_scheduled_events_delegates_to_rest_module():
     guild = Guild({"id": "10"})
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_EVENT_PAYLOAD])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_EVENT_PAYLOAD])]) as urlopen:
         result = run(guild.fetch_scheduled_events())
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/scheduled-events"
@@ -291,7 +285,7 @@ def test_guild_fetch_scheduled_events_delegates_to_rest_module():
 
 def test_guild_create_scheduled_event_delegates_to_rest_module():
     guild = Guild({"id": "10"})
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_EVENT_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_EVENT_PAYLOAD)]) as urlopen:
         result = run(guild.create_scheduled_event("shiv's game night", 2, "2024-01-01T00:00:00Z", 3))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/scheduled-events"
@@ -300,7 +294,7 @@ def test_guild_create_scheduled_event_delegates_to_rest_module():
 
 def test_guild_fetch_scheduled_event_delegates_to_rest_module():
     guild = Guild({"id": "10"})
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_EVENT_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_EVENT_PAYLOAD)]):
         assert isinstance(run(guild.fetch_scheduled_event("1")), GuildScheduledEvent)
 
 
@@ -309,7 +303,7 @@ def test_guild_fetch_scheduled_event_delegates_to_rest_module():
 
 def test_event_edit_delegates_to_rest_module():
     event = GuildScheduledEvent(_EVENT_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_EVENT_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_EVENT_PAYLOAD)]) as urlopen:
         result = run(event.edit(status=2))
 
     req = urlopen.call_args.args[0]
@@ -320,7 +314,7 @@ def test_event_edit_delegates_to_rest_module():
 
 def test_event_delete_delegates_to_rest_module():
     event = GuildScheduledEvent(_EVENT_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(event.delete())
 
     req = urlopen.call_args.args[0]
@@ -330,7 +324,7 @@ def test_event_delete_delegates_to_rest_module():
 
 def test_event_fetch_users_delegates_to_rest_module():
     event = GuildScheduledEvent(_EVENT_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_EVENT_USER_PAYLOAD])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_EVENT_USER_PAYLOAD])]) as urlopen:
         result = run(event.fetch_users())
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/scheduled-events/1/users"
@@ -372,7 +366,7 @@ def test_event_user_member_has_guild_id_stitched_in():
 def test_event_fetch_user_counts_delegates_to_rest_module():
     event = GuildScheduledEvent(_EVENT_PAYLOAD)
     payload = {"guild_scheduled_event_count": 3, "guild_scheduled_event_exception_counts": {}}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         result = run(event.fetch_user_counts())
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/scheduled-events/1/users/counts"
@@ -381,7 +375,7 @@ def test_event_fetch_user_counts_delegates_to_rest_module():
 
 def test_event_create_exception_delegates_to_rest_module():
     event = GuildScheduledEvent(_EVENT_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_EXCEPTION_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_EXCEPTION_PAYLOAD)]) as urlopen:
         result = run(event.create_exception("2024-01-08T00:00:00Z"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/scheduled-events/1/exceptions"
@@ -393,7 +387,7 @@ def test_event_create_exception_delegates_to_rest_module():
 
 def test_exception_edit_delegates_to_rest_module():
     exception = GuildScheduledEventException(dict(_EXCEPTION_PAYLOAD, guild_id="10"))
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_EXCEPTION_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_EXCEPTION_PAYLOAD)]) as urlopen:
         result = run(exception.edit(is_canceled=True))
 
     req = urlopen.call_args.args[0]
@@ -404,7 +398,7 @@ def test_exception_edit_delegates_to_rest_module():
 
 def test_exception_delete_delegates_to_rest_module():
     exception = GuildScheduledEventException(dict(_EXCEPTION_PAYLOAD, guild_id="10"))
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(exception.delete())
 
     req = urlopen.call_args.args[0]
@@ -414,7 +408,7 @@ def test_exception_delete_delegates_to_rest_module():
 
 def test_exception_fetch_users_delegates_to_rest_module():
     exception = GuildScheduledEventException(dict(_EXCEPTION_PAYLOAD, guild_id="10"))
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_EVENT_USER_PAYLOAD])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_EVENT_USER_PAYLOAD])]) as urlopen:
         result = run(exception.fetch_users())
 
     assert (

@@ -5,7 +5,7 @@ import os
 from asyncio import run
 from unittest.mock import patch
 
-from conftest import FakeDiscordResponse
+from conftest import BOT_ENV, FakeDiscordResponse, send_patch
 
 from cordless._rest import audit_log
 from cordless._rest.models import (
@@ -19,8 +19,6 @@ from cordless._rest.models import (
 )
 from cordless.app import Cordless
 from cordless.models import Guild, User
-
-_ENV = {"DISCORD_BOT_TOKEN": "tok"}
 
 _AUDIT_LOG_PAYLOAD = {
     "application_commands": [],
@@ -36,15 +34,11 @@ _AUDIT_LOG_PAYLOAD = {
 }
 
 
-def _urlopen(responses):
-    return patch("cordless._rest._client._send", side_effect=responses)
-
-
 # --- _rest/audit_log.py ---
 
 
 def test_fetch_audit_log_returns_audit_log():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_AUDIT_LOG_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_AUDIT_LOG_PAYLOAD)]) as urlopen:
         result = run(audit_log.fetch_audit_log("10"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/audit-logs"
@@ -52,7 +46,7 @@ def test_fetch_audit_log_returns_audit_log():
 
 
 def test_fetch_audit_log_passes_query_params():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_AUDIT_LOG_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_AUDIT_LOG_PAYLOAD)]) as urlopen:
         run(audit_log.fetch_audit_log("10", user_id="55", action_type=1, before="90", after="10", limit=5))
 
     url = urlopen.call_args.args[0].full_url
@@ -64,7 +58,7 @@ def test_fetch_audit_log_passes_query_params():
 
 
 def test_fetch_audit_log_action_type_zero_is_included():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_AUDIT_LOG_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_AUDIT_LOG_PAYLOAD)]) as urlopen:
         run(audit_log.fetch_audit_log("10", action_type=0))
 
     assert "action_type=0" in urlopen.call_args.args[0].full_url
@@ -75,7 +69,7 @@ def test_fetch_audit_log_action_type_zero_is_included():
 
 def test_bot_fetch_audit_log_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_AUDIT_LOG_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_AUDIT_LOG_PAYLOAD)]):
         assert isinstance(run(bot.fetch_audit_log("10")), AuditLog)
 
 
@@ -84,7 +78,7 @@ def test_bot_fetch_audit_log_delegates_to_rest_module():
 
 def test_guild_fetch_audit_log_delegates_to_rest_module():
     guild = Guild({"id": "10"})
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_AUDIT_LOG_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_AUDIT_LOG_PAYLOAD)]) as urlopen:
         result = run(guild.fetch_audit_log())
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/audit-logs"

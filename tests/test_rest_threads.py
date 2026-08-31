@@ -6,14 +6,12 @@ import os
 from asyncio import run
 from unittest.mock import patch
 
-from conftest import FakeDiscordResponse
+from conftest import BOT_ENV, FakeDiscordResponse, send_patch
 
 from cordless._rest import threads
 from cordless._rest.models import Thread, ThreadMember
 from cordless.app import Cordless
 from cordless.models import Channel, Guild
-
-_ENV = {"DISCORD_BOT_TOKEN": "tok"}
 
 _THREAD_PAYLOAD = {
     "id": "1",
@@ -27,10 +25,6 @@ _THREAD_PAYLOAD = {
     "thread_metadata": {"archived": False, "locked": False},
     "rate_limit_per_user": 0,
 }
-
-
-def _urlopen(responses):
-    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 # --- Thread/ThreadMember expose unknown fields ---
@@ -53,7 +47,7 @@ def test_thread_member_exposes_a_field_not_declared_anywhere_in_cordless():
 
 
 def test_start_thread_from_message_posts_expected_path_and_payload():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
         result = run(threads.start_thread_from_message("20", "99", "discussion", auto_archive_duration=1440))
 
     req = urlopen.call_args.args[0]
@@ -68,7 +62,7 @@ def test_start_thread_from_message_posts_expected_path_and_payload():
 
 
 def test_start_thread_from_message_omits_auto_archive_duration_by_default():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
         run(threads.start_thread_from_message("20", "99", "discussion"))
 
     assert urlopen.call_args.args[0].data == b'{"name": "discussion"}'
@@ -78,7 +72,7 @@ def test_start_thread_from_message_omits_auto_archive_duration_by_default():
 
 
 def test_start_thread_without_message_defaults_to_private_thread_type():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
         result = run(threads.start_thread_without_message("20", "discussion"))
 
     req = urlopen.call_args.args[0]
@@ -88,7 +82,7 @@ def test_start_thread_without_message_defaults_to_private_thread_type():
 
 
 def test_start_thread_without_message_passes_invitable():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
         run(threads.start_thread_without_message("20", "discussion", invitable=False))
 
     assert urlopen.call_args.args[0].data == b'{"name": "discussion", "type": 11, "invitable": false}'
@@ -98,7 +92,7 @@ def test_start_thread_without_message_passes_invitable():
 
 
 def test_start_thread_from_forum_posts_expected_path_and_payload():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
         result = run(threads.start_thread_from_forum("20", "discussion", message="first post"))
 
     req = urlopen.call_args.args[0]
@@ -112,7 +106,7 @@ def test_start_thread_from_forum_posts_expected_path_and_payload():
 
 
 def test_start_thread_from_forum_passes_applied_tags_and_auto_archive_duration():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
         run(
             threads.start_thread_from_forum(
                 "20", "discussion", message="first post", applied_tags=["tag1"], auto_archive_duration=1440
@@ -127,14 +121,14 @@ def test_start_thread_from_forum_passes_applied_tags_and_auto_archive_duration()
 def test_start_thread_from_forum_omits_rate_limit_per_user_when_unset():
     """Leaving it unset should fall back to the forum channel's own
     default_thread_rate_limit_per_user, not silently send 0 (no slowmode)."""
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
         run(threads.start_thread_from_forum("20", "discussion", message="first post"))
 
     assert "rate_limit_per_user" not in json.loads(urlopen.call_args.args[0].data)
 
 
 def test_start_thread_from_forum_passes_explicit_zero_rate_limit_per_user():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
         run(threads.start_thread_from_forum("20", "discussion", message="first post", rate_limit_per_user=0))
 
     assert json.loads(urlopen.call_args.args[0].data)["rate_limit_per_user"] == 0
@@ -142,7 +136,7 @@ def test_start_thread_from_forum_passes_explicit_zero_rate_limit_per_user():
 
 def test_bot_start_thread_from_forum_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_THREAD_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_THREAD_PAYLOAD)]):
         result = run(bot.start_thread_from_forum("20", "discussion", message="first post"))
 
     assert isinstance(result, Thread)
@@ -153,7 +147,7 @@ def test_bot_start_thread_from_forum_delegates_to_rest_module():
 
 
 def test_join_thread_puts_at_me():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(threads.join_thread("20"))
 
     req = urlopen.call_args.args[0]
@@ -162,7 +156,7 @@ def test_join_thread_puts_at_me():
 
 
 def test_leave_thread_deletes_at_me():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(threads.leave_thread("20"))
 
     req = urlopen.call_args.args[0]
@@ -171,14 +165,14 @@ def test_leave_thread_deletes_at_me():
 
 
 def test_add_thread_member_puts_user_id():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(threads.add_thread_member("20", "55"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/thread-members/55"
 
 
 def test_remove_thread_member_deletes_user_id():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(threads.remove_thread_member("20", "55"))
 
     req = urlopen.call_args.args[0]
@@ -191,7 +185,7 @@ def test_remove_thread_member_deletes_user_id():
 
 def test_fetch_thread_members_returns_thread_member_list():
     payload = [{"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0}]
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         result = run(threads.fetch_thread_members("20"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/thread-members"
@@ -199,14 +193,14 @@ def test_fetch_thread_members_returns_thread_member_list():
 
 
 def test_fetch_thread_members_with_member_flag_adds_query_string():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([])]) as urlopen:
         run(threads.fetch_thread_members("20", with_member=True))
 
     assert urlopen.call_args.args[0].full_url.endswith("?with_member=true")
 
 
 def test_fetch_thread_members_passes_after_and_limit():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([])]) as urlopen:
         run(threads.fetch_thread_members("20", with_member=True, after="90", limit=50))
 
     url = urlopen.call_args.args[0].full_url
@@ -219,7 +213,7 @@ def test_fetch_thread_members_passes_after_and_limit():
 
 def test_fetch_public_archived_threads_returns_thread_list():
     payload = {"threads": [_THREAD_PAYLOAD], "members": [], "has_more": False}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         result = run(threads.fetch_public_archived_threads("20"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/threads/archived/public"
@@ -228,7 +222,7 @@ def test_fetch_public_archived_threads_returns_thread_list():
 
 def test_fetch_public_archived_threads_passes_before_and_limit():
     payload = {"threads": [], "members": [], "has_more": False}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         run(threads.fetch_public_archived_threads("20", before="2024-01-01T00:00:00Z", limit=5))
 
     url = urlopen.call_args.args[0].full_url
@@ -241,7 +235,7 @@ def test_fetch_public_archived_threads_passes_before_and_limit():
 
 def test_bot_start_thread_from_message_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_THREAD_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_THREAD_PAYLOAD)]):
         result = run(bot.start_thread_from_message("20", "99", "discussion"))
 
     assert isinstance(result, Thread)
@@ -251,7 +245,7 @@ def test_bot_start_thread_from_message_delegates_to_rest_module():
 def test_bot_fetch_public_archived_threads_delegates_to_rest_module():
     bot = Cordless()
     payload = {"threads": [_THREAD_PAYLOAD], "members": [], "has_more": False}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]):
         result = run(bot.fetch_public_archived_threads("20"))
 
     assert result == [Thread(_THREAD_PAYLOAD)]
@@ -262,7 +256,7 @@ def test_bot_fetch_public_archived_threads_delegates_to_rest_module():
 
 def test_channel_start_thread_without_message_delegates_to_rest_module():
     channel = Channel({"id": "20", "name": "general"})
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
         result = run(channel.start_thread_without_message("discussion"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/threads"
@@ -271,7 +265,7 @@ def test_channel_start_thread_without_message_delegates_to_rest_module():
 
 def test_channel_start_thread_from_message_delegates_to_rest_module():
     channel = Channel({"id": "20", "name": "general"})
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_THREAD_PAYLOAD)]) as urlopen:
         result = run(channel.start_thread_from_message("99", "discussion"))
 
     req = urlopen.call_args.args[0]
@@ -281,7 +275,7 @@ def test_channel_start_thread_from_message_delegates_to_rest_module():
 
 def test_channel_start_thread_from_forum_delegates_to_rest_module():
     channel = Channel({"id": "20", "name": "forum"})
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_THREAD_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_THREAD_PAYLOAD)]):
         result = run(channel.start_thread_from_forum("discussion", message="first post"))
 
     assert isinstance(result, Thread)
@@ -290,7 +284,7 @@ def test_channel_start_thread_from_forum_delegates_to_rest_module():
 def test_channel_fetch_public_archived_threads_delegates_to_rest_module():
     channel = Channel({"id": "20", "name": "general"})
     payload = {"threads": [_THREAD_PAYLOAD], "members": [], "has_more": False}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         result = run(channel.fetch_public_archived_threads())
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/threads/archived/public"
@@ -299,7 +293,7 @@ def test_channel_fetch_public_archived_threads_delegates_to_rest_module():
 
 def test_thread_join_delegates_to_rest_module():
     thread = Thread(_THREAD_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(thread.join())
 
     req = urlopen.call_args.args[0]
@@ -309,7 +303,7 @@ def test_thread_join_delegates_to_rest_module():
 
 def test_thread_leave_delegates_to_rest_module():
     thread = Thread(_THREAD_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(thread.leave())
 
     req = urlopen.call_args.args[0]
@@ -319,7 +313,7 @@ def test_thread_leave_delegates_to_rest_module():
 
 def test_thread_add_member_delegates_to_rest_module():
     thread = Thread(_THREAD_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(thread.add_member("55"))
 
     req = urlopen.call_args.args[0]
@@ -329,7 +323,7 @@ def test_thread_add_member_delegates_to_rest_module():
 
 def test_thread_remove_member_delegates_to_rest_module():
     thread = Thread(_THREAD_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(thread.remove_member("55"))
 
     req = urlopen.call_args.args[0]
@@ -340,7 +334,7 @@ def test_thread_remove_member_delegates_to_rest_module():
 def test_thread_fetch_members_delegates_to_rest_module():
     thread = Thread(_THREAD_PAYLOAD)
     payload = [{"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0}]
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         result = run(thread.fetch_members())
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/1/thread-members"
@@ -349,7 +343,7 @@ def test_thread_fetch_members_delegates_to_rest_module():
 
 def test_thread_fetch_members_passes_after_and_limit():
     thread = Thread(_THREAD_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([])]) as urlopen:
         run(thread.fetch_members(with_member=True, after="90", limit=50))
 
     url = urlopen.call_args.args[0].full_url
@@ -362,7 +356,7 @@ def test_thread_fetch_members_passes_after_and_limit():
 
 def test_fetch_thread_member_returns_single_member():
     payload = {"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         result = run(threads.fetch_thread_member("20", "55"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/thread-members/55"
@@ -371,7 +365,7 @@ def test_fetch_thread_member_returns_single_member():
 
 def test_fetch_thread_member_with_member_flag_adds_query_string():
     payload = {"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         run(threads.fetch_thread_member("20", "55", with_member=True))
 
     assert urlopen.call_args.args[0].full_url.endswith("?with_member=true")
@@ -380,7 +374,7 @@ def test_fetch_thread_member_with_member_flag_adds_query_string():
 def test_thread_fetch_member_delegates_to_rest_module():
     thread = Thread(_THREAD_PAYLOAD)
     payload = {"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         result = run(thread.fetch_member("55"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/1/thread-members/55"
@@ -392,7 +386,7 @@ def test_thread_fetch_member_delegates_to_rest_module():
 
 def test_fetch_private_archived_threads_returns_thread_list():
     payload = {"threads": [_THREAD_PAYLOAD], "members": [], "has_more": False}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         result = run(threads.fetch_private_archived_threads("20"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/threads/archived/private"
@@ -401,7 +395,7 @@ def test_fetch_private_archived_threads_returns_thread_list():
 
 def test_fetch_joined_private_archived_threads_returns_thread_list():
     payload = {"threads": [_THREAD_PAYLOAD], "members": [], "has_more": False}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         result = run(threads.fetch_joined_private_archived_threads("20"))
 
     url = urlopen.call_args.args[0].full_url
@@ -412,7 +406,7 @@ def test_fetch_joined_private_archived_threads_returns_thread_list():
 def test_channel_fetch_private_archived_threads_delegates_to_rest_module():
     channel = Channel({"id": "20", "name": "general"})
     payload = {"threads": [_THREAD_PAYLOAD], "members": [], "has_more": False}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]):
         result = run(channel.fetch_private_archived_threads())
 
     assert result == [Thread(_THREAD_PAYLOAD)]
@@ -421,7 +415,7 @@ def test_channel_fetch_private_archived_threads_delegates_to_rest_module():
 def test_channel_fetch_joined_private_archived_threads_delegates_to_rest_module():
     channel = Channel({"id": "20", "name": "general"})
     payload = {"threads": [_THREAD_PAYLOAD], "members": [], "has_more": False}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]):
         result = run(channel.fetch_joined_private_archived_threads())
 
     assert result == [Thread(_THREAD_PAYLOAD)]
@@ -432,7 +426,7 @@ def test_channel_fetch_joined_private_archived_threads_delegates_to_rest_module(
 
 def test_fetch_active_guild_threads_returns_thread_list():
     payload = {"threads": [_THREAD_PAYLOAD], "members": []}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         result = run(threads.fetch_active_guild_threads("10"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/threads/active"
@@ -442,7 +436,7 @@ def test_fetch_active_guild_threads_returns_thread_list():
 def test_guild_fetch_active_threads_delegates_to_rest_module():
     guild = Guild({"id": "10", "name": "shiv's server"})
     payload = {"threads": [_THREAD_PAYLOAD], "members": []}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]):
         result = run(guild.fetch_active_threads())
 
     assert result == [Thread(_THREAD_PAYLOAD)]
@@ -451,7 +445,7 @@ def test_guild_fetch_active_threads_delegates_to_rest_module():
 def test_bot_fetch_active_guild_threads_delegates_to_rest_module():
     bot = Cordless()
     payload = {"threads": [_THREAD_PAYLOAD], "members": []}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]):
         result = run(bot.fetch_active_guild_threads("10"))
 
     assert result == [Thread(_THREAD_PAYLOAD)]
@@ -462,7 +456,7 @@ def test_bot_fetch_active_guild_threads_delegates_to_rest_module():
 
 def test_search_channel_threads_returns_thread_list():
     payload = {"threads": [_THREAD_PAYLOAD], "members": [], "has_more": False, "total_results": 1}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         result = run(threads.search_channel_threads("20"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/threads/search"
@@ -471,7 +465,7 @@ def test_search_channel_threads_returns_thread_list():
 
 def test_search_channel_threads_passes_scalar_query_params():
     payload = {"threads": [], "members": [], "has_more": False, "total_results": 0}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         run(threads.search_channel_threads("20", name="shiv", archived=True, limit=5))
 
     url = urlopen.call_args.args[0].full_url
@@ -482,7 +476,7 @@ def test_search_channel_threads_passes_scalar_query_params():
 
 def test_search_channel_threads_sends_archived_false_explicitly():
     payload = {"threads": [], "members": [], "has_more": False, "total_results": 0}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         run(threads.search_channel_threads("20", archived=False))
 
     assert "archived=false" in urlopen.call_args.args[0].full_url
@@ -490,7 +484,7 @@ def test_search_channel_threads_sends_archived_false_explicitly():
 
 def test_search_channel_threads_omits_archived_when_unset():
     payload = {"threads": [], "members": [], "has_more": False, "total_results": 0}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         run(threads.search_channel_threads("20"))
 
     assert "archived" not in urlopen.call_args.args[0].full_url
@@ -498,7 +492,7 @@ def test_search_channel_threads_omits_archived_when_unset():
 
 def test_search_channel_threads_repeats_tag_key_for_a_list():
     payload = {"threads": [], "members": [], "has_more": False, "total_results": 0}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         run(threads.search_channel_threads("20", tag=["1", "2"]))
 
     url = urlopen.call_args.args[0].full_url
@@ -508,7 +502,7 @@ def test_search_channel_threads_repeats_tag_key_for_a_list():
 
 def test_search_channel_threads_accepts_a_single_tag():
     payload = {"threads": [], "members": [], "has_more": False, "total_results": 0}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         run(threads.search_channel_threads("20", tag="1"))
 
     assert "tag=1" in urlopen.call_args.args[0].full_url
@@ -517,7 +511,7 @@ def test_search_channel_threads_accepts_a_single_tag():
 def test_bot_search_channel_threads_delegates_to_rest_module():
     bot = Cordless()
     payload = {"threads": [_THREAD_PAYLOAD], "members": [], "has_more": False, "total_results": 1}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]):
         assert run(bot.search_channel_threads("20")) == [Thread(_THREAD_PAYLOAD)]
 
 
@@ -526,7 +520,7 @@ def test_bot_search_channel_threads_delegates_to_rest_module():
 
 def test_bot_start_thread_without_message_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_THREAD_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_THREAD_PAYLOAD)]):
         result = run(bot.start_thread_without_message("20", "discussion"))
 
     assert isinstance(result, Thread)
@@ -534,7 +528,7 @@ def test_bot_start_thread_without_message_delegates_to_rest_module():
 
 def test_bot_join_thread_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(bot.join_thread("20"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/thread-members/@me"
@@ -542,7 +536,7 @@ def test_bot_join_thread_delegates_to_rest_module():
 
 def test_bot_leave_thread_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(bot.leave_thread("20"))
 
     req = urlopen.call_args.args[0]
@@ -552,7 +546,7 @@ def test_bot_leave_thread_delegates_to_rest_module():
 
 def test_bot_add_thread_member_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(bot.add_thread_member("20", "55"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/thread-members/55"
@@ -560,7 +554,7 @@ def test_bot_add_thread_member_delegates_to_rest_module():
 
 def test_bot_remove_thread_member_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(bot.remove_thread_member("20", "55"))
 
     req = urlopen.call_args.args[0]
@@ -571,7 +565,7 @@ def test_bot_remove_thread_member_delegates_to_rest_module():
 def test_bot_fetch_thread_member_delegates_to_rest_module():
     bot = Cordless()
     payload = {"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]):
         result = run(bot.fetch_thread_member("20", "55"))
 
     assert result == ThreadMember({"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0})
@@ -580,7 +574,7 @@ def test_bot_fetch_thread_member_delegates_to_rest_module():
 def test_bot_fetch_thread_members_delegates_to_rest_module():
     bot = Cordless()
     payload = [{"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0}]
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]):
         result = run(bot.fetch_thread_members("20"))
 
     assert result == [ThreadMember({"id": "1", "user_id": "55", "join_timestamp": "t", "flags": 0})]
@@ -589,7 +583,7 @@ def test_bot_fetch_thread_members_delegates_to_rest_module():
 def test_bot_fetch_private_archived_threads_delegates_to_rest_module():
     bot = Cordless()
     payload = {"threads": [_THREAD_PAYLOAD], "members": [], "has_more": False}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         result = run(bot.fetch_private_archived_threads("20"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/threads/archived/private"
@@ -599,7 +593,7 @@ def test_bot_fetch_private_archived_threads_delegates_to_rest_module():
 def test_bot_fetch_joined_private_archived_threads_delegates_to_rest_module():
     bot = Cordless()
     payload = {"threads": [_THREAD_PAYLOAD], "members": [], "has_more": False}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         result = run(bot.fetch_joined_private_archived_threads("20"))
 
     url = urlopen.call_args.args[0].full_url

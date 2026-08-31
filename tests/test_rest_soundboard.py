@@ -7,27 +7,21 @@ from asyncio import run
 from unittest.mock import patch
 
 import pytest
-from conftest import FakeDiscordResponse
+from conftest import BOT_ENV, FakeDiscordResponse, send_patch
 
 from cordless._rest import soundboard
 from cordless._rest.models import SoundboardSound
 from cordless.app import Cordless
 from cordless.models import Channel, Guild
 
-_ENV = {"DISCORD_BOT_TOKEN": "tok"}
-
 _SOUND_PAYLOAD = {"sound_id": "1", "name": "shiv_horn", "volume": 1.0, "guild_id": "10"}
-
-
-def _urlopen(responses):
-    return patch("cordless._rest._client._send", side_effect=responses)
 
 
 # --- _rest/soundboard.py ---
 
 
 def test_send_soundboard_sound_posts_required_and_optional_fields():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(soundboard.send_soundboard_sound("20", "1", source_guild_id="99"))
 
     req = urlopen.call_args.args[0]
@@ -36,7 +30,7 @@ def test_send_soundboard_sound_posts_required_and_optional_fields():
 
 
 def test_fetch_default_soundboard_sounds_returns_sound_list():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_SOUND_PAYLOAD])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_SOUND_PAYLOAD])]) as urlopen:
         result = run(soundboard.fetch_default_soundboard_sounds())
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/soundboard-default-sounds"
@@ -45,7 +39,7 @@ def test_fetch_default_soundboard_sounds_returns_sound_list():
 
 def test_fetch_guild_soundboard_sounds_unwraps_items_key():
     payload = {"items": [_SOUND_PAYLOAD]}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         result = run(soundboard.fetch_guild_soundboard_sounds("10"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/soundboard-sounds"
@@ -53,7 +47,7 @@ def test_fetch_guild_soundboard_sounds_unwraps_items_key():
 
 
 def test_fetch_guild_soundboard_sound_returns_single_sound():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_SOUND_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_SOUND_PAYLOAD)]) as urlopen:
         result = run(soundboard.fetch_guild_soundboard_sound("10", "1"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/soundboard-sounds/1"
@@ -61,7 +55,7 @@ def test_fetch_guild_soundboard_sound_returns_single_sound():
 
 
 def test_create_guild_soundboard_sound_sends_required_and_optional_fields():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_SOUND_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_SOUND_PAYLOAD)]) as urlopen:
         result = run(
             soundboard.create_guild_soundboard_sound("10", "shiv_horn", "data:audio/mpeg;base64,abc", volume=0.5)
         )
@@ -73,7 +67,7 @@ def test_create_guild_soundboard_sound_sends_required_and_optional_fields():
 
 
 def test_edit_guild_soundboard_sound_only_sends_fields_that_were_set():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_SOUND_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_SOUND_PAYLOAD)]) as urlopen:
         result = run(soundboard.edit_guild_soundboard_sound("10", "1", name="renamed"))
 
     assert json.loads(urlopen.call_args.args[0].data) == {"name": "renamed"}
@@ -81,7 +75,7 @@ def test_edit_guild_soundboard_sound_only_sends_fields_that_were_set():
 
 
 def test_delete_guild_soundboard_sound_deletes_sound():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(soundboard.delete_guild_soundboard_sound("10", "1"))
 
     req = urlopen.call_args.args[0]
@@ -94,33 +88,33 @@ def test_delete_guild_soundboard_sound_deletes_sound():
 
 def test_bot_send_soundboard_sound_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(bot.send_soundboard_sound("20", "1"))
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/channels/20/send-soundboard-sound"
 
 
 def test_bot_fetch_default_soundboard_sounds_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_SOUND_PAYLOAD])]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_SOUND_PAYLOAD])]):
         assert run(bot.fetch_default_soundboard_sounds()) == [SoundboardSound(_SOUND_PAYLOAD)]
 
 
 def test_bot_fetch_guild_soundboard_sounds_delegates_to_rest_module():
     bot = Cordless()
     payload = {"items": [_SOUND_PAYLOAD]}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]):
         assert run(bot.fetch_guild_soundboard_sounds("10")) == [SoundboardSound(_SOUND_PAYLOAD)]
 
 
 def test_bot_fetch_guild_soundboard_sound_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_SOUND_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_SOUND_PAYLOAD)]):
         assert isinstance(run(bot.fetch_guild_soundboard_sound("10", "1")), SoundboardSound)
 
 
 def test_bot_create_guild_soundboard_sound_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_SOUND_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_SOUND_PAYLOAD)]):
         result = run(bot.create_guild_soundboard_sound("10", "shiv_horn", "data:audio/mpeg;base64,abc"))
 
     assert isinstance(result, SoundboardSound)
@@ -128,13 +122,13 @@ def test_bot_create_guild_soundboard_sound_delegates_to_rest_module():
 
 def test_bot_edit_guild_soundboard_sound_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_SOUND_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_SOUND_PAYLOAD)]):
         assert isinstance(run(bot.edit_guild_soundboard_sound("10", "1", name="renamed")), SoundboardSound)
 
 
 def test_bot_delete_guild_soundboard_sound_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(bot.delete_guild_soundboard_sound("10", "1"))
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/soundboard-sounds/1"
 
@@ -144,7 +138,7 @@ def test_bot_delete_guild_soundboard_sound_delegates_to_rest_module():
 
 def test_channel_send_soundboard_sound_delegates_to_rest_module():
     channel = Channel({"id": "20"})
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(channel.send_soundboard_sound("1"))
 
     req = urlopen.call_args.args[0]
@@ -155,7 +149,7 @@ def test_channel_send_soundboard_sound_delegates_to_rest_module():
 def test_guild_fetch_soundboard_sounds_delegates_to_rest_module():
     guild = Guild({"id": "10"})
     payload = {"items": [_SOUND_PAYLOAD]}
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
         result = run(guild.fetch_soundboard_sounds())
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/soundboard-sounds"
@@ -164,13 +158,13 @@ def test_guild_fetch_soundboard_sounds_delegates_to_rest_module():
 
 def test_guild_fetch_soundboard_sound_delegates_to_rest_module():
     guild = Guild({"id": "10"})
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_SOUND_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_SOUND_PAYLOAD)]):
         assert isinstance(run(guild.fetch_soundboard_sound("1")), SoundboardSound)
 
 
 def test_guild_create_soundboard_sound_delegates_to_rest_module():
     guild = Guild({"id": "10"})
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_SOUND_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_SOUND_PAYLOAD)]) as urlopen:
         result = run(guild.create_soundboard_sound("shiv_horn", "data:audio/mpeg;base64,abc"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/soundboard-sounds"
@@ -182,7 +176,7 @@ def test_guild_create_soundboard_sound_delegates_to_rest_module():
 
 def test_soundboard_sound_edit_delegates_to_rest_module():
     sound = SoundboardSound(_SOUND_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_SOUND_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_SOUND_PAYLOAD)]) as urlopen:
         result = run(sound.edit(name="renamed"))
 
     req = urlopen.call_args.args[0]
@@ -193,7 +187,7 @@ def test_soundboard_sound_edit_delegates_to_rest_module():
 
 def test_soundboard_sound_delete_delegates_to_rest_module():
     sound = SoundboardSound(_SOUND_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(sound.delete())
 
     req = urlopen.call_args.args[0]

@@ -6,13 +6,11 @@ import os
 from asyncio import run
 from unittest.mock import patch
 
-from conftest import FakeDiscordResponse
+from conftest import BOT_ENV, FakeDiscordResponse, send_patch
 
 from cordless._rest import entitlements, skus, subscriptions
 from cordless._rest.models import SKU, Entitlement, Subscription
 from cordless.app import Cordless
-
-_ENV = {"DISCORD_BOT_TOKEN": "tok"}
 
 _ENTITLEMENT_PAYLOAD = {
     "id": "1",
@@ -34,15 +32,11 @@ _SUBSCRIPTION_PAYLOAD = {
 }
 
 
-def _urlopen(responses):
-    return patch("cordless._rest._client._send", side_effect=responses)
-
-
 # --- _rest/entitlements.py ---
 
 
 def test_fetch_entitlements_returns_entitlement_list():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_ENTITLEMENT_PAYLOAD])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_ENTITLEMENT_PAYLOAD])]) as urlopen:
         result = run(entitlements.fetch_entitlements("3"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/applications/3/entitlements"
@@ -50,7 +44,7 @@ def test_fetch_entitlements_returns_entitlement_list():
 
 
 def test_fetch_entitlements_passes_query_params():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([])]) as urlopen:
         run(
             entitlements.fetch_entitlements(
                 "3",
@@ -77,7 +71,7 @@ def test_fetch_entitlements_passes_query_params():
 
 
 def test_fetch_entitlements_omits_bool_params_when_unset():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([])]) as urlopen:
         run(entitlements.fetch_entitlements("3"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/applications/3/entitlements"
@@ -87,7 +81,7 @@ def test_fetch_entitlements_bool_param_alone_still_gets_a_leading_question_mark(
     """With no scalar filters set, exclude_ended is the very first (and
     only) query part - regression coverage for the old two-query-strings-
     spliced-together implementation getting the ?/& choice wrong here."""
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([])]) as urlopen:
         run(entitlements.fetch_entitlements("3", exclude_ended=True))
 
     assert urlopen.call_args.args[0].full_url == (
@@ -96,7 +90,7 @@ def test_fetch_entitlements_bool_param_alone_still_gets_a_leading_question_mark(
 
 
 def test_fetch_entitlement_returns_single_entitlement():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_ENTITLEMENT_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_ENTITLEMENT_PAYLOAD)]) as urlopen:
         result = run(entitlements.fetch_entitlement("3", "1"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/applications/3/entitlements/1"
@@ -104,7 +98,7 @@ def test_fetch_entitlement_returns_single_entitlement():
 
 
 def test_consume_entitlement_consumes_it():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(entitlements.consume_entitlement("3", "1"))
 
     req = urlopen.call_args.args[0]
@@ -113,7 +107,7 @@ def test_consume_entitlement_consumes_it():
 
 
 def test_create_test_entitlement_posts_required_fields():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_ENTITLEMENT_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_ENTITLEMENT_PAYLOAD)]) as urlopen:
         result = run(entitlements.create_test_entitlement("3", "2", "55", 2))
 
     req = urlopen.call_args.args[0]
@@ -123,7 +117,7 @@ def test_create_test_entitlement_posts_required_fields():
 
 
 def test_delete_test_entitlement_deletes_it():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(entitlements.delete_test_entitlement("3", "1"))
 
     req = urlopen.call_args.args[0]
@@ -135,7 +129,7 @@ def test_delete_test_entitlement_deletes_it():
 
 
 def test_fetch_skus_returns_sku_list():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_SKU_PAYLOAD])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_SKU_PAYLOAD])]) as urlopen:
         result = run(skus.fetch_skus("3"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/applications/3/skus"
@@ -146,7 +140,7 @@ def test_fetch_skus_returns_sku_list():
 
 
 def test_fetch_sku_subscriptions_returns_subscription_list():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_SUBSCRIPTION_PAYLOAD])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_SUBSCRIPTION_PAYLOAD])]) as urlopen:
         result = run(subscriptions.fetch_sku_subscriptions("2"))
 
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/skus/2/subscriptions"
@@ -154,7 +148,7 @@ def test_fetch_sku_subscriptions_returns_subscription_list():
 
 
 def test_fetch_sku_subscriptions_passes_query_params():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([])]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([])]) as urlopen:
         run(subscriptions.fetch_sku_subscriptions("2", limit=5, user_id="55"))
 
     url = urlopen.call_args.args[0].full_url
@@ -163,7 +157,7 @@ def test_fetch_sku_subscriptions_passes_query_params():
 
 
 def test_fetch_sku_subscription_returns_single_subscription():
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_SUBSCRIPTION_PAYLOAD)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_SUBSCRIPTION_PAYLOAD)]) as urlopen:
         result = run(subscriptions.fetch_sku_subscription("2", "4", user_id="55"))
 
     url = urlopen.call_args.args[0].full_url
@@ -176,51 +170,51 @@ def test_fetch_sku_subscription_returns_single_subscription():
 
 def test_bot_fetch_entitlements_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_ENTITLEMENT_PAYLOAD])]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_ENTITLEMENT_PAYLOAD])]):
         assert run(bot.fetch_entitlements("3")) == [Entitlement(_ENTITLEMENT_PAYLOAD)]
 
 
 def test_bot_fetch_entitlement_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_ENTITLEMENT_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_ENTITLEMENT_PAYLOAD)]):
         assert isinstance(run(bot.fetch_entitlement("3", "1")), Entitlement)
 
 
 def test_bot_consume_entitlement_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(bot.consume_entitlement("3", "1"))
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/applications/3/entitlements/1/consume"
 
 
 def test_bot_create_test_entitlement_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_ENTITLEMENT_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_ENTITLEMENT_PAYLOAD)]):
         assert isinstance(run(bot.create_test_entitlement("3", "2", "55", 2)), Entitlement)
 
 
 def test_bot_delete_test_entitlement_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(bot.delete_test_entitlement("3", "1"))
     assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/applications/3/entitlements/1"
 
 
 def test_bot_fetch_skus_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_SKU_PAYLOAD])]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_SKU_PAYLOAD])]):
         assert run(bot.fetch_skus("3")) == [SKU(_SKU_PAYLOAD)]
 
 
 def test_bot_fetch_sku_subscriptions_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse([_SUBSCRIPTION_PAYLOAD])]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse([_SUBSCRIPTION_PAYLOAD])]):
         assert run(bot.fetch_sku_subscriptions("2")) == [Subscription(_SUBSCRIPTION_PAYLOAD)]
 
 
 def test_bot_fetch_sku_subscription_delegates_to_rest_module():
     bot = Cordless()
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(_SUBSCRIPTION_PAYLOAD)]):
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_SUBSCRIPTION_PAYLOAD)]):
         assert isinstance(run(bot.fetch_sku_subscription("2", "4")), Subscription)
 
 
@@ -229,7 +223,7 @@ def test_bot_fetch_sku_subscription_delegates_to_rest_module():
 
 def test_entitlement_consume_delegates_to_rest_module():
     entitlement = Entitlement(_ENTITLEMENT_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(entitlement.consume())
 
     req = urlopen.call_args.args[0]
@@ -239,7 +233,7 @@ def test_entitlement_consume_delegates_to_rest_module():
 
 def test_entitlement_delete_delegates_to_rest_module():
     entitlement = Entitlement(_ENTITLEMENT_PAYLOAD)
-    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(None)]) as urlopen:
+    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]) as urlopen:
         run(entitlement.delete())
 
     req = urlopen.call_args.args[0]
