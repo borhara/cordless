@@ -228,6 +228,7 @@ def run(
     elif not aws_ok:
         iam_checks = [("warn", "IAM role", "skipped - AWS credentials not available")]
     else:
+        assert session is not None
         iam_checks = wait(
             "IAM",
             lambda: check_iam_role(session.client("iam"), role_name, defer_worker=defer_worker, ratelimit=ratelimit),
@@ -239,6 +240,7 @@ def run(
     elif not aws_ok:
         lambda_checks = [("warn", "Deployed function", "skipped - AWS credentials not available")]
     else:
+        assert session is not None
         from .deploy import ratelimit_table_name
 
         table_name = ratelimit_table_name(function_name) if ratelimit else None
