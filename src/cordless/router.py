@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+from typing import Literal
 
 from .errors import (
     CordlessError,
@@ -55,7 +56,7 @@ class Router:
         default_member_permissions=None,
         nsfw=False,
         guild_ids=None,
-        user_installable=False,
+        user_installable: bool | Literal["only"] = False,
         name_localizations=None,
         description_localizations=None,
         group_description=None,

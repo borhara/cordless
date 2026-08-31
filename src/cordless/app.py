@@ -4,7 +4,8 @@ import inspect
 import json
 import os
 import re
-from typing import Literal, Union, get_args, get_origin
+from types import EllipsisType
+from typing import Any, Literal, Union, get_args, get_origin
 
 from ._rest._mixin import RESTMixin
 from .context import Context
@@ -263,7 +264,7 @@ class Cordless(RESTMixin):
         nsfw=False,
         ephemeral=False,
         guild_ids=None,
-        user_installable=False,
+        user_installable: bool | Literal["only"] = False,
         name_localizations=None,
         description_localizations=None,
         group_description=None,
@@ -468,7 +469,14 @@ class Cordless(RESTMixin):
         _, body = await asyncio.get_event_loop().run_in_executor(None, _webhook.get_webhook, webhook_id, webhook_token)
         return Webhook(json.loads(body))
 
-    async def edit_webhook_with_token(self, webhook_id, webhook_token=None, *, name=..., avatar=...):
+    async def edit_webhook_with_token(
+        self,
+        webhook_id,
+        webhook_token=None,
+        *,
+        name: str | EllipsisType = ...,
+        avatar: str | None | EllipsisType = ...,
+    ):
         """Rename a webhook or change its avatar using its own token rather
         than DISCORD_BOT_TOKEN. Unlike `edit_webhook`, this can't move it to
         a different channel. avatar can be cleared by passing None."""
@@ -667,7 +675,7 @@ class Cordless(RESTMixin):
         default_member_permissions=None,
         nsfw=False,
         guild_ids=None,
-        user_installable=False,
+        user_installable: bool | Literal["only"] = False,
         name_localizations=None,
     ):
         """Register a User context menu command (right-click → Apps → name).
@@ -701,7 +709,7 @@ class Cordless(RESTMixin):
         default_member_permissions=None,
         nsfw=False,
         guild_ids=None,
-        user_installable=False,
+        user_installable: bool | Literal["only"] = False,
         name_localizations=None,
     ):
         """Register a Message context menu command (right-click message → Apps → name).
@@ -787,7 +795,7 @@ class Cordless(RESTMixin):
 
         return decorator
 
-    def handle(self, event, context=None):
+    def handle(self, event, context=None) -> dict[str, Any] | None:
         """Process one raw Lambda event dict: verifies the signature and
         dispatches it to the right registered handler. Most bots use
         `handler()` instead, which wraps this plus keep-warm pings and
