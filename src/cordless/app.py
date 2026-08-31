@@ -744,8 +744,8 @@ class Cordless(RESTMixin):
         Discord interaction flow.
 
         Use it for requests that must reach this function without Discord
-        signature verification: third-party webhooks (Stripe, GitHub),
-        OAuth redirect callbacks, health checks. The handler is called as
+        signature verification: incoming webhooks from other services, OAuth
+        redirect callbacks, health checks. The handler is called as
         `handler(event, bot)` with the raw Lambda event and this instance,
         so it can reuse `send_message`, `execute_webhook`, and the rest.
 

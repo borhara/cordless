@@ -32,7 +32,7 @@ The current feature surface, for orientation:
 - `cordless dev`: local hot-reload server with an optional cloudflared
   public tunnel
 - `bot.route(method, path)`: raw HTTP handlers on the same Lambda, outside
-  the Discord interaction flow, for third-party webhooks (Stripe, GitHub),
+  the Discord interaction flow, for incoming webhooks from other services,
   OAuth redirect callbacks, and health checks. The handler gets the raw
   event and the `bot` instance, so it can reuse `send_message`,
   `execute_webhook`, and the rest. Paths take `{name}` segments. Works on
