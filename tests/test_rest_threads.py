@@ -480,6 +480,22 @@ def test_search_channel_threads_passes_scalar_query_params():
     assert "limit=5" in url
 
 
+def test_search_channel_threads_sends_archived_false_explicitly():
+    payload = {"threads": [], "members": [], "has_more": False, "total_results": 0}
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+        run(threads.search_channel_threads("20", archived=False))
+
+    assert "archived=false" in urlopen.call_args.args[0].full_url
+
+
+def test_search_channel_threads_omits_archived_when_unset():
+    payload = {"threads": [], "members": [], "has_more": False, "total_results": 0}
+    with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:
+        run(threads.search_channel_threads("20"))
+
+    assert "archived" not in urlopen.call_args.args[0].full_url
+
+
 def test_search_channel_threads_repeats_tag_key_for_a_list():
     payload = {"threads": [], "members": [], "has_more": False, "total_results": 0}
     with patch.dict(os.environ, _ENV), _urlopen([FakeDiscordResponse(payload)]) as urlopen:

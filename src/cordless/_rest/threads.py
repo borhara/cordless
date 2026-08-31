@@ -150,20 +150,25 @@ async def search_channel_threads(
     offset=None,
     token=None,
 ):
-    """Forum/media channels only. tag takes a single tag id or a list of up
-    to 20, matching Discord's repeated-key array query param shape."""
+    """Forum/media channels only. archived filters the result: None leaves it
+    to the endpoint, False returns active threads only, True archived only.
+    tag takes a single tag id or a list of up to 20, matching Discord's
+    repeated-key array query param shape."""
     parts = _client.query_parts(
         name=name,
         slop=slop,
         min_id=min_id,
         max_id=max_id,
         tag_setting=tag_setting,
-        archived=archived,
         sort_by=sort_by,
         sort_order=sort_order,
         limit=limit,
         offset=offset,
     )
+    # archived is a real filter, not a flag: False means "active only", so it
+    # has to be sent, unlike query_parts which drops any False.
+    if archived is not None:
+        parts.append(f"archived={'true' if archived else 'false'}")
     if tag is not None:
         parts += [f"tag={t}" for t in (tag if isinstance(tag, (list, tuple)) else [tag])]
     qs = _client.join_query_parts(parts)
