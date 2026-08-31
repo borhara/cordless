@@ -130,7 +130,8 @@ def _explain_form_errors(body, commands):
                 elif not trail:
                     walk(child, item, [f"command {item['name']!r}"])
                 else:
-                    label = {1: "subcommand", 2: "group"}.get(item.get("type"), "option")
+                    labels: dict[object, str] = {1: "subcommand", 2: "group"}
+                    label = labels.get(item.get("type"), "option")
                     walk(child, item, trail + [f"{label} {item['name']!r}"])
             elif key in ("options", "choices") and isinstance(defn, dict):
                 walk(child, defn.get(key), trail)
