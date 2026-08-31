@@ -31,6 +31,13 @@ The current feature surface, for orientation:
 - File uploads / multipart attachments
 - `cordless dev`: local hot-reload server with an optional cloudflared
   public tunnel
+- `bot.route(method, path)`: raw HTTP handlers on the same Lambda, outside
+  the Discord interaction flow, for third-party webhooks (Stripe, GitHub),
+  OAuth redirect callbacks, and health checks. The handler gets the raw
+  event and the `bot` instance, so it can reuse `send_message`,
+  `execute_webhook`, and the rest. Paths take `{name}` segments. Requires
+  `endpoint = "api_gateway"`; `cordless deploy` diffs the routes onto the
+  API the same way it diffs Discord commands
 - `cordless deploy`: Function URL or API Gateway (custom domain), IAM role,
   command registration, all in one command; `cordless destroy` to tear down
 - Environment-specific config (`--environment`/`--env`, overlay `.env` files)
@@ -70,16 +77,6 @@ N/A
   to live in their own IaC instead of being managed imperatively by the CLI.
 - Starter templates (`cordless init --template moderation`, `--template
   economy`, ...).
-- `bot.route(method, path)`: register raw HTTP routes on the same Lambda,
-  outside the Discord interaction flow, with the handler getting the raw
-  event and the `bot` instance (so it can reuse `send_message`,
-  `execute_webhook`, etc.). For anything that needs to land on the same
-  function without going through Discord signature verification: third-party
-  webhooks (Stripe, GitHub, ...), OAuth redirect callbacks, health checks.
-  Only viable under `endpoint = "api_gateway"`, since Function URLs are
-  single-path; `deploy` would need to diff/sync these routes the same way it
-  already diffs/syncs Discord commands, rather than requiring a hand-rolled
-  boto3 script like today.
 
 ## Non-goals (for now)
 
