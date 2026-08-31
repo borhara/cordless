@@ -401,6 +401,10 @@ def _list_all_layer_versions(lam, layer_name):
     return paginator.paginate(LayerName=layer_name).build_full_result()["LayerVersions"]
 
 
+def _list_all_routes(apigw, api_id):
+    return apigw.get_paginator("get_routes").paginate(ApiId=api_id).build_full_result()["Items"]
+
+
 def _list_all_rules(events, prefix):
     return events.get_paginator("list_rules").paginate(NamePrefix=prefix).build_full_result()["Rules"]
 
@@ -490,7 +494,21 @@ def _update_function(
     lam.get_waiter("function_updated").wait(FunctionName=function_name)
 
 
-def _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id):
+def _ensure_integration(apigw, api_id, function_arn):
+    """Return the id of this API's AWS_PROXY integration to the function,
+    creating it if absent. Every route shares the one integration."""
+    for integration in apigw.get_integrations(ApiId=api_id).get("Items", []):
+        if integration.get("IntegrationUri") == function_arn:
+            return integration["IntegrationId"]
+    return apigw.create_integration(
+        ApiId=api_id,
+        IntegrationType="AWS_PROXY",
+        IntegrationUri=function_arn,
+        PayloadFormatVersion="2.0",
+    )["IntegrationId"]
+
+
+def _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id, routes=None):
     api_name = f"{function_name}-api"
 
     # Reuse existing API if one with this name exists
@@ -504,21 +522,19 @@ def _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account
         api = apigw.create_api(Name=api_name, ProtocolType="HTTP")
         api_id = api["ApiId"]
         endpoint = api["ApiEndpoint"]
-
-        integration = apigw.create_integration(
-            ApiId=api_id,
-            IntegrationType="AWS_PROXY",
-            IntegrationUri=function_arn,
-            PayloadFormatVersion="2.0",
-        )
-
-        apigw.create_route(
-            ApiId=api_id,
-            RouteKey="POST /",
-            Target=f"integrations/{integration['IntegrationId']}",
-        )
-
         apigw.create_stage(ApiId=api_id, StageName="$default", AutoDeploy=True)
+
+    integration_id = _ensure_integration(apigw, api_id, function_arn)
+    target = f"integrations/{integration_id}"
+
+    # POST / is Discord's interaction endpoint; the rest come from @bot.route.
+    # Sync them like slash commands: create the missing, drop the stale.
+    wanted = {"POST /"} | {f"{method} {path}" for method, path in (routes or [])}
+    present = {r["RouteKey"]: r["RouteId"] for r in _list_all_routes(apigw, api_id)}
+    for key in wanted - set(present):
+        apigw.create_route(ApiId=api_id, RouteKey=key, Target=target)
+    for key in set(present) - wanted:
+        apigw.delete_route(ApiId=api_id, RouteId=present[key])
 
     # Always refresh the Lambda invoke permission for this API
     source_arn = f"arn:aws:execute-api:{region}:{account_id}:{api_id}/*/*"
@@ -688,6 +704,7 @@ def deploy(
     endpoint=None,
     keep_warm=None,
     log_retention_days=_DEFAULT_LOG_RETENTION_DAYS,
+    routes=None,
 ):
     if not function_name:
         raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
@@ -720,8 +737,15 @@ def deploy(
             endpoint = "function_url"
         elif _has_api_gateway(apigw, function_name):
             endpoint = "api_gateway"
+        elif routes:
+            endpoint = "api_gateway"
         else:
             endpoint = "function_url"
+
+    if routes and endpoint == "function_url":
+        raise SystemExit(
+            'bot.route() needs endpoint = "api_gateway" in cordless.toml; a Function URL serves a single path'
+        )
 
     print()
 
@@ -791,7 +815,7 @@ def deploy(
                 url = _ensure_function_url(lam, function_name)
         else:
             with Spinner("API Gateway"):
-                url = _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id)
+                url = _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id, routes=routes)
 
         if defer_worker:
             w_exists, worker_arn = _function_exists(lam, defer_worker)
@@ -862,6 +886,7 @@ def deploy(
         keep_warm,
         ratelimit,
         table_name,
+        routes,
     )
 
     missing_packages = scan_missing_packages(source_dir, packages)
@@ -905,6 +930,7 @@ def _health_check(
     keep_warm,
     ratelimit,
     table_name,
+    routes=None,
 ):
     """Describe-only post-deploy checks - no invocations, no AWS cost. Confirms
     the pieces deploy() just wired are actually present and in the expected
@@ -945,8 +971,14 @@ def _health_check(
     else:
         try:
             api_name = f"{function_name}-api"
-            exists = any(a["Name"] == api_name for a in _list_all_apis(apigw))
-            checks.append((exists, "API Gateway", "present" if exists else "not found"))
+            api = next((a for a in _list_all_apis(apigw) if a["Name"] == api_name), None)
+            checks.append((api is not None, "API Gateway", "present" if api else "not found"))
+            if api is not None and routes:
+                have = {r["RouteKey"] for r in _list_all_routes(apigw, api["ApiId"])}
+                want = {"POST /"} | {f"{method} {path}" for method, path in routes}
+                missing = want - have
+                detail = "all present" if not missing else f"missing: {', '.join(sorted(missing))}"
+                checks.append((not missing, "API routes", detail))
         except Exception as exc:
             checks.append((False, "API Gateway", f"could not verify ({exc})"))
 
