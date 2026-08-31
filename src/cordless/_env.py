@@ -1,3 +1,4 @@
+# pyright: strict
 """Shared .env parsing/loading, with optional per-environment overlay files."""
 
 import os
@@ -5,13 +6,13 @@ import os
 ENV_VAR = "ENV"
 
 
-def resolve_environment(explicit=None):
+def resolve_environment(explicit: str | None = None) -> str | None:
     """CLI flag wins over $ENV; neither means no overlay file."""
     return explicit or os.environ.get(ENV_VAR)
 
 
-def _parse_env_file(path):
-    result = {}
+def _parse_env_file(path: str) -> dict[str, str]:
+    result: dict[str, str] = {}
     if not os.path.exists(path):
         return result
     with open(path) as f:
@@ -24,7 +25,7 @@ def _parse_env_file(path):
     return result
 
 
-def read_dotenv(source_dir, environment=None):
+def read_dotenv(source_dir: str, environment: str | None = None) -> dict[str, str]:
     """Return .env merged with .env.<environment>, the latter taking priority. Missing files are skipped."""
     result = _parse_env_file(os.path.join(source_dir, ".env"))
     if environment:
@@ -32,7 +33,7 @@ def read_dotenv(source_dir, environment=None):
     return result
 
 
-def load_dotenv(source_dir, environment=None):
+def load_dotenv(source_dir: str, environment: str | None = None) -> None:
     """Load .env (+ .env.<environment> override) into the process environment (no clobber)."""
     for key, value in read_dotenv(source_dir, environment).items():
         os.environ.setdefault(key, value)
