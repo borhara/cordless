@@ -263,6 +263,19 @@ def test_run_reports_undeployed_function_as_warn_not_fail():
     assert ok is False
 
 
+def test_run_threads_routes_into_deployed_function_check():
+    with mock_aws(), patch("cordless.doctor.check_deployed_function", return_value=[]) as cdf:
+        run(
+            function_name="my-fn",
+            role_name=None,
+            region=REGION,
+            local_env={"DISCORD_PUBLIC_KEY": "a" * 64},
+            routes=[("GET", "/healthz")],
+        )
+
+    assert cdf.call_args.args[-1] == [("GET", "/healthz")]
+
+
 def test_run_ok_false_when_public_key_missing():
     with mock_aws():
         sections, ok = run(function_name=None, role_name=None, region=REGION, local_env={})

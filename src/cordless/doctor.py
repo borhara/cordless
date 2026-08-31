@@ -144,7 +144,18 @@ def check_env_drift(lam, function_name, local_env):
 
 
 def check_deployed_function(
-    lam, apigw, events, dynamodb, function_name, defer_worker, crons, keep_warm, ratelimit, table_name, local_env
+    lam,
+    apigw,
+    events,
+    dynamodb,
+    function_name,
+    defer_worker,
+    crons,
+    keep_warm,
+    ratelimit,
+    table_name,
+    local_env,
+    routes=None,
 ):
     from .deploy import _function_exists, _has_api_gateway, _has_function_url, _health_check
 
@@ -160,7 +171,18 @@ def check_deployed_function(
         endpoint = "function_url"
 
     health = _health_check(
-        lam, apigw, events, dynamodb, function_name, defer_worker, endpoint, crons, keep_warm, ratelimit, table_name
+        lam,
+        apigw,
+        events,
+        dynamodb,
+        function_name,
+        defer_worker,
+        endpoint,
+        crons,
+        keep_warm,
+        ratelimit,
+        table_name,
+        routes,
     )
     checks = [("ok" if ok else "fail", label, detail) for ok, label, detail in health]
     checks.extend(check_env_drift(lam, function_name, local_env))
@@ -176,6 +198,7 @@ def run(
     keep_warm=None,
     ratelimit=False,
     local_env=None,
+    routes=None,
     on_section=None,
 ):
     """Run every diagnostic check, one section at a time. Returns (sections, ok):
@@ -233,6 +256,7 @@ def run(
                 ratelimit,
                 table_name,
                 local_env,
+                routes,
             ),
         )
     _emit("Lambda", lambda_checks)
