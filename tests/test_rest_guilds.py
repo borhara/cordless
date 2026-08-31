@@ -18,7 +18,6 @@ from cordless._rest.models import (
     IncidentsData,
     Integration,
     Invite,
-    NewMemberWelcome,
     VoiceRegion,
     WelcomeScreen,
 )
@@ -302,20 +301,6 @@ def test_edit_guild_incident_actions_puts_fields():
     assert isinstance(result, IncidentsData)
 
 
-def test_fetch_guild_new_member_welcome_returns_welcome():
-    payload = {"guild_id": "10", "enabled": True, "new_member_actions": [], "resource_channels": []}
-    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
-        result = run(guilds.fetch_guild_new_member_welcome("10"))
-
-    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/new-member-welcome"
-    assert isinstance(result, NewMemberWelcome)
-
-
-def test_fetch_guild_new_member_welcome_returns_none_when_not_configured():
-    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(None)]):
-        assert run(guilds.fetch_guild_new_member_welcome("10")) is None
-
-
 # --- bot.<verb>() delegation (every mixin method) ---
 
 
@@ -458,13 +443,6 @@ def test_bot_edit_guild_incident_actions_delegates_to_rest_module():
     bot = Cordless()
     with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_INCIDENTS_PAYLOAD)]):
         assert isinstance(run(bot.edit_guild_incident_actions("10")), IncidentsData)
-
-
-def test_bot_fetch_guild_new_member_welcome_delegates_to_rest_module():
-    bot = Cordless()
-    payload = {"guild_id": "10", "enabled": True, "new_member_actions": [], "resource_channels": []}
-    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]):
-        assert isinstance(run(bot.fetch_guild_new_member_welcome("10")), NewMemberWelcome)
 
 
 # --- guild.*() object-method delegation (every new method) ---
@@ -622,25 +600,3 @@ def test_guild_edit_incident_actions_delegates_to_rest_module():
     guild = Guild({"id": "10"})
     with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_INCIDENTS_PAYLOAD)]):
         assert isinstance(run(guild.edit_incident_actions()), IncidentsData)
-
-
-def test_guild_fetch_new_member_welcome_delegates_to_rest_module():
-    guild = Guild({"id": "10"})
-    payload = {"guild_id": "10", "enabled": True, "new_member_actions": [], "resource_channels": []}
-    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
-        result = run(guild.fetch_new_member_welcome())
-
-    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/new-member-welcome"
-    assert isinstance(result, NewMemberWelcome)
-
-
-def test_guild_fetch_join_requests_delegates_to_rest_module():
-    from cordless._rest.models import GuildJoinRequest
-
-    guild = Guild({"id": "10"})
-    payload = {"total": 1, "guild_join_requests": [{"id": "1", "guild_id": "10", "user_id": "55"}]}
-    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(payload)]) as urlopen:
-        result = run(guild.fetch_join_requests())
-
-    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/guilds/10/requests"
-    assert result == [GuildJoinRequest({"id": "1", "guild_id": "10", "user_id": "55"})]

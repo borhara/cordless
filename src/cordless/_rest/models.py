@@ -174,35 +174,6 @@ class GuildOnboarding(DiscordObject):
     `.guild_id`, `.prompts`, `.default_channel_ids`, `.enabled`, `.mode`."""
 
 
-class NewMemberWelcome(DiscordObject):
-    """From `guild.fetch_new_member_welcome()`. `.guild_id`, `.enabled`,
-    `.welcome_message`, `.new_member_actions`, `.resource_channels`."""
-
-
-class GuildJoinRequest(DiscordObject):
-    """A pending membership screening application, from
-    `guild.fetch_join_requests()`. `.id`, `.guild_id`, `.user_id`,
-    `.application_status`, `.form_responses`."""
-
-    @property
-    def user(self):
-        """The applicant's `User`, or `None` if not included."""
-        user_data = self._data.get("user")
-        return User(user_data) if user_data is not None else None
-
-    async def approve(self, **kwargs):
-        """Approve this join request. Returns the updated
-        `GuildJoinRequest`. Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
-        return await guild_requests.edit_guild_join_request(self.guild_id, self.id, "APPROVED", **kwargs)
-
-    async def reject(self, *, rejection_reason=None, **kwargs):
-        """Reject this join request. Returns the updated `GuildJoinRequest`.
-        Requires `DISCORD_BOT_TOKEN` and `MANAGE_GUILD`."""
-        return await guild_requests.edit_guild_join_request(
-            self.guild_id, self.id, "REJECTED", rejection_reason=rejection_reason, **kwargs
-        )
-
-
 class IncidentsData(DiscordObject):
     """From `guild.edit_incident_actions()`. `.invites_disabled_until`,
     `.dms_disabled_until`, `.dm_spam_detected_at`, `.raid_detected_at`."""
@@ -571,14 +542,6 @@ class Application(DiscordObject):
         return await application.edit_current_application(**kwargs)
 
 
-class PublicApplication(DiscordObject):
-    """Another application's public info, from `bot.fetch_application_by_id()`.
-    `.id`, `.name`, `.icon`, `.description`, `.bot_public`, `.owner`,
-    `.approximate_guild_count`, and any other field Discord sends. No
-    `.edit()` here - unlike `Application`, this isn't necessarily the bot's
-    own application."""
-
-
 class ApplicationRoleConnectionMetadata(DiscordObject):
     """One Linked Roles metadata record, from
     `bot.fetch_application_role_connection_metadata()`. `.type`, `.key`,
@@ -633,7 +596,6 @@ from . import (
     auto_moderation,
     emojis,
     entitlements,
-    guild_requests,
     invites,
     scheduled_events,
     soundboard,

@@ -9,7 +9,7 @@ from unittest.mock import patch
 from conftest import BOT_ENV, FakeDiscordResponse, send_patch
 
 from cordless._rest import application
-from cordless._rest.models import Application, ApplicationRoleConnectionMetadata, PublicApplication
+from cordless._rest.models import Application, ApplicationRoleConnectionMetadata
 from cordless.app import Cordless
 
 _APPLICATION_PAYLOAD = {"id": "3", "name": "shiv's bot", "bot_public": True, "flags": 0}
@@ -36,14 +36,6 @@ def test_edit_current_application_only_sends_fields_that_were_set():
     assert req.get_method() == "PATCH"
     assert json.loads(req.data) == {"description": "a shiv original", "tags": ["fun", "utility"]}
     assert isinstance(result, Application)
-
-
-def test_fetch_application_returns_public_application():
-    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_APPLICATION_PAYLOAD)]) as urlopen:
-        result = run(application.fetch_application("3"))
-
-    assert urlopen.call_args.args[0].full_url == "https://discord.com/api/v10/applications/3"
-    assert isinstance(result, PublicApplication)
 
 
 def test_fetch_application_role_connection_metadata_returns_records():
@@ -83,12 +75,6 @@ def test_bot_edit_application_delegates_to_rest_module():
     bot = Cordless()
     with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_APPLICATION_PAYLOAD)]):
         assert isinstance(run(bot.edit_application(description="a shiv original")), Application)
-
-
-def test_bot_fetch_application_by_id_delegates_to_rest_module():
-    bot = Cordless()
-    with patch.dict(os.environ, BOT_ENV), send_patch([FakeDiscordResponse(_APPLICATION_PAYLOAD)]):
-        assert isinstance(run(bot.fetch_application_by_id("3")), PublicApplication)
 
 
 def test_bot_fetch_application_role_connection_metadata_delegates_to_rest_module():

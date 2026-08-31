@@ -22,7 +22,6 @@ from . import (
     channels,
     emojis,
     entitlements,
-    guild_requests,
     guilds,
     invites,
     members,
@@ -56,9 +55,6 @@ class RESTMixin:
     # -- application --
     fetch_application = _delegate(application.fetch_current_application)
     edit_application = _delegate(application.edit_current_application)
-    # fetch_application above is the bot's own application, matching
-    # fetch_current_user's bare name. This one looks up any application by id.
-    fetch_application_by_id = _delegate(application.fetch_application)
     fetch_application_role_connection_metadata = _delegate(application.fetch_application_role_connection_metadata)
     edit_application_role_connection_metadata = _delegate(application.edit_application_role_connection_metadata)
 
@@ -235,12 +231,6 @@ class RESTMixin:
     fetch_guild_onboarding = _delegate(guilds.fetch_guild_onboarding)
     edit_guild_onboarding = _delegate(guilds.edit_guild_onboarding)
     edit_guild_incident_actions = _delegate(guilds.edit_guild_incident_actions)
-    fetch_guild_new_member_welcome = _delegate(guilds.fetch_guild_new_member_welcome)
-
-    # -- guild join requests --
-    fetch_guild_join_requests = _delegate(guild_requests.fetch_guild_join_requests)
-    edit_guild_join_request = _delegate(guild_requests.edit_guild_join_request)
-
     # -- channels --
     fetch_channel = _delegate(channels.fetch_channel)
     edit_channel = _delegate(channels.edit_channel)

@@ -103,4 +103,3 @@ async def fetch_guild_scheduled_event_users(
     qs = _client.query_string(limit=limit, with_member=with_member, before=before, after=after)
     data = await _client.request_json("GET", f"/guilds/{guild_id}/scheduled-events/{event_id}/users{qs}", token=token)
     return [GuildScheduledEventUser(_with_guild_id(u, guild_id)) for u in data]
-

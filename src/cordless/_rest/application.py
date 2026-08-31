@@ -1,16 +1,14 @@
 """Application REST endpoints (Discord API v10).
 
-fetch_current_application/edit_current_application are keyed on @me -
-Discord resolves that to whichever application owns the bot token making
-the request, so unlike almost every other resource here there is no id
-parameter to pass in. fetch_application is the odd one out: it looks up any
-application by id, not just the bot's own, but still needs a bot token like
-everything else in this package.
+fetch_current_application/edit_current_application are keyed on @me: Discord
+resolves that to whichever application owns the bot token making the request,
+so unlike almost every other resource here there is no id parameter to pass
+in.
 """
 
 from . import _client
 from ._client import UNSET
-from .models import Application, ApplicationRoleConnectionMetadata, PublicApplication
+from .models import Application, ApplicationRoleConnectionMetadata
 
 
 async def fetch_current_application(*, token=None):
@@ -18,12 +16,6 @@ async def fetch_current_application(*, token=None):
     developer portal."""
     data = await _client.request("GET", "/applications/@me", token=token)
     return Application(data)
-
-
-async def fetch_application(application_id, *, token=None):
-    """Look up any application's public info by id, not just the bot's own."""
-    data = await _client.request("GET", f"/applications/{application_id}", token=token)
-    return PublicApplication(data)
 
 
 async def fetch_application_role_connection_metadata(application_id, *, token=None):

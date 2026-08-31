@@ -29,7 +29,6 @@ from .models import (
     IncidentsData,
     Integration,
     Invite,
-    NewMemberWelcome,
     VoiceRegion,
     WelcomeScreen,
 )
@@ -262,10 +261,3 @@ async def edit_guild_incident_actions(guild_id, *, invites_disabled_until=UNSET,
     payload = _client.payload(invites_disabled_until=invites_disabled_until, dms_disabled_until=dms_disabled_until)
     data = await _client.request("PUT", f"/guilds/{guild_id}/incident-actions", payload, token=token)
     return IncidentsData(data)
-
-
-async def fetch_guild_new_member_welcome(guild_id, *, token=None):
-    """Returns None if the guild has no new member welcome configured -
-    Discord answers with an empty 204 rather than a 404 in that case."""
-    data = await _client.request("GET", f"/guilds/{guild_id}/new-member-welcome", token=token)
-    return NewMemberWelcome(data) if data is not None else None
