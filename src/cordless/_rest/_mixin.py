@@ -127,13 +127,6 @@ class RESTMixin:
     edit_guild_scheduled_event = _delegate(scheduled_events.edit_guild_scheduled_event)
     delete_guild_scheduled_event = _delegate(scheduled_events.delete_guild_scheduled_event)
     fetch_guild_scheduled_event_users = _delegate(scheduled_events.fetch_guild_scheduled_event_users)
-    fetch_guild_scheduled_event_user_counts = _delegate(scheduled_events.fetch_guild_scheduled_event_user_counts)
-    create_guild_scheduled_event_exception = _delegate(scheduled_events.create_guild_scheduled_event_exception)
-    edit_guild_scheduled_event_exception = _delegate(scheduled_events.edit_guild_scheduled_event_exception)
-    delete_guild_scheduled_event_exception = _delegate(scheduled_events.delete_guild_scheduled_event_exception)
-    fetch_guild_scheduled_event_exception_users = _delegate(
-        scheduled_events.fetch_guild_scheduled_event_exception_users
-    )
 
     # -- emojis --
     fetch_guild_emojis = _delegate(emojis.fetch_guild_emojis)
