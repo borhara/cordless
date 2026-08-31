@@ -129,8 +129,8 @@ def test_channel_select_default_values():
 
 
 def test_text_input():
-    d = TextInput("name_input", "Your name", style=TextInputStyle.SHORT, placeholder="e.g. Alice").to_dict()
-    assert d == {"type": 4, "custom_id": "name_input", "label": "Your name", "style": 1, "placeholder": "e.g. Alice"}
+    d = TextInput("name_input", "Your name", style=TextInputStyle.SHORT, placeholder="e.g. shiv").to_dict()
+    assert d == {"type": 4, "custom_id": "name_input", "label": "Your name", "style": 1, "placeholder": "e.g. shiv"}
 
 
 def test_modal_wraps_text_inputs_in_action_rows():

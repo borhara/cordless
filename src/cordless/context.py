@@ -2,7 +2,15 @@ import base64
 import json
 
 from ._multipart import build_multipart_body
-from .errors import MessageTooLongError
+from ._payload import (
+    _FLAG_EPHEMERAL,
+    _FLAG_UI_KIT,
+    _attach_files,
+    _contains_uikit,
+    _validate_content_length,
+    _validate_uikit,
+    _with_guild_id,
+)
 from .models import Attachment, Channel, Guild, Member, Message, Role, User, _wrap
 
 _CHANNEL_MESSAGE_WITH_SOURCE = 4
@@ -11,75 +19,6 @@ _DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE = 5
 _DEFERRED_UPDATE_MESSAGE = 6
 _AUTOCOMPLETE_RESULT = 8
 _MODAL = 9
-
-_FLAG_EPHEMERAL = 64
-_FLAG_UI_KIT = 32768
-
-_MAX_CONTENT_LENGTH = 2000
-_MAX_UIKIT_COMPONENTS = 40
-_MAX_UIKIT_TEXT_LENGTH = 4000
-
-
-# Components v2 types: Section, TextDisplay, Thumbnail, MediaGallery, File, Separator, Container
-_UI_KIT_TYPES = {9, 10, 11, 12, 13, 14, 17}
-
-
-def _contains_uikit(components):
-    if not components:
-        return False
-    for c in components:
-        if getattr(c, "is_ui_kit", False):
-            return True
-        if isinstance(c, dict):
-            if c.get("type") in _UI_KIT_TYPES:
-                return True
-            if _contains_uikit(c.get("components")):
-                return True
-        # recurse into ActionRow children
-        elif hasattr(c, "components"):
-            if _contains_uikit(c.components):
-                return True
-    return False
-
-
-def _count_components(components):
-    """Discord counts every component in the tree toward the 40-component
-    cap, including ones nested inside a Container/Section/ActionRow and a
-    Section's accessory."""
-    if not components:
-        return 0
-    total = 0
-    for c in components:
-        total += 1
-        if isinstance(c, dict):
-            total += _count_components(c.get("components"))
-            if c.get("accessory") is not None:
-                total += 1
-        else:
-            if hasattr(c, "components"):
-                total += _count_components(c.components)
-            if getattr(c, "accessory", None) is not None:
-                total += 1
-    return total
-
-
-def _uikit_text_length(components):
-    """Sum of every TextDisplay's content, which Discord caps at 4000
-    characters total across the whole message."""
-    if not components:
-        return 0
-    total = 0
-    for c in components:
-        if isinstance(c, dict):
-            if c.get("type") == 10:
-                total += len(c.get("content") or "")
-            total += _uikit_text_length(c.get("components"))
-        else:
-            if hasattr(c, "content") and not hasattr(c, "components"):
-                total += len(c.content or "")
-            if hasattr(c, "components"):
-                total += _uikit_text_length(c.components)
-    return total
 
 
 def _leaf_options(data):
@@ -90,36 +29,11 @@ def _leaf_options(data):
     return options
 
 
-def _validate_content_length(content):
-    """Discord rejects the interaction response/followup outright when
-    content is too long, but that rejection happens on Discord's end after
-    we've already returned 200 to API Gateway, so we check upfront instead
-    of failing invisibly."""
-    if content is not None and len(content) > _MAX_CONTENT_LENGTH:
-        raise MessageTooLongError(
-            f"Message content is {len(content)} characters, which exceeds Discord's {_MAX_CONTENT_LENGTH}-character limit"
-        )
-
-
 def _build_message_data(msg, content, embeds, components, ephemeral=False, allowed_mentions=None):
     _content = content if content is not None else msg
     is_uikit = _contains_uikit(components)
     if is_uikit:
-        if _content is not None or embeds is not None:
-            raise ValueError(
-                "Components v2 messages can't also set content or embeds, use TextDisplay/Container instead"
-            )
-        count = _count_components(components)
-        if count > _MAX_UIKIT_COMPONENTS:
-            raise ValueError(
-                f"Message has {count} components, which exceeds Discord's {_MAX_UIKIT_COMPONENTS}-component limit"
-            )
-        text_length = _uikit_text_length(components)
-        if text_length > _MAX_UIKIT_TEXT_LENGTH:
-            raise MessageTooLongError(
-                f"Components v2 text totals {text_length} characters, which exceeds "
-                f"Discord's {_MAX_UIKIT_TEXT_LENGTH}-character limit"
-            )
+        _validate_uikit(_content, embeds, components)
     else:
         _validate_content_length(_content)
 
@@ -143,12 +57,7 @@ def _build_message_data(msg, content, embeds, components, ephemeral=False, allow
     return data
 
 
-def _attach_files(data, files):
-    """Add the attachments metadata array Discord expects alongside a multipart body."""
-    data["attachments"] = [{"id": i, "filename": name} for i, (name, _) in enumerate(files)]
-
-
-def _wrap_members(members, users):
+def _wrap_members(members, users, guild_id):
     """Discord's resolved.members entries omit the nested `user` object
     that's normally embedded on a member payload - it lives separately in
     resolved.users instead. Stitch it back in so `.user` works on a
@@ -158,7 +67,7 @@ def _wrap_members(members, users):
         user_data = users.get(member_id)
         if user_data is not None and "user" not in member_data:
             member_data = {**member_data, "user": user_data}
-        result[member_id] = Member(member_data)
+        result[member_id] = Member(_with_guild_id(member_data, guild_id))
     return result
 
 
@@ -210,13 +119,14 @@ class Context:
         # Suffix segments when a handler matched by prefix, e.g. "shop:item1" → ["item1"]
         self.custom_id_args = []
         self.options = {opt["name"]: opt["value"] for opt in _leaf_options(data) if "value" in opt}
+        guild_id = interaction.get("guild_id")
         self.user = _wrap(User, (interaction.get("member") or {}).get("user") or interaction.get("user"))
-        self.member = _wrap(Member, interaction.get("member"))
+        self.member = _wrap(Member, _with_guild_id(interaction.get("member"), guild_id))
         self.message = _wrap(Message, interaction.get("message"))
         self.channel = _wrap(Channel, interaction.get("channel"))
         self.guild = _wrap(Guild, interaction.get("guild"))
         self.locale = interaction.get("locale")
-        self.guild_id = interaction.get("guild_id")
+        self.guild_id = guild_id
         self.channel_id = interaction.get("channel_id")
         self.interaction_id = interaction.get("id")
         self.token = interaction.get("token")
@@ -244,7 +154,7 @@ class Context:
         # (data.target_id, or ctx.values for selects).
         resolved = data.get("resolved", {})
         resolved_users = resolved.get("users", {})
-        resolved_members = _wrap_members(resolved.get("members", {}), resolved_users)
+        resolved_members = _wrap_members(resolved.get("members", {}), resolved_users, guild_id)
 
         # Attachment options (type 11): ctx.options holds the id,
         # ctx.attachments[id] holds the filename/url/size metadata
@@ -256,7 +166,7 @@ class Context:
 
         self.resolved_users = {uid: User(u) for uid, u in resolved_users.items()}
         self.resolved_members = resolved_members
-        self.resolved_roles = {rid: Role(r) for rid, r in resolved.get("roles", {}).items()}
+        self.resolved_roles = {rid: Role(_with_guild_id(r, guild_id)) for rid, r in resolved.get("roles", {}).items()}
         self.resolved_channels = {cid: Channel(c) for cid, c in resolved.get("channels", {}).items()}
 
     async def send(
@@ -364,7 +274,7 @@ class Context:
         """Loading state, for commands/modals. You don't normally call this
         yourself; decorator `defer=True` handles the ack and runs your
         handler on the worker."""
-        data = {"type": _DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE}
+        data: dict = {"type": _DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE}
         if ephemeral:
             data["data"] = {"flags": _FLAG_EPHEMERAL}
         self.response = _response(data)

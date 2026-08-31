@@ -687,12 +687,12 @@ def test_user_command_dispatch():
                 "name": "Inspect User",
                 "type": 2,
                 "target_id": "42",
-                "resolved": {"users": {"42": {"id": "42", "username": "bob"}}},
+                "resolved": {"users": {"42": {"id": "42", "username": "shiv"}}},
             },
         },
     )
     assert result["statusCode"] == 200
-    assert captured["target"] == {"id": "42", "username": "bob"}
+    assert captured["target"] == {"id": "42", "username": "shiv"}
 
 
 def test_message_command_dispatch():

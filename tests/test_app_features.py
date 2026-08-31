@@ -6,10 +6,11 @@ from typing import Literal
 from unittest.mock import patch
 
 import pytest
+from conftest import FakeDiscordResponse, make_http_error, send_patch
 
 from cordless import Cog
 from cordless.app import Cordless, options_from_signature
-from cordless.errors import MessageTooLongError
+from cordless.errors import DiscordHTTPError, MessageTooLongError
 
 
 def _handle(bot, payload):
@@ -629,58 +630,58 @@ def test_raw_dict_uikit_component_sets_flag():
 # --- send_message / edit_message ---
 
 
-def _captured_request(bot, coro):
+def _captured_request(coro):
     captured = {}
 
-    def fake_request(method, path, payload=None, files=None):
+    def fake_request(method, path, payload=None, files=None, token=None, raw_body=None, reason=None, idempotent=None):
         captured["payload"] = payload
         captured["files"] = files
         return b"{}"
 
-    with patch.object(bot, "_discord_request", side_effect=fake_request):
+    with patch("cordless._rest._client._request_raw_sync", side_effect=fake_request):
         asyncio.run(coro)
     return captured
 
 
-def _captured_payload(bot, coro):
-    return _captured_request(bot, coro)["payload"]
+def _captured_payload(coro):
+    return _captured_request(coro)["payload"]
 
 
 def test_send_message_sets_components_v2_flag():
     bot = Cordless()
-    payload = _captured_payload(bot, bot.send_message("123", components=[{"type": 17, "components": []}]))
+    payload = _captured_payload(bot.send_message("123", components=[{"type": 17, "components": []}]))
     assert payload["flags"] & 32768
 
 
 def test_send_message_omits_flags_without_uikit_components():
     bot = Cordless()
-    payload = _captured_payload(bot, bot.send_message("123", content="hi"))
+    payload = _captured_payload(bot.send_message("123", content="hi"))
     assert "flags" not in payload
 
 
 def test_edit_message_sets_components_v2_flag():
     bot = Cordless()
-    payload = _captured_payload(bot, bot.edit_message("123", "456", components=[{"type": 17, "components": []}]))
+    payload = _captured_payload(bot.edit_message("123", "456", components=[{"type": 17, "components": []}]))
     assert payload["flags"] & 32768
 
 
 def test_send_message_passes_files_through_to_discord_request():
     bot = Cordless()
     files = [("board.png", b"\x89PNG...")]
-    captured = _captured_request(bot, bot.send_message("123", content="hi", files=files))
+    captured = _captured_request(bot.send_message("123", content="hi", files=files))
     assert captured["files"] == files
 
 
 def test_send_message_without_files_passes_none():
     bot = Cordless()
-    captured = _captured_request(bot, bot.send_message("123", content="hi"))
+    captured = _captured_request(bot.send_message("123", content="hi"))
     assert captured["files"] is None
 
 
 def test_edit_message_passes_files_through_to_discord_request():
     bot = Cordless()
     files = [("board.png", b"\x89PNG...")]
-    captured = _captured_request(bot, bot.edit_message("123", "456", files=files))
+    captured = _captured_request(bot.edit_message("123", "456", files=files))
     assert captured["files"] == files
 
 
@@ -700,144 +701,349 @@ def test_edit_message_over_content_limit_raises_without_request():
     fake_request.assert_not_called()
 
 
-def test_discord_request_attaches_files_metadata_and_builds_multipart(fake_app_conn):
+def test_unset_repr_is_readable():
+    from cordless._rest._client import UNSET
+
+    assert repr(UNSET) == "UNSET"
+
+
+def test_discord_request_attaches_files_metadata_and_builds_multipart():
     import os
 
-    fake_app_conn.responses = [(200, {}, b"{}")]
-
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch([FakeDiscordResponse({})]) as urlopen:
         bot = Cordless()
-        bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}, [("board.png", b"\x89PNG...")])
+        asyncio.run(
+            bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}, [("board.png", b"\x89PNG...")])
+        )
 
-    sent = fake_app_conn.requests[0]
-    assert sent["headers"]["Content-Type"].startswith("multipart/form-data; boundary=")
-    assert b'name="files[0]"; filename="board.png"' in sent["body"]
-    assert b'name="payload_json"' in sent["body"]
-    assert b'"attachments": [{"id": 0, "filename": "board.png"}]' in sent["body"]
-
-
-def test_discord_request_reconnects_when_kept_alive_connection_is_dropped(fake_app_conn, monkeypatch):
-    """A warm connection reused across invocations can get closed by Discord's
-    end between requests - _send_discord_request must close it, open a fresh
-    one, and retry the same request once rather than blowing up."""
-    import os
-
-    import cordless.app
-
-    monkeypatch.setattr(cordless.app, "_conn", fake_app_conn("discord.com"))
-    fake_app_conn.raise_once = OSError("connection reset by peer")
-    fake_app_conn.responses = [(200, {}, b"{}")]
-
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}):
-        bot = Cordless()
-        data = bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
-
-    assert data == b"{}"
-    assert fake_app_conn.close_calls == 1
-    assert len(fake_app_conn.requests) == 1  # only the retried request actually went through
+    req = urlopen.call_args.args[0]
+    assert req.get_header("Content-type").startswith("multipart/form-data; boundary=")
+    assert b'name="files[0]"; filename="board.png"' in req.data
+    assert b'name="payload_json"' in req.data
+    assert b'"attachments": [{"id": 0, "filename": "board.png"}]' in req.data
 
 
-def test_discord_request_checks_ratelimit_before_sending(fake_app_conn, monkeypatch):
+def test_discord_request_checks_ratelimit_before_sending(monkeypatch):
     import os
 
     import cordless.ratelimit as ratelimit
 
     calls = []
     monkeypatch.setattr(ratelimit, "wait_if_needed", lambda method, path: calls.append((method, path)))
-    fake_app_conn.responses = [(200, {}, b"{}")]
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch([FakeDiscordResponse({})]):
         bot = Cordless()
-        bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
+        asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
     assert calls == [("POST", "/channels/123/messages")]
 
 
-def test_discord_request_records_response_headers_on_success(fake_app_conn, monkeypatch):
+def test_discord_request_records_response_headers_on_success(monkeypatch):
     import os
 
     import cordless.ratelimit as ratelimit
 
     recorded = []
     monkeypatch.setattr(ratelimit, "record_response", lambda method, path, headers: recorded.append(headers))
-    resp_headers = {"X-RateLimit-Remaining": "4", "X-RateLimit-Reset-After": "1"}
-    fake_app_conn.responses = [(200, resp_headers, b"{}")]
+    resp = FakeDiscordResponse({})
+    resp.headers = {"X-RateLimit-Remaining": "4", "X-RateLimit-Reset-After": "1"}
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch([resp]):
         bot = Cordless()
-        bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
+        asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
-    assert recorded == [resp_headers]
+    assert recorded == [resp.headers]
 
 
-def test_discord_request_retries_once_on_429_then_succeeds(fake_app_conn, monkeypatch):
+def test_discord_request_retries_once_on_429_then_succeeds(monkeypatch):
     import os
-    import time
 
     import cordless.ratelimit as ratelimit
+    from cordless._rest import _client
 
     blocked = []
-    monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: blocked.append(retry_after))
-    monkeypatch.setattr(time, "sleep", lambda s: None)
-    fake_app_conn.responses = [
-        (429, {}, json.dumps({"retry_after": 0.2}).encode()),
-        (200, {}, b"{}"),
+    monkeypatch.setattr(
+        ratelimit, "note_blocked", lambda method, path, retry_after, headers=None: blocked.append(retry_after)
+    )
+    monkeypatch.setattr(_client, "sleep", lambda s: None)
+    responses = [
+        make_http_error(429, json.dumps({"retry_after": 0.2}).encode()),
+        FakeDiscordResponse({}),
     ]
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch(responses):
         bot = Cordless()
-        result = bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
+        result = asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
     assert result == b"{}"
     assert blocked == [0.2]
 
 
-def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(fake_app_conn, monkeypatch):
+def test_discord_request_sleeps_at_least_retry_after_on_429(monkeypatch):
+    """Regression test: retrying before Discord's own retry_after just
+    turns one 429 into a stream of further ones. _client used to cap this
+    wait at 5 seconds via jittered_wait regardless of retry_after; it must
+    use retry_after_wait instead, which never sleeps less than retry_after."""
+    import os
+
+    from cordless._rest import _client
+
+    slept = []
+    monkeypatch.setattr(_client, "sleep", lambda s: slept.append(s))
+    responses = [
+        make_http_error(429, json.dumps({"retry_after": 12.0}).encode()),
+        FakeDiscordResponse({}),
+    ]
+
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch(responses):
+        bot = Cordless()
+        asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
+
+    assert slept and slept[0] >= 12.0
+
+
+def test_discord_request_passes_the_429_response_headers_to_note_blocked(monkeypatch):
+    """note_blocked needs the 429's own headers, not just its body, to learn
+    the bucket id a shared-bucket sibling route should also back off on."""
+    import os
+
+    import cordless.ratelimit as ratelimit
+    from cordless._rest import _client
+
+    seen_headers = []
+    monkeypatch.setattr(
+        ratelimit, "note_blocked", lambda method, path, retry_after, headers=None: seen_headers.append(headers)
+    )
+    monkeypatch.setattr(_client, "sleep", lambda s: None)
+    responses = [
+        make_http_error(429, json.dumps({"retry_after": 0.2}).encode(), headers={"X-RateLimit-Bucket": "shared"}),
+        FakeDiscordResponse({}),
+    ]
+
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch(responses):
+        bot = Cordless()
+        asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
+
+    assert seen_headers and seen_headers[0].get("X-RateLimit-Bucket") == "shared"
+
+
+def test_discord_request_retries_once_on_transient_network_error(monkeypatch):
+    """A transient network blip (connection reset, dropped keep-alive, ...)
+    raises a plain OSError out of urlopen(), distinct from the HTTPError 429
+    handling above: _request_raw_sync must retry it once rather than
+    aborting the request outright, for an idempotent method (GET) where
+    repeating the request can't duplicate a side effect."""
+    import os
+
+    responses = [OSError("connection reset by peer"), FakeDiscordResponse({})]
+
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch(responses):
+        bot = Cordless()
+        result = asyncio.run(bot._discord_request("GET", "/channels/123/messages", None))
+
+    assert result == b"{}"
+
+
+def test_discord_request_only_retries_network_error_once(monkeypatch):
+    import os
+
+    responses = [OSError("connection reset by peer"), OSError("connection reset by peer")]
+
+    with (
+        patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
+        send_patch(responses),
+        pytest.raises(OSError),
+    ):
+        bot = Cordless()
+        asyncio.run(bot._discord_request("GET", "/channels/123/messages", None))
+
+
+def test_discord_request_does_not_retry_a_post_after_network_error(monkeypatch):
+    """Regression test: unlike GET above, a POST must not be retried after a
+    network error. Discord may have already received and processed it
+    before the connection dropped, so resending it risks a duplicate side
+    effect (e.g. sending the same message twice) that the caller has no way
+    to detect or undo."""
+    import os
+
+    responses = [OSError("connection reset by peer"), FakeDiscordResponse({})]
+
+    with (
+        patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
+        send_patch(responses),
+        pytest.raises(OSError),
+    ):
+        bot = Cordless()
+        asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
+
+
+def test_request_raw_idempotent_override_prevents_retry_for_a_normally_safe_method():
+    """idempotent=False must override _IDEMPOTENT_METHODS' default GET-is-
+    safe guess, for the rare GET-shaped call a caller knows isn't actually
+    safe to repeat."""
+    import os
+
+    from cordless._rest import _client
+
+    responses = [OSError("connection reset by peer"), FakeDiscordResponse({})]
+
+    with (
+        patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
+        send_patch(responses),
+        pytest.raises(OSError),
+    ):
+        asyncio.run(_client.request_raw("GET", "/gateway", idempotent=False))
+
+
+def test_request_raw_idempotent_override_allows_retry_for_a_normally_unsafe_method():
+    """The flip side: idempotent=True must override the default POST-is-
+    unsafe guess, for an endpoint the caller knows converges to the same
+    state regardless of how many times it's called."""
+    import os
+
+    from cordless._rest import _client
+
+    responses = [OSError("connection reset by peer"), FakeDiscordResponse({})]
+
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch(responses):
+        result = asyncio.run(_client.request_raw("POST", "/gateway", idempotent=True))
+
+    assert result == b"{}"
+
+
+def test_discord_request_defaults_retry_after_when_429_body_is_not_json(monkeypatch):
+    import os
+
+    import cordless.ratelimit as ratelimit
+    from cordless._rest import _client
+
+    blocked = []
+    monkeypatch.setattr(
+        ratelimit, "note_blocked", lambda method, path, retry_after, headers=None: blocked.append(retry_after)
+    )
+    monkeypatch.setattr(_client, "sleep", lambda s: None)
+    responses = [
+        make_http_error(429, b"not json"),
+        FakeDiscordResponse({}),
+    ]
+
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch(responses):
+        bot = Cordless()
+        result = asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
+
+    assert result == b"{}"
+    assert blocked == [1.0]
+
+
+def test_discord_request_defaults_retry_after_when_body_has_explicit_null(monkeypatch):
+    """{"retry_after": null} isn't a missing key, so .get(..., 1)'s default
+    never kicks in - float(None) must be caught too, not just a missing or
+    unparseable body."""
+    import os
+
+    import cordless.ratelimit as ratelimit
+    from cordless._rest import _client
+
+    blocked = []
+    monkeypatch.setattr(
+        ratelimit, "note_blocked", lambda method, path, retry_after, headers=None: blocked.append(retry_after)
+    )
+    monkeypatch.setattr(_client, "sleep", lambda s: None)
+    responses = [
+        make_http_error(429, json.dumps({"retry_after": None}).encode()),
+        FakeDiscordResponse({}),
+    ]
+
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch(responses):
+        bot = Cordless()
+        result = asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
+
+    assert result == b"{}"
+    assert blocked == [1.0]
+
+
+def test_discord_request_rechecks_ratelimit_on_each_retry_attempt(monkeypatch):
     """wait_if_needed must run before every attempt, not just the first - otherwise a
     sibling call's note_blocked() from a moment ago is never consulted before retrying."""
     import os
-    import time
 
     import cordless.ratelimit as ratelimit
+    from cordless._rest import _client
 
     waits = []
     monkeypatch.setattr(ratelimit, "wait_if_needed", lambda method, path: waits.append((method, path)))
-    monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after: None)
-    monkeypatch.setattr(time, "sleep", lambda s: None)
-    fake_app_conn.responses = [
-        (429, {}, json.dumps({"retry_after": 0.1}).encode()),
-        (200, {}, b"{}"),
+    monkeypatch.setattr(ratelimit, "note_blocked", lambda method, path, retry_after, headers=None: None)
+    monkeypatch.setattr(_client, "sleep", lambda s: None)
+    responses = [
+        make_http_error(429, json.dumps({"retry_after": 0.1}).encode()),
+        FakeDiscordResponse({}),
     ]
 
-    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}):
+    with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}), send_patch(responses):
         bot = Cordless()
-        bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
+        asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
 
     assert waits == [("POST", "/channels/123/messages"), ("POST", "/channels/123/messages")]
 
 
-def test_discord_request_gives_up_after_retry_budget_exhausted(fake_app_conn, monkeypatch):
+def test_discord_request_gives_up_after_retry_budget_exhausted(monkeypatch):
     import os
-    import time
 
-    monkeypatch.setattr(time, "sleep", lambda s: None)
+    from cordless._rest import _client
+
+    monkeypatch.setattr(_client, "sleep", lambda s: None)
     # jump straight past _MAX_RETRY_SECONDS on the very first check, so this test
-    # doesn't actually spend 30 real seconds retrying against a mocked 429
+    # doesn't actually spend 30 real seconds retrying against a mocked 429.
+    # patched on _client rather than the global time module - asyncio's own
+    # event loop clock is time.monotonic() too, and a global patch here
+    # previously corrupted asyncio's internal timeouts (it thought its
+    # default-executor shutdown had taken 300+ seconds and warned about it).
     clock = [0.0]
 
     def fake_monotonic():
         clock[0] += 100
         return clock[0]
 
-    monkeypatch.setattr(time, "monotonic", fake_monotonic)
-    fake_app_conn.responses = [(429, {}, b'{"retry_after": 0.1}')] * 5
+    monkeypatch.setattr(_client, "monotonic", fake_monotonic)
+    responses = [make_http_error(429, b'{"retry_after": 0.1}')] * 5
 
     with (
         patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
-        pytest.raises(RuntimeError, match="429"),
+        send_patch(responses),
+        pytest.raises(DiscordHTTPError, match="429"),
     ):
         bot = Cordless()
-        bot._discord_request("POST", "/channels/123/messages", {"content": "hi"})
+        asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
+
+
+def test_discord_request_does_not_sleep_past_the_retry_deadline(monkeypatch):
+    """Regression test: the deadline check must account for the upcoming
+    sleep, not just the current time when the check runs, otherwise a 429
+    arriving close to the deadline with a large retry_after would sleep
+    well past _MAX_RETRY_SECONDS before giving up."""
+    import os
+
+    from cordless._rest import _client
+
+    slept = []
+    monkeypatch.setattr(_client, "sleep", lambda s: slept.append(s))
+
+    # first call sets deadline = 0 + _MAX_RETRY_SECONDS (30); second call, at
+    # the 429 check, is 25, comfortably before the deadline on its own, but
+    # a 20s retry_after would still land well past it
+    times = iter([0.0, 25.0])
+    monkeypatch.setattr(_client, "monotonic", lambda: next(times))
+    responses = [make_http_error(429, json.dumps({"retry_after": 20.0}).encode())]
+
+    with (
+        patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "tok"}),
+        send_patch(responses),
+        pytest.raises(DiscordHTTPError, match="429"),
+    ):
+        bot = Cordless()
+        asyncio.run(bot._discord_request("POST", "/channels/123/messages", {"content": "hi"}))
+
+    assert slept == []
 
 
 # --- load_extension ---

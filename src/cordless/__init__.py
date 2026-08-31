@@ -24,18 +24,25 @@ from .components import (
 )
 from .embeds import Embed, EmbedField
 from .errors import (
+    BadRequest,
     CordlessError,
+    DiscordHTTPError,
+    Forbidden,
     InvalidSignatureError,
     MessageTooLongError,
+    MissingTokenError,
     NoResponseError,
+    NotFound,
     PermissionDeniedError,
+    ServerError,
+    Unauthorized,
     UnknownButtonError,
     UnknownCommandError,
     UnknownComponentError,
     UnknownModalError,
     UnsupportedInteractionError,
 )
-from .models import Attachment, Channel, Member, Message, Permissions, Role, User
+from .models import Attachment, Channel, Guild, Member, Message, Permissions, Role, User
 
 __all__ = [
     "Cordless",
@@ -63,6 +70,7 @@ __all__ = [
     # Models
     "Attachment",
     "Channel",
+    "Guild",
     "Member",
     "Message",
     "Permissions",
@@ -77,11 +85,18 @@ __all__ = [
     "TextDisplay",
     "Thumbnail",
     # Errors
+    "BadRequest",
     "CordlessError",
+    "DiscordHTTPError",
+    "Forbidden",
     "InvalidSignatureError",
     "MessageTooLongError",
+    "MissingTokenError",
     "NoResponseError",
+    "NotFound",
     "PermissionDeniedError",
+    "ServerError",
+    "Unauthorized",
     "UnknownButtonError",
     "UnknownCommandError",
     "UnknownComponentError",

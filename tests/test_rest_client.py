@@ -1,0 +1,197 @@
+"""_rest/_client.py's _send(): the real (unmocked) persistent-connection
+transport every other test in this suite bypasses by mocking _send itself."""
+
+import urllib.error
+import urllib.request
+
+import pytest
+
+import cordless._rest._client as _client
+from cordless.errors import MissingTokenError
+
+
+class _FakeResponse:
+    """Real http.client.HTTPResponse objects support the context-manager
+    protocol (via io.IOBase); _send()'s callers rely on that, so this fake
+    needs to as well."""
+
+    def __init__(self, status, body):
+        self.status = status
+        self.reason = ""
+        self.headers = {}
+        self._body = body
+
+    def read(self):
+        return self._body
+
+    def close(self):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+
+class FakeHTTPSConnection:
+    requests = []
+    responses = []
+    raise_once = None  # set to an exception instance to make the next request() raise
+    close_calls = 0
+
+    def __init__(self, host, timeout=None):
+        self.host = host
+        self.timeout = timeout
+
+    def request(self, method, url, body, headers):
+        cls = FakeHTTPSConnection
+        if cls.raise_once is not None:
+            exc = cls.raise_once
+            cls.raise_once = None
+            raise exc
+        cls.requests.append({"method": method, "url": url, "body": body, "headers": headers, "timeout": self.timeout})
+
+    def getresponse(self):
+        status, body = FakeHTTPSConnection.responses.pop(0) if FakeHTTPSConnection.responses else (200, b"{}")
+        return _FakeResponse(status, body)
+
+    def close(self):
+        FakeHTTPSConnection.close_calls += 1
+
+
+@pytest.fixture
+def fake_conn(monkeypatch):
+    FakeHTTPSConnection.requests = []
+    FakeHTTPSConnection.responses = []
+    FakeHTTPSConnection.raise_once = None
+    FakeHTTPSConnection.close_calls = 0
+    monkeypatch.setattr(_client.http.client, "HTTPSConnection", FakeHTTPSConnection)
+    monkeypatch.setattr(_client, "_conn", None)
+    return FakeHTTPSConnection
+
+
+def _request(method="GET", path="/api/v10/gateway", body=None, headers=None):
+    return urllib.request.Request(f"https://discord.com{path}", data=body, headers=headers or {}, method=method)
+
+
+def test_send_reuses_the_same_connection_across_calls(fake_conn):
+    with _client._send(_request(), True) as resp:
+        resp.read()
+    first_conn = _client._conn
+    with _client._send(_request(), True) as resp:
+        resp.read()
+
+    assert _client._conn is first_conn
+    assert len(fake_conn.requests) == 2
+
+
+def test_send_reconnects_when_kept_alive_connection_is_dropped(fake_conn, monkeypatch):
+    """A warm connection reused across invocations can get closed by Discord's
+    end between requests. _send must close it, open a fresh one, and retry
+    the same request once rather than blowing up, when the caller says the
+    request is idempotent."""
+    monkeypatch.setattr(_client, "_conn", fake_conn("discord.com"))
+    fake_conn.raise_once = OSError("connection reset by peer")
+    fake_conn.responses = [(200, b"{}")]
+
+    with _client._send(_request(), True) as resp:
+        assert resp.read() == b"{}"
+
+    assert fake_conn.close_calls == 1
+    assert len(fake_conn.requests) == 1  # only the retried request actually went through
+
+
+def test_send_does_not_resend_when_caller_says_not_idempotent(fake_conn, monkeypatch):
+    """Same broken-connection scenario as above, but with idempotent=False:
+    _send must not resend the request, since Discord may have already
+    received and processed the first attempt before the connection died,
+    and resending would risk duplicating whatever it did. _send trusts the
+    caller's flag here rather than inspecting the request's own method -
+    that mapping is _request_raw_sync's job, covered in test_app_features.py."""
+    monkeypatch.setattr(_client, "_conn", fake_conn("discord.com"))
+    fake_conn.raise_once = OSError("connection reset by peer")
+
+    with pytest.raises(OSError):
+        _client._send(_request(method="POST"), False)
+
+    assert fake_conn.close_calls == 1  # the broken connection is still dropped
+    assert len(fake_conn.requests) == 0  # but the request itself is never resent
+    assert not _client._conn_lock.locked()  # and the lock isn't leaked on this path
+
+
+def test_send_resends_a_post_when_caller_says_idempotent(fake_conn, monkeypatch):
+    """The flip side of the test above: _send only cares about the
+    idempotent flag it's given, not the request's HTTP method, so a POST
+    marked idempotent=True does get resent."""
+    monkeypatch.setattr(_client, "_conn", fake_conn("discord.com"))
+    fake_conn.raise_once = OSError("connection reset by peer")
+    fake_conn.responses = [(200, b"{}")]
+
+    with _client._send(_request(method="POST"), True) as resp:
+        assert resp.read() == b"{}"
+
+    assert len(fake_conn.requests) == 1
+
+
+def test_send_returns_readable_response_on_success(fake_conn):
+    fake_conn.responses = [(200, b'{"id": "1"}')]
+
+    with _client._send(_request(), True) as resp:
+        assert resp.status == 200
+        assert resp.read() == b'{"id": "1"}'
+
+
+def test_send_raises_http_error_on_non_2xx(fake_conn):
+    fake_conn.responses = [(404, b'{"message": "Not Found"}')]
+
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        _client._send(_request(), True)
+
+    assert exc_info.value.code == 404
+    assert exc_info.value.read() == b'{"message": "Not Found"}'
+
+
+def test_send_holds_conn_lock_until_response_is_read(fake_conn):
+    """The point of the fix: releasing _conn_lock right after getresponse(),
+    before the body is read, would let a second concurrent _send() send a
+    new request on the same connection while this one's body is still
+    unread, which http.client refuses, corrupting the shared connection."""
+    fake_conn.responses = [(200, b"{}")]
+
+    with _client._send(_request(), True) as resp:
+        assert _client._conn_lock.locked()
+        resp.read()
+
+    assert not _client._conn_lock.locked()
+
+
+def test_send_holds_conn_lock_until_error_body_is_read(fake_conn):
+    """Same rationale as test_send_holds_conn_lock_until_response_is_read,
+    for the non-2xx path: the caller drains exc.read() outside of any
+    `with` block, so the lock must stay held until that happens too."""
+    fake_conn.responses = [(404, b'{"message": "Not Found"}')]
+
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        _client._send(_request(), True)
+
+    assert _client._conn_lock.locked()
+    exc_info.value.read()
+    assert not _client._conn_lock.locked()
+
+
+def test_missing_token_raises_a_typed_error(monkeypatch):
+    monkeypatch.delenv("DISCORD_BOT_TOKEN", raising=False)
+    with pytest.raises(MissingTokenError):
+        _client._request_raw_sync("GET", "/users/@me")
+
+
+def test_send_forwards_method_path_body_and_headers(fake_conn):
+    req_obj = _request(method="POST", path="/api/v10/channels/20/messages", body=b'{"content": "hi"}')
+    with _client._send(req_obj, False) as resp:
+        resp.read()
+
+    req = fake_conn.requests[0]
+    assert req["method"] == "POST"
+    assert req["url"] == "/api/v10/channels/20/messages"
+    assert req["body"] == b'{"content": "hi"}'

@@ -1,3 +1,4 @@
+from cordless._base import DiscordObject
 from cordless.models import Channel, Guild, Member, Permissions, Role, User
 
 
@@ -165,3 +166,27 @@ def test_role_mention():
 def test_channel_mention():
     channel = Channel({"id": "1360544003434745908"})
     assert channel.mention == "<#1360544003434745908>"
+
+
+# --- hashing ---
+
+
+def test_models_are_hashable_by_id():
+    assert len({User({"id": "1"}), User({"id": "1"}), User({"id": "2"})}) == 2
+
+
+def test_member_hashes_by_nested_user_id():
+    a = Member({"user": {"id": "1"}, "nick": "a"})
+    b = Member({"user": {"id": "1"}, "nick": "b"})
+    assert hash(a) == hash(b)
+    assert len({a, b, Member({"user": {"id": "2"}})}) == 3
+
+
+def test_equal_models_hash_equal():
+    a = User({"id": "1", "username": "shiv"})
+    b = User({"id": "1", "username": "shiv"})
+    assert a == b and hash(a) == hash(b)
+
+
+def test_id_less_object_still_hashable():
+    hash(DiscordObject({"reason": "spam"}))

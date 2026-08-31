@@ -5,6 +5,8 @@ import threading
 import time
 from http.client import HTTPException, HTTPSConnection
 
+from ._useragent import USER_AGENT
+
 _TIMEOUT = 10
 
 # Kept open across invocations in a warm Lambda container, so most requests
@@ -82,7 +84,7 @@ def _request(method, path, body=None, content_type=None, retry_404=False):
     channel buckets - there's nothing for the cross-invocation coordination
     in ratelimit.py to usefully do here, just a local retry.
     """
-    headers = {"User-Agent": "cordless"}
+    headers = {"User-Agent": USER_AGENT}
     if content_type:
         headers["Content-Type"] = content_type
 
