@@ -1,3 +1,8 @@
+# pyright: strict
+import email.message
+from collections.abc import Mapping
+
+
 class CordlessError(Exception):
     """Base exception for all cordless errors."""
 
@@ -49,7 +54,14 @@ class DiscordHTTPError(CordlessError):
     caller that needs more than the message (a header, the raw body) still
     has it, rather than having to parse the message string back apart."""
 
-    def __init__(self, status, message, *, body=None, headers=None):
+    def __init__(
+        self,
+        status: int,
+        message: str,
+        *,
+        body: bytes | None = None,
+        headers: Mapping[str, str] | email.message.Message | None = None,
+    ) -> None:
         super().__init__(f"Discord API error {status}: {message}")
         self.status = status
         self.body = body
@@ -76,10 +88,21 @@ class ServerError(DiscordHTTPError):
     """5xx: Discord's own error, generally safe to retry later."""
 
 
-_STATUS_ERRORS = {400: BadRequest, 401: Unauthorized, 403: Forbidden, 404: NotFound}
+_STATUS_ERRORS: dict[int, type[DiscordHTTPError]] = {
+    400: BadRequest,
+    401: Unauthorized,
+    403: Forbidden,
+    404: NotFound,
+}
 
 
-def discord_http_error(status, message, *, body=None, headers=None):
+def discord_http_error(
+    status: int,
+    message: str,
+    *,
+    body: bytes | None = None,
+    headers: Mapping[str, str] | email.message.Message | None = None,
+) -> DiscordHTTPError:
     """Pick the right DiscordHTTPError subclass for a REST response status:
     one of the named 4xx classes above, ServerError for any 5xx, or the
     base DiscordHTTPError itself for anything else Discord might send."""
