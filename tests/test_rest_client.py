@@ -7,6 +7,7 @@ import urllib.request
 import pytest
 
 import cordless._rest._client as _client
+from cordless.errors import MissingTokenError
 
 
 class _FakeResponse:
@@ -177,6 +178,12 @@ def test_send_holds_conn_lock_until_error_body_is_read(fake_conn):
     assert _client._conn_lock.locked()
     exc_info.value.read()
     assert not _client._conn_lock.locked()
+
+
+def test_missing_token_raises_a_typed_error(monkeypatch):
+    monkeypatch.delenv("DISCORD_BOT_TOKEN", raising=False)
+    with pytest.raises(MissingTokenError):
+        _client._request_raw_sync("GET", "/users/@me")
 
 
 def test_send_forwards_method_path_body_and_headers(fake_conn):

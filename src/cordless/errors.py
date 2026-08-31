@@ -38,6 +38,11 @@ class MessageTooLongError(CordlessError):
     """Raised when outgoing message content exceeds Discord's character limit."""
 
 
+class MissingTokenError(CordlessError):
+    """Raised when a bot-token REST call has no token: nothing passed and no
+    DISCORD_BOT_TOKEN in the environment."""
+
+
 class DiscordHTTPError(CordlessError):
     """Raised when Discord's REST API returns a status cordless doesn't
     retry on its own. status/body/headers carry the raw response, so a

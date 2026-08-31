@@ -203,7 +203,11 @@ def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_bo
     where the default guess is wrong for that specific call, e.g. a PUT
     that isn't actually idempotent (see _IDEMPOTENT_METHODS' docstring)."""
     safe_to_retry = method in _IDEMPOTENT_METHODS if idempotent is None else idempotent
-    token = token or os.environ["DISCORD_BOT_TOKEN"]
+    if not token:
+        try:
+            token = os.environ["DISCORD_BOT_TOKEN"]
+        except KeyError:
+            raise errors.MissingTokenError("set DISCORD_BOT_TOKEN or pass token=...") from None
     if raw_body is not None:
         body, content_type = raw_body
     elif files:
