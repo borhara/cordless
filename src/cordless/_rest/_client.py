@@ -1,3 +1,4 @@
+# pyright: strict
 """Shared low-level HTTP plumbing for cordless's REST layer.
 
 request()/request_raw() are async, matching every other public REST call in
@@ -13,6 +14,7 @@ that fans out heavily should batch its own work instead.
 """
 
 import asyncio
+import email.message
 import http.client
 import json
 import os
@@ -60,7 +62,7 @@ _IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "PUT", "DELETE"})
 # Kept open across invocations in a warm Lambda container, so most requests
 # skip the TLS handshake instead of paying for it every time - same pattern
 # as webhook.py/defer.py's own kept-alive connections.
-_conn = None
+_conn: http.client.HTTPSConnection | None = None
 _conn_lock = threading.Lock()
 
 
@@ -73,29 +75,29 @@ class _LockedResponse:
     that (CannotSendRequest), and the reconnect-on-error path then closes
     the very socket this response's unread body still depends on."""
 
-    def __init__(self, resp, lock):
+    def __init__(self, resp: http.client.HTTPResponse, lock: threading.Lock) -> None:
         self._resp = resp
         self._lock = lock
 
     @property
-    def status(self):
+    def status(self) -> int:
         return self._resp.status
 
     @property
-    def headers(self):
+    def headers(self) -> email.message.Message:
         return self._resp.headers
 
-    def read(self):
+    def read(self) -> bytes:
         return self._resp.read()
 
-    def __enter__(self):
+    def __enter__(self) -> "_LockedResponse":
         return self
 
-    def __exit__(self, *exc_info):
+    def __exit__(self, *exc_info: object) -> bool:
         self.close()
         return False
 
-    def close(self):
+    def close(self) -> None:
         try:
             self._resp.close()
         finally:
@@ -114,30 +116,30 @@ class _LockedErrorBody:
     fp.close(); without this, that raises AttributeError inside __del__
     (an "unraisable exception", silently logged rather than propagated)."""
 
-    def __init__(self, resp, lock):
+    def __init__(self, resp: http.client.HTTPResponse, lock: threading.Lock) -> None:
         self._resp = resp
         self._lock = lock
         self._released = False
 
-    def read(self, *args):
+    def read(self, *args: int) -> bytes:
         try:
             return self._resp.read(*args)
         finally:
             self._release()
 
-    def close(self):
+    def close(self) -> None:
         try:
             self._resp.close()
         finally:
             self._release()
 
-    def _release(self):
+    def _release(self) -> None:
         if not self._released:
             self._released = True
             self._lock.release()
 
 
-def _send(req, idempotent):
+def _send(req: urllib.request.Request, idempotent: bool) -> _LockedResponse:
     """Send a urllib.request.Request over a persistent HTTPSConnection to
     discord.com instead of urllib.request.urlopen(), which always opens a
     fresh connection per call with no way to keep it warm. A drop-in
@@ -188,7 +190,16 @@ def _send(req, idempotent):
     return _LockedResponse(resp, _conn_lock)
 
 
-def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_body=None, reason=None, idempotent=None):
+def _request_raw_sync(
+    method: str,
+    path: str,
+    payload: Any = None,
+    files: list[tuple[str, bytes]] | None = None,
+    token: str | None = None,
+    raw_body: tuple[bytes, str] | None = None,
+    reason: str | None = None,
+    idempotent: bool | None = None,
+) -> bytes:
     """The actual blocking urllib work; only ever run inside an executor thread.
 
     raw_body is an escape hatch for the handful of endpoints that don't use
@@ -277,7 +288,16 @@ def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_bo
             continue
 
 
-async def request_raw(method, path, payload=None, files=None, token=None, raw_body=None, reason=None, idempotent=None):
+async def request_raw(
+    method: str,
+    path: str,
+    payload: Any = None,
+    files: list[tuple[str, bytes]] | None = None,
+    token: str | None = None,
+    raw_body: tuple[bytes, str] | None = None,
+    reason: str | None = None,
+    idempotent: bool | None = None,
+) -> bytes:
     """Make an authenticated Discord API call, retrying 429s. Returns the raw
     response body. See _request_raw_sync's docstring for idempotent."""
     return await asyncio.get_event_loop().run_in_executor(
@@ -285,7 +305,16 @@ async def request_raw(method, path, payload=None, files=None, token=None, raw_bo
     )
 
 
-async def request(method, path, payload=None, files=None, token=None, raw_body=None, reason=None, idempotent=None):
+async def request(
+    method: str,
+    path: str,
+    payload: Any = None,
+    files: list[tuple[str, bytes]] | None = None,
+    token: str | None = None,
+    raw_body: tuple[bytes, str] | None = None,
+    reason: str | None = None,
+    idempotent: bool | None = None,
+) -> Any:
     """Like request_raw, but parses the JSON response body (None for an empty body)."""
     data = await request_raw(
         method, path, payload, files, token=token, raw_body=raw_body, reason=reason, idempotent=idempotent
@@ -293,7 +322,16 @@ async def request(method, path, payload=None, files=None, token=None, raw_body=N
     return json.loads(data) if data else None
 
 
-async def request_json(method, path, payload=None, files=None, token=None, raw_body=None, reason=None, idempotent=None):
+async def request_json(
+    method: str,
+    path: str,
+    payload: Any = None,
+    files: list[tuple[str, bytes]] | None = None,
+    token: str | None = None,
+    raw_body: tuple[bytes, str] | None = None,
+    reason: str | None = None,
+    idempotent: bool | None = None,
+) -> Any:
     """Like request(), for the endpoints that always answer with a body.
     Asserts it, so callers that then index or iterate the result don't each
     repeat the check to satisfy the type checker."""
@@ -304,7 +342,7 @@ async def request_json(method, path, payload=None, files=None, token=None, raw_b
     return data
 
 
-def join_query_parts(parts):
+def join_query_parts(parts: list[str]) -> str:
     """Shared '?'-or-'&' joiner for a list of already-formatted key=value
     query string parts, so a future fix to how they get combined only has
     to happen in one place - query_string, messages._array_qs, and
@@ -313,7 +351,7 @@ def join_query_parts(parts):
     return ("?" + "&".join(parts)) if parts else ""
 
 
-def query_parts(**params):
+def query_parts(**params: Any) -> list[str]:
     """Builds the key=value parts query_string() joins. Split out so a
     caller with one extra formatting quirk (entitlements' tri-state
     booleans) can add its own part to the same list before joining once,
@@ -322,7 +360,7 @@ def query_parts(**params):
     None and False are omitted: a flag defaulting to False reads the same
     as not sending it at all, which is what every existing caller wants.
     True becomes Discord's lowercase "true". Values are URL-encoded."""
-    parts = []
+    parts: list[str] = []
     for key, value in params.items():
         if value is None or value is False:
             continue
@@ -331,7 +369,7 @@ def query_parts(**params):
     return parts
 
 
-def query_string(**params):
+def query_string(**params: Any) -> str:
     """Shared query-string builder for GET endpoints' optional scalar
     filters (limit/before/after/..., and boolean flags like with_counts).
     Doesn't handle list values: Discord's array-style query params
@@ -341,7 +379,7 @@ def query_string(**params):
     return join_query_parts(query_parts(**params))
 
 
-def pagination_qs(*, before=None, limit=None):
+def pagination_qs(*, before: str | None = None, limit: int | None = None) -> str:
     """Shared query-string builder for the handful of endpoints paginated by
     before/limit (archived threads, channel pins, ...)."""
     return query_string(before=before, limit=limit)
@@ -350,14 +388,14 @@ def pagination_qs(*, before=None, limit=None):
 class _Unset:
     __slots__ = ()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "UNSET"
 
 
 UNSET = _Unset()
 
 
-def payload(**fields):
+def payload(**fields: Any) -> dict[str, Any]:
     """Build a request body from a resource function's optional kwargs,
     keeping only the ones the caller actually set. Fields default to UNSET
     rather than None, so passing None explicitly (Discord's way of clearing
@@ -366,7 +404,7 @@ def payload(**fields):
     return {k: v for k, v in fields.items() if v is not UNSET}
 
 
-def compact(**fields):
+def compact(**fields: Any) -> dict[str, Any]:
     """Like payload(), but drops None as well. For create-style endpoints
     with no clear-with-null semantics, where an unset field just means "don't
     send it"."""
