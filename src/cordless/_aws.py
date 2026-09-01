@@ -1,4 +1,10 @@
+# pyright: strict
 """Shared AWS session management."""
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from boto3.session import Session
 
 _NO_CREDENTIALS_MSG = """
 No AWS credentials found. cordless looks for credentials in the standard places:
@@ -23,7 +29,7 @@ Once configured, re-run: cordless deploy
 """
 
 
-def get_session(region=None, validate=True):
+def get_session(region: str | None = None, validate: bool = True) -> "Session":
     try:
         import boto3
         from botocore.exceptions import ClientError, NoCredentialsError
@@ -39,7 +45,7 @@ def get_session(region=None, validate=True):
         return session
 
     try:
-        session.client("sts").get_caller_identity()
+        session.client("sts").get_caller_identity()  # pyright: ignore[reportUnknownMemberType]
         return session
     except NoCredentialsError:
         raise SystemExit(_NO_CREDENTIALS_MSG)
