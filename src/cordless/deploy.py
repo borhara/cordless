@@ -8,6 +8,7 @@ import tempfile
 import time
 import tomllib
 import zipfile
+from typing import Any
 
 _EXCLUDE_DIRS = {
     "__pycache__",
@@ -417,7 +418,7 @@ def _function_exists(lam, function_name):
         return False, None
 
 
-def _env_vars(env):
+def _env_vars(env) -> Any:
     return {"Variables": env or {}}
 
 

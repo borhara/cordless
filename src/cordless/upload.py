@@ -2,6 +2,7 @@ import importlib.util
 import os
 import tempfile
 import zipfile
+from typing import Any
 
 _LAMBDA_RUNTIMES = ["python3.10", "python3.11", "python3.12", "python3.13", "python3.14"]
 
@@ -93,10 +94,11 @@ def upload(function_name, layer_name, region, python_version=None):
     try:
         print(f"Publishing layer '{layer_name}'...", flush=True)
         with open(zip_path, "rb") as f:
+            runtimes: Any = [f"python{python_version}"] if python_version else _LAMBDA_RUNTIMES
             resp = lam.publish_layer_version(
                 LayerName=layer_name,
                 Content={"ZipFile": f.read()},
-                CompatibleRuntimes=[f"python{python_version}"] if python_version else _LAMBDA_RUNTIMES,
+                CompatibleRuntimes=runtimes,
             )
         layer_arn = resp["LayerVersionArn"]
         print(f"  {layer_arn}", flush=True)

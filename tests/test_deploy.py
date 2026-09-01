@@ -1,7 +1,7 @@
 import json
 import os
 import zipfile
-from typing import Any
+from typing import Any, cast
 
 import boto3
 import pytest
@@ -1125,7 +1125,7 @@ def test_deploy_grants_ratelimit_table_access(deploy_patches, monkeypatch):
     monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
     deploy(**_base_deploy_kwargs(deploy_patches, ratelimit=True))
     policy = iam.get_role_policy(RoleName="my-bot-role", PolicyName="cordless-ratelimit-table")
-    assert "dynamodb:PutItem" in policy["PolicyDocument"]["Statement"][0]["Action"]
+    assert "dynamodb:PutItem" in cast("Any", policy["PolicyDocument"])["Statement"][0]["Action"]
 
 
 @mock_aws

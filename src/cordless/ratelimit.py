@@ -30,6 +30,7 @@ import os
 import random
 import re
 import time
+from typing import Any
 
 from . import errors
 
@@ -264,7 +265,7 @@ def _shared_block(key):
     """(blocked_until, confirmed), or None if key has no recorded block (or
     the table is unreachable/unconfigured, see the fail-open note below)."""
     try:
-        item = _table().get_item(Key={"pk": key}).get("Item")
+        item: Any = _table().get_item(Key={"pk": key}).get("Item")
     except Exception as exc:
         _warn_degraded("read", exc)
         return None  # fail-open: a DynamoDB hiccup should never block sending
