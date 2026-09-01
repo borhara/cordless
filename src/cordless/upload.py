@@ -1,36 +1,37 @@
+# pyright: strict, reportTypedDictNotRequiredAccess=false
 import importlib.util
 import os
 import tempfile
 import zipfile
 from typing import Any
 
-_LAMBDA_RUNTIMES = ["python3.10", "python3.11", "python3.12", "python3.13", "python3.14"]
+_LAMBDA_RUNTIMES: list[Any] = ["python3.10", "python3.11", "python3.12", "python3.13", "python3.14"]
 
 # Local-machine-only tooling (the `cordless deploy`/`cordless dev` CLI itself)
 # that never runs inside a deployed Lambda - excluded from both the layer and
 # bundle_cordless, since shipping it there is dead weight, not a runtime need.
-_CLI_ONLY_FILES = {"deploy.py", "cli.py", "dev.py", "upload.py", "_aws.py", "_progress.py", "_env.py"}
+_CLI_ONLY_FILES: set[str] = {"deploy.py", "cli.py", "dev.py", "upload.py", "_aws.py", "_progress.py", "_env.py"}
 
 
-def _is_runtime_file(fname):
+def _is_runtime_file(fname: str) -> bool:
     return fname not in _CLI_ONLY_FILES and not fname.endswith(".pyc")
 
 
-def _cordless_package_dir():
+def _cordless_package_dir() -> str:
     spec = importlib.util.find_spec("cordless")
     if spec is None or spec.origin is None:
         raise SystemExit("Cannot locate the cordless package. Is it installed?")
     return os.path.dirname(spec.origin)
 
 
-def _layer_extras_dir(python_version, architecture="x86_64"):
+def _layer_extras_dir(python_version: str, architecture: str = "x86_64") -> str:
     """Fetch pynacl (required for signature verification) for the layer."""
-    from .deploy import _ensure_packages
+    from .deploy import _ensure_packages  # pyright: ignore[reportPrivateUsage, reportUnknownVariableType]
 
     return _ensure_packages(["pynacl"], python_version, architecture)
 
 
-def build_layer_zip(python_version=None, architecture="x86_64"):
+def build_layer_zip(python_version: str | None = None, architecture: str = "x86_64") -> str:
     """Zip cordless (plus pynacl, when fetchable) in the python/ layout Lambda layers require."""
     pkg_dir = _cordless_package_dir()
     site_dir = os.path.dirname(pkg_dir)
@@ -40,9 +41,9 @@ def build_layer_zip(python_version=None, architecture="x86_64"):
     # cordless's own files and the pynacl extras can overlap (e.g. a stray
     # dotfile at the root of both trees), so dedupe to avoid writing the same
     # zip entry twice
-    written = set()
+    written: set[str] = set()
 
-    def _write(zf, abs_path, arcname):
+    def _write(zf: zipfile.ZipFile, abs_path: str, arcname: str) -> None:
         if arcname in written:
             return
         written.add(arcname)
@@ -82,11 +83,11 @@ def build_layer_zip(python_version=None, architecture="x86_64"):
     return tmp.name
 
 
-def upload(function_name, layer_name, region, python_version=None):
+def upload(function_name: str, layer_name: str, region: str | None, python_version: str | None = None) -> None:
     from ._aws import get_session
 
     session = get_session(region)
-    lam = session.client("lambda")
+    lam = session.client("lambda")  # pyright: ignore[reportUnknownMemberType]
 
     print("Building layer zip...", flush=True)
     zip_path = build_layer_zip(python_version)
@@ -105,7 +106,7 @@ def upload(function_name, layer_name, region, python_version=None):
 
         print(f"Attaching to '{function_name}'...", flush=True)
         config = lam.get_function_configuration(FunctionName=function_name)
-        existing = [layer["Arn"] for layer in config.get("Layers", [])]
+        existing = [layer["Arn"] for layer in config.get("Layers") or []]
         kept = [arn for arn in existing if f":layer:{layer_name}:" not in arn]
 
         lam.update_function_configuration(
