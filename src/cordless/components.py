@@ -1,4 +1,8 @@
+# pyright: strict
 """Discord UI component builders."""
+
+from collections.abc import Iterable
+from typing import Any
 
 
 class _ButtonStyle:
@@ -20,15 +24,22 @@ ButtonStyle = _ButtonStyle()
 class SelectOption:
     """One option in a `StringSelect`. `default=True` pre-selects it."""
 
-    def __init__(self, label, value, description=None, emoji=None, default=False):
+    def __init__(
+        self,
+        label: str,
+        value: str,
+        description: str | None = None,
+        emoji: dict[str, Any] | None = None,
+        default: bool = False,
+    ) -> None:
         self.label = label
         self.value = value
         self.description = description
         self.emoji = emoji
         self.default = default
 
-    def to_dict(self):
-        d = {"label": self.label, "value": self.value}
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"label": self.label, "value": self.value}
         if self.description is not None:
             d["description"] = self.description
         if self.emoji is not None:
@@ -42,7 +53,16 @@ class Button:
     """`style` is a `ButtonStyle`. `emoji` is a partial emoji dict, e.g.
     `{"name": "👋"}` or `{"id": "1234", "name": "custom"}`."""
 
-    def __init__(self, label=None, custom_id=None, style=1, url=None, emoji=None, disabled=False, sku_id=None):
+    def __init__(
+        self,
+        label: str | None = None,
+        custom_id: str | None = None,
+        style: int = 1,
+        url: str | None = None,
+        emoji: dict[str, Any] | None = None,
+        disabled: bool = False,
+        sku_id: str | None = None,
+    ) -> None:
         self.label = label
         self.custom_id = custom_id
         self.style = style
@@ -51,8 +71,8 @@ class Button:
         self.disabled = disabled
         self.sku_id = sku_id  # required for style=6 (PREMIUM) buttons
 
-    def to_dict(self):
-        d = {"type": 2, "style": self.style}
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"type": 2, "style": self.style}
         # premium buttons (style 6) only take sku_id, no label/custom_id/url
         if self.style == 6:
             if self.sku_id is not None:
@@ -75,7 +95,7 @@ class ActionRow:
     """Wraps up to 5 buttons, or exactly 1 select (Discord doesn't allow a
     select menu to share a row with anything else)."""
 
-    def __init__(self, components):
+    def __init__(self, components: Iterable[Any]) -> None:
         components = list(components)
         if any(isinstance(c, (StringSelect, _EntitySelect)) for c in components):
             if len(components) > 1:
@@ -84,14 +104,22 @@ class ActionRow:
             raise ValueError(f"An ActionRow can hold at most 5 buttons, got {len(components)}")
         self.components = components
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {"type": 1, "components": [c.to_dict() for c in self.components]}
 
 
 class StringSelect:
     """A select menu with a fixed list of `SelectOption`s."""
 
-    def __init__(self, custom_id, options, placeholder=None, min_values=1, max_values=1, disabled=False):
+    def __init__(
+        self,
+        custom_id: str,
+        options: Iterable[Any],
+        placeholder: str | None = None,
+        min_values: int = 1,
+        max_values: int = 1,
+        disabled: bool = False,
+    ) -> None:
         self.custom_id = custom_id
         self.options = options
         self.placeholder = placeholder
@@ -99,8 +127,8 @@ class StringSelect:
         self.max_values = max_values
         self.disabled = disabled
 
-    def to_dict(self):
-        d = {
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
             "type": 3,
             "custom_id": self.custom_id,
             "options": [o.to_dict() if hasattr(o, "to_dict") else o for o in self.options],
@@ -115,9 +143,17 @@ class StringSelect:
 
 
 class _EntitySelect:
-    _type = None
+    _type: int | None = None
 
-    def __init__(self, custom_id, placeholder=None, min_values=1, max_values=1, disabled=False, default_values=None):
+    def __init__(
+        self,
+        custom_id: str,
+        placeholder: str | None = None,
+        min_values: int = 1,
+        max_values: int = 1,
+        disabled: bool = False,
+        default_values: list[Any] | None = None,
+    ) -> None:
         self.custom_id = custom_id
         self.placeholder = placeholder
         self.min_values = min_values
@@ -125,8 +161,8 @@ class _EntitySelect:
         self.disabled = disabled
         self.default_values = default_values
 
-    def to_dict(self):
-        d = {
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
             "type": self._type,
             "custom_id": self.custom_id,
             "min_values": self.min_values,
@@ -175,18 +211,18 @@ class ChannelSelect(_EntitySelect):
 
     def __init__(
         self,
-        custom_id,
-        channel_types=None,
-        placeholder=None,
-        min_values=1,
-        max_values=1,
-        disabled=False,
-        default_values=None,
-    ):
+        custom_id: str,
+        channel_types: list[int] | None = None,
+        placeholder: str | None = None,
+        min_values: int = 1,
+        max_values: int = 1,
+        disabled: bool = False,
+        default_values: list[Any] | None = None,
+    ) -> None:
         super().__init__(custom_id, placeholder, min_values, max_values, disabled, default_values)
         self.channel_types = channel_types
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         if self.channel_types is not None:
             d["channel_types"] = self.channel_types
@@ -207,8 +243,16 @@ class TextInput:
     """A field inside a `Modal`. `value` pre-fills it."""
 
     def __init__(
-        self, custom_id, label, style=1, min_length=None, max_length=None, required=True, value=None, placeholder=None
-    ):
+        self,
+        custom_id: str,
+        label: str,
+        style: int = 1,
+        min_length: int | None = None,
+        max_length: int | None = None,
+        required: bool = True,
+        value: str | None = None,
+        placeholder: str | None = None,
+    ) -> None:
         self.custom_id = custom_id
         self.label = label
         self.style = style
@@ -218,8 +262,8 @@ class TextInput:
         self.value = value
         self.placeholder = placeholder
 
-    def to_dict(self):
-        d = {"type": 4, "custom_id": self.custom_id, "label": self.label, "style": self.style}
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"type": 4, "custom_id": self.custom_id, "label": self.label, "style": self.style}
         if self.min_length is not None:
             d["min_length"] = self.min_length
         if self.max_length is not None:
@@ -238,13 +282,13 @@ class Label:
     label, Discord's required container for anything other than a plain
     `TextInput` in an `ActionRow`."""
 
-    def __init__(self, label, component, description=None):
+    def __init__(self, label: str, component: Any, description: str | None = None) -> None:
         self.label = label
         self.component = component
         self.description = description
 
-    def to_dict(self):
-        d = {"type": 18, "label": self.label, "component": self.component.to_dict()}
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"type": 18, "label": self.label, "component": self.component.to_dict()}
         if self.description is not None:
             d["description"] = self.description
         return d
@@ -255,13 +299,13 @@ class Modal:
     Select menus aren't valid inside an `ActionRow` in a modal, wrap them in
     a `Label` first: `Modal("m", "Title", Label("Pick one", StringSelect(...)))`."""
 
-    def __init__(self, custom_id, title, *components):
+    def __init__(self, custom_id: str, title: str, *components: Any) -> None:
         self.custom_id = custom_id
         self.title = title
         self.components = list(components)
 
-    def to_dict(self):
-        rows = []
+    def to_dict(self) -> dict[str, Any]:
+        rows: list[dict[str, Any]] = []
         for c in self.components:
             if isinstance(c, (ActionRow, Label)):
                 rows.append(c.to_dict())
@@ -279,13 +323,13 @@ class Container:
 
     is_ui_kit = True
 
-    def __init__(self, components, accent_color=None, spoiler=False):
+    def __init__(self, components: Iterable[Any], accent_color: int | None = None, spoiler: bool = False) -> None:
         self.components = list(components)
         self.accent_color = accent_color
         self.spoiler = spoiler
 
-    def to_dict(self):
-        d = {"type": 17, "components": [c.to_dict() for c in self.components]}
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"type": 17, "components": [c.to_dict() for c in self.components]}
         if self.accent_color is not None:
             d["accent_color"] = self.accent_color
         if self.spoiler:
@@ -299,12 +343,12 @@ class Section:
 
     is_ui_kit = True
 
-    def __init__(self, *components, accessory=None):
+    def __init__(self, *components: Any, accessory: Any = None) -> None:
         self.components = list(components)
         self.accessory = accessory
 
-    def to_dict(self):
-        d = {"type": 9, "components": [c.to_dict() for c in self.components]}
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"type": 9, "components": [c.to_dict() for c in self.components]}
         if self.accessory is not None:
             d["accessory"] = self.accessory.to_dict() if hasattr(self.accessory, "to_dict") else self.accessory
         return d
@@ -315,10 +359,10 @@ class TextDisplay:
 
     is_ui_kit = True
 
-    def __init__(self, content):
+    def __init__(self, content: str) -> None:
         self.content = content
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {"type": 10, "content": self.content}
 
 
@@ -328,13 +372,13 @@ class Thumbnail:
 
     is_ui_kit = True
 
-    def __init__(self, url, description=None, spoiler=False):
+    def __init__(self, url: str, description: str | None = None, spoiler: bool = False) -> None:
         self.url = url
         self.description = description
         self.spoiler = spoiler
 
-    def to_dict(self):
-        d = {"type": 11, "media": {"url": self.url}}
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"type": 11, "media": {"url": self.url}}
         if self.description is not None:
             d["description"] = self.description
         if self.spoiler:
@@ -349,12 +393,12 @@ class File:
 
     is_ui_kit = True
 
-    def __init__(self, url, spoiler=False):
+    def __init__(self, url: str, spoiler: bool = False) -> None:
         self.url = url
         self.spoiler = spoiler
 
-    def to_dict(self):
-        d = {"type": 13, "file": {"url": self.url}}
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"type": 13, "file": {"url": self.url}}
         if self.spoiler:
             d["spoiler"] = True
         return d
@@ -366,10 +410,10 @@ class MediaGallery:
 
     is_ui_kit = True
 
-    def __init__(self, *items):
+    def __init__(self, *items: Any) -> None:
         self.items = list(items)
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {"type": 12, "items": self.items}
 
 
@@ -379,9 +423,9 @@ class Separator:
 
     is_ui_kit = True
 
-    def __init__(self, divider=True, spacing=1):
+    def __init__(self, divider: bool = True, spacing: int = 1) -> None:
         self.divider = divider
         self.spacing = spacing
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {"type": 14, "divider": self.divider, "spacing": self.spacing}
