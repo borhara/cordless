@@ -1,3 +1,4 @@
+# pyright: strict
 """Raw HTTP route matching and response coercion for `@bot.route` handlers.
 
 These routes sit outside the Discord interaction flow. A request arrives on
@@ -8,6 +9,9 @@ raw event dict together with the bot instance.
 import base64
 import json
 import re
+from typing import Any, cast
+
+_Pattern = list[tuple[str, str]]
 
 _PARAM_NAME = re.compile(r"[A-Za-z0-9._]+")
 _METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
@@ -17,14 +21,14 @@ _TEXT_CONTENT_TYPE = "text/plain; charset=utf-8"
 _BINARY_CONTENT_TYPE = "application/octet-stream"
 
 
-def normalize_path(path):
+def normalize_path(path: str) -> str:
     """Return `path` with a leading slash, single slashes between segments,
     and no trailing slash except for the root."""
     segments = [s for s in path.split("/") if s]
     return "/" + "/".join(segments)
 
 
-def normalize(method, path):
+def normalize(method: str, path: str) -> tuple[str, str]:
     """Validate a route and return its canonical `(method, path)` pair.
 
     Raises `ValueError` for an unknown method, a malformed `{name}` segment,
@@ -57,10 +61,10 @@ def normalize(method, path):
     return method, norm
 
 
-def compile_pattern(norm_path):
+def compile_pattern(norm_path: str) -> _Pattern:
     """Turn a normalised path into a list of match segments, each a
     `("lit", value)`, `("param", name)`, or `("greedy", name)` tuple."""
-    pattern = []
+    pattern: _Pattern = []
     for segment in (s for s in norm_path.split("/") if s):
         if segment.startswith("{") and segment.endswith("}"):
             name = segment[1:-1]
@@ -73,11 +77,11 @@ def compile_pattern(norm_path):
     return pattern
 
 
-def match_pattern(pattern, path):
+def match_pattern(pattern: _Pattern, path: str) -> dict[str, str] | None:
     """Return a `{name: value}` dict when `path` matches `pattern`, else
     `None`. A greedy segment captures the rest of the path verbatim."""
     parts = [p for p in path.split("/") if p]
-    params = {}
+    params: dict[str, str] = {}
     for index, (kind, value) in enumerate(pattern):
         if kind == "greedy":
             if index >= len(parts):
@@ -96,7 +100,7 @@ def match_pattern(pattern, path):
     return params
 
 
-def patterns_conflict(a, b):
+def patterns_conflict(a: _Pattern, b: _Pattern) -> bool:
     """True when two patterns would match the same set of paths, so only one
     can be registered. Parameter names are ignored; literal values are not."""
     if len(a) != len(b):
@@ -109,7 +113,7 @@ def patterns_conflict(a, b):
     return True
 
 
-def specificity(pattern):
+def specificity(pattern: _Pattern) -> tuple[int, int, bool]:
     """Sort key placing more literal, longer, non-greedy patterns first, so
     a static route always wins over one with a parameter in the same slot."""
     literals = sum(1 for kind, _ in pattern if kind == "lit")
@@ -117,7 +121,7 @@ def specificity(pattern):
     return (literals, len(pattern), not has_greedy)
 
 
-def request_method_path(event):
+def request_method_path(event: dict[str, Any]) -> tuple[str | None, str | None]:
     """Pull the HTTP method and path from a Lambda event.
 
     Handles the API Gateway v2 shape (`requestContext.http`), the v1 shape
@@ -125,16 +129,16 @@ def request_method_path(event):
     `(None, None)` for a bare interaction invoke that carries no HTTP
     envelope.
     """
-    request_context = event.get("requestContext") or {}
-    http = request_context.get("http") or {}
-    method = http.get("method") or event.get("httpMethod")
-    path = http.get("path") or event.get("rawPath") or event.get("path")
+    request_context: Any = event.get("requestContext") or {}
+    http: Any = request_context.get("http") or {}
+    method: Any = http.get("method") or event.get("httpMethod")
+    path: Any = http.get("path") or event.get("rawPath") or event.get("path")
     if method is None or path is None:
         return None, None
     return method.upper(), normalize_path(path)
 
 
-def build_response(returned):
+def build_response(returned: Any) -> dict[str, Any]:
     """Coerce a route handler's return value into a Lambda proxy response.
 
     Accepts a full proxy dict (passed through unchanged), a status int, a
@@ -142,10 +146,11 @@ def build_response(returned):
     `(status, body)` or `(status, body, headers)` tuple.
     """
     if isinstance(returned, dict) and "statusCode" in returned:
-        return returned
+        return cast("dict[str, Any]", returned)
 
-    headers = {}
+    headers: Any = {}
     if isinstance(returned, tuple):
+        returned = cast("tuple[Any, ...]", returned)
         if len(returned) == 2:
             status, body = returned
         elif len(returned) == 3:
@@ -159,12 +164,12 @@ def build_response(returned):
     elif isinstance(returned, int):
         status, body = returned, None
     else:
-        status, body = 200, returned
+        status, body = 200, cast("Any", returned)
 
     return _finish(status, body, dict(headers or {}))
 
 
-def _finish(status, body, headers):
+def _finish(status: int, body: Any, headers: dict[str, str]) -> dict[str, Any]:
     is_base64 = False
     if body is None:
         out_body = ""
@@ -182,7 +187,7 @@ def _finish(status, body, headers):
         out_body = str(body)
         headers.setdefault("Content-Type", _TEXT_CONTENT_TYPE)
 
-    response = {"statusCode": status, "headers": headers, "body": out_body}
+    response: dict[str, Any] = {"statusCode": status, "headers": headers, "body": out_body}
     if is_base64:
         response["isBase64Encoded"] = True
     return response
