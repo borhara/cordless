@@ -1,3 +1,4 @@
+# pyright: strict
 """Shared dataclasses for REST responses.
 
 Carry read-only convenience properties plus thin action methods (e.g.
@@ -10,6 +11,7 @@ same code path, so there is no request logic duplicated between them.
 
 import asyncio
 import json
+from typing import Any
 
 from .._base import DiscordObject
 
@@ -27,38 +29,40 @@ class Thread(DiscordObject):
     `.rate_limit_per_user`, and any other field Discord sends."""
 
     @property
-    def archived(self):
+    def archived(self) -> Any:
         return self._data.get("thread_metadata", {}).get("archived", False)
 
     @property
-    def locked(self):
+    def locked(self) -> Any:
         return self._data.get("thread_metadata", {}).get("locked", False)
 
     @property
-    def mention(self):
+    def mention(self) -> Any:
         return f"<#{self._data['id']}>"
 
-    async def join(self, *, token=None):
+    async def join(self, *, token: str | None = None) -> Any:
         """No-op if the bot is already a member."""
         await threads.join_thread(self.id, token=token)
 
-    async def leave(self, *, token=None):
+    async def leave(self, *, token: str | None = None) -> Any:
         """The bot stops receiving the thread's messages."""
         await threads.leave_thread(self.id, token=token)
 
-    async def add_member(self, user_id, *, token=None):
+    async def add_member(self, user_id: str, *, token: str | None = None) -> Any:
         """Needs the bot in the thread; a private thread also needs SEND_MESSAGES_IN_THREADS."""
         await threads.add_thread_member(self.id, user_id, token=token)
 
-    async def remove_member(self, user_id, *, token=None):
+    async def remove_member(self, user_id: str, *, token: str | None = None) -> Any:
         """Requires MANAGE_THREADS, or thread ownership for a private thread."""
         await threads.remove_thread_member(self.id, user_id, token=token)
 
-    async def fetch_member(self, user_id, *, with_member=False, token=None):
+    async def fetch_member(self, user_id: str, *, with_member: bool = False, token: str | None = None) -> Any:
         """Fetch a single member of this thread, as a `ThreadMember`."""
         return await threads.fetch_thread_member(self.id, user_id, with_member=with_member, token=token)
 
-    async def fetch_members(self, *, with_member=False, after=None, limit=None, token=None):
+    async def fetch_members(
+        self, *, with_member: bool = False, after: str | None = None, limit: int | None = None, token: str | None = None
+    ) -> Any:
         """List this thread's members, as a list of `ThreadMember`."""
         return await threads.fetch_thread_members(
             self.id, with_member=with_member, after=after, limit=limit, token=token
@@ -72,28 +76,28 @@ class Invite(DiscordObject):
     Discord sends are available as attributes."""
 
     @property
-    def url(self):
+    def url(self) -> Any:
         """Full `https://discord.gg/<code>` invite link."""
         return f"https://discord.gg/{self._data['code']}"
 
-    async def fetch(self, **kwargs):
+    async def fetch(self, **kwargs: Any) -> Any:
         """Re-fetch this invite by code. Returns the refreshed `Invite`."""
         return await invites.fetch_invite(self.code, **kwargs)
 
-    async def delete(self, **kwargs):
+    async def delete(self, **kwargs: Any) -> Any:
         """Delete this invite. Returns the now-deleted `Invite`. Requires `MANAGE_CHANNELS` (or `MANAGE_GUILD` to
         remove any invite in the guild)."""
         return await invites.delete_invite(self.code, **kwargs)
 
-    async def fetch_target_users(self, **kwargs):
+    async def fetch_target_users(self, **kwargs: Any) -> Any:
         """Fetch this invite's target user allowlist, as raw CSV text."""
         return await invites.fetch_invite_target_users(self.code, **kwargs)
 
-    async def edit_target_users(self, filename, file_bytes, **kwargs):
+    async def edit_target_users(self, filename: str, file_bytes: bytes, **kwargs: Any) -> Any:
         """Replace this invite's target user allowlist from a CSV file."""
         await invites.edit_invite_target_users(self.code, filename, file_bytes, **kwargs)
 
-    async def fetch_target_users_job_status(self, **kwargs):
+    async def fetch_target_users_job_status(self, **kwargs: Any) -> Any:
         """Check the progress of a target user allowlist upload, as a
         `TargetUsersJobStatus`."""
         return await invites.fetch_invite_target_users_job_status(self.code, **kwargs)
@@ -116,7 +120,7 @@ class MessagePin(DiscordObject):
     timestamp string of when it was pinned."""
 
     @property
-    def message(self):
+    def message(self) -> Any:
         """The pinned `Message`."""
         message_data = self._data.get("message")
         return Message(message_data) if message_data is not None else None
@@ -126,7 +130,7 @@ class Ban(DiscordObject):
     """One entry from `guild.fetch_bans()`. `.reason`, `.user`."""
 
     @property
-    def user(self):
+    def user(self) -> Any:
         """The banned `User`."""
         user_data = self._data.get("user")
         return User(user_data) if user_data is not None else None
@@ -184,19 +188,19 @@ class MessageSearchResult(DiscordObject):
     `.doing_deep_historical_index`."""
 
     @property
-    def messages(self):
+    def messages(self) -> Any:
         """The matching messages, as a list of `Message`. Discord used to
         nest each hit in its own array to carry surrounding context, that
         context is no longer returned, so this flattens it back out."""
         return [Message(hit[0]) for hit in self._data.get("messages", []) if hit]
 
     @property
-    def threads(self):
+    def threads(self) -> Any:
         """Threads containing any of the matched messages, as a list of `Channel`."""
         return [Channel(c) for c in self._data.get("threads", [])]
 
     @property
-    def members(self):
+    def members(self) -> Any:
         """A `ThreadMember` per thread in `.threads` the bot has joined."""
         return [ThreadMember(m) for m in self._data.get("members", [])]
 
@@ -206,28 +210,28 @@ class Webhook(DiscordObject):
     `.guild_id`, `.token` (only present for Incoming Webhooks, e.g. right
     after `guild.create_webhook()`), and any other field Discord sends."""
 
-    async def edit(self, **kwargs):
+    async def edit(self, **kwargs: Any) -> Any:
         """Update this webhook. Requires `MANAGE_WEBHOOKS`."""
         return await webhooks.edit_webhook(self.id, **kwargs)
 
-    async def delete(self, **kwargs):
+    async def delete(self, **kwargs: Any) -> Any:
         """Delete this webhook. Requires `MANAGE_WEBHOOKS`."""
         await webhooks.delete_webhook(self.id, **kwargs)
 
     async def execute(
         self,
-        content=None,
+        content: Any = None,
         *,
-        embeds=None,
-        components=None,
-        files=None,
-        username=None,
-        avatar_url=None,
-        tts=False,
-        allowed_mentions=None,
-        wait=False,
-        thread_id=None,
-    ):
+        embeds: Any = None,
+        components: Any = None,
+        files: Any = None,
+        username: str | None = None,
+        avatar_url: str | None = None,
+        tts: bool = False,
+        allowed_mentions: Any = None,
+        wait: bool = False,
+        thread_id: str | None = None,
+    ) -> Any:
         """Send a message through this webhook, authenticated with its own
         token rather than `DISCORD_BOT_TOKEN`. Only works on a `Webhook`
         that carries `.token` (Incoming Webhooks, e.g. straight after
@@ -247,7 +251,7 @@ class Webhook(DiscordObject):
         if wait and body:
             return json.loads(body)
 
-    async def fetch_message(self, message_id="@original", **kwargs):
+    async def fetch_message(self, message_id: str = "@original", **kwargs: Any) -> Any:
         """Fetch a message previously sent through this webhook. Uses its
         own token, not `DISCORD_BOT_TOKEN`."""
         _, body = await asyncio.get_event_loop().run_in_executor(
@@ -256,8 +260,15 @@ class Webhook(DiscordObject):
         return json.loads(body)
 
     async def edit_message(
-        self, message_id="@original", content=None, *, embeds=None, components=None, files=None, allowed_mentions=None
-    ):
+        self,
+        message_id: str = "@original",
+        content: Any = None,
+        *,
+        embeds: Any = None,
+        components: Any = None,
+        files: Any = None,
+        allowed_mentions: Any = None,
+    ) -> Any:
         """Edit a message previously sent through this webhook. Uses its
         own token, not `DISCORD_BOT_TOKEN`."""
         payload = _webhook.build_payload(content, embeds, components, allowed_mentions=allowed_mentions)
@@ -265,7 +276,7 @@ class Webhook(DiscordObject):
             None, _webhook.edit_message, self.id, self.token, message_id, payload, files
         )
 
-    async def delete_message(self, message_id="@original"):
+    async def delete_message(self, message_id: str = "@original") -> Any:
         """Delete a message previously sent through this webhook. Uses its
         own token, not `DISCORD_BOT_TOKEN`."""
         await asyncio.get_event_loop().run_in_executor(None, _webhook.delete_message, self.id, self.token, message_id)
@@ -276,7 +287,7 @@ class Emoji(DiscordObject):
     `bot.fetch_application_emojis()`. `.id`, `.name`, `.roles`, `.animated`,
     `.available`, and any other field Discord sends."""
 
-    async def edit(self, **kwargs):
+    async def edit(self, **kwargs: Any) -> Any:
         """Update this emoji. Requires and
         `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS` for a guild
         emoji."""
@@ -284,7 +295,7 @@ class Emoji(DiscordObject):
             return await emojis.edit_guild_emoji(self._data["guild_id"], self.id, **kwargs)
         return await emojis.edit_application_emoji(self._data["application_id"], self.id, **kwargs)
 
-    async def delete(self, **kwargs):
+    async def delete(self, **kwargs: Any) -> Any:
         """Delete this emoji. Requires and
         `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS` for a guild
         emoji."""
@@ -294,7 +305,7 @@ class Emoji(DiscordObject):
             await emojis.delete_application_emoji(self._data["application_id"], self.id, **kwargs)
 
 
-def _guild_id_or_raise(data, message):
+def _guild_id_or_raise(data: dict[str, Any], message: str) -> Any:
     """Shared guard for resources with a non-guild variant that can't be
     edited or deleted (pack stickers, default soundboard sounds, ...) -
     guild_id is only present on the guild-scoped kind."""
@@ -310,13 +321,13 @@ class Sticker(DiscordObject):
     `.format_type`, and any other field Discord sends. `.guild_id` is only
     present on guild stickers, not standard (pack) ones."""
 
-    async def edit(self, **kwargs):
+    async def edit(self, **kwargs: Any) -> Any:
         """Update this guild sticker. Requires and
         `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS`."""
         guild_id = _guild_id_or_raise(self._data, "can't edit a sticker pack sticker, only guild stickers")
         return await stickers.edit_guild_sticker(guild_id, self.id, **kwargs)
 
-    async def delete(self, **kwargs):
+    async def delete(self, **kwargs: Any) -> Any:
         """Delete this guild sticker. Requires and
         `CREATE_GUILD_EXPRESSIONS`/`MANAGE_GUILD_EXPRESSIONS`."""
         guild_id = _guild_id_or_raise(self._data, "can't delete a sticker pack sticker, only guild stickers")
@@ -329,13 +340,13 @@ class SoundboardSound(DiscordObject):
     `.id`. `.name`, `.volume`, `.emoji_id`, `.emoji_name`. `.guild_id` is
     only present on guild sounds, not default ones."""
 
-    async def edit(self, **kwargs):
+    async def edit(self, **kwargs: Any) -> Any:
         """Update this guild soundboard sound. Requires `CREATE_GUILD_EXPRESSIONS`/
         `MANAGE_GUILD_EXPRESSIONS`."""
         guild_id = _guild_id_or_raise(self._data, "can't edit a default soundboard sound, only guild sounds")
         return await soundboard.edit_guild_soundboard_sound(guild_id, self.sound_id, **kwargs)
 
-    async def delete(self, **kwargs):
+    async def delete(self, **kwargs: Any) -> Any:
         """Delete this guild soundboard sound. Requires `CREATE_GUILD_EXPRESSIONS`/
         `MANAGE_GUILD_EXPRESSIONS`."""
         guild_id = _guild_id_or_raise(self._data, "can't delete a default soundboard sound, only guild sounds")
@@ -348,7 +359,7 @@ class StickerPack(DiscordObject):
     `.banner_asset_id`. `.stickers` is a list of `Sticker`."""
 
     @property
-    def stickers(self):
+    def stickers(self) -> Any:
         return [Sticker(s) for s in self._data.get("stickers", [])]
 
 
@@ -358,22 +369,22 @@ class GuildScheduledEvent(DiscordObject):
     `.status`, `.entity_type`, and any other field Discord sends."""
 
     @property
-    def creator(self):
+    def creator(self) -> Any:
         """The `User` that created this event, or `None` (always `None`
         for events created before 25 October 2021)."""
         creator_data = self._data.get("creator")
         return User(creator_data) if creator_data is not None else None
 
-    async def edit(self, **kwargs):
+    async def edit(self, **kwargs: Any) -> Any:
         """Update this event. Set `status` to start/end it. Returns the
         updated `GuildScheduledEvent`."""
         return await scheduled_events.edit_guild_scheduled_event(self.guild_id, self.id, **kwargs)
 
-    async def delete(self, **kwargs):
+    async def delete(self, **kwargs: Any) -> Any:
         """Requires MANAGE_EVENTS."""
         await scheduled_events.delete_guild_scheduled_event(self.guild_id, self.id, **kwargs)
 
-    async def fetch_users(self, **kwargs):
+    async def fetch_users(self, **kwargs: Any) -> Any:
         """List users subscribed to this event, as a list of
         `GuildScheduledEventUser`."""
         return await scheduled_events.fetch_guild_scheduled_event_users(self.guild_id, self.id, **kwargs)
@@ -385,12 +396,12 @@ class AutoModerationRule(DiscordObject):
     `.trigger_type`, `.trigger_metadata`, `.actions`, `.enabled`,
     `.exempt_roles`, `.exempt_channels`."""
 
-    async def edit(self, **kwargs):
+    async def edit(self, **kwargs: Any) -> Any:
         """Update this rule. Returns the updated `AutoModerationRule`.
         Requires `MANAGE_GUILD`."""
         return await auto_moderation.edit_auto_moderation_rule(self.guild_id, self.id, **kwargs)
 
-    async def delete(self, **kwargs):
+    async def delete(self, **kwargs: Any) -> Any:
         """Delete this rule. Requires `MANAGE_GUILD`."""
         await auto_moderation.delete_auto_moderation_rule(self.guild_id, self.id, **kwargs)
 
@@ -399,13 +410,13 @@ class GuildScheduledEventUser(DiscordObject):
     """One entry from `event.fetch_users()`. `.guild_scheduled_event_id`."""
 
     @property
-    def user(self):
+    def user(self) -> Any:
         """The subscribed `User`."""
         user_data = self._data.get("user")
         return User(user_data) if user_data is not None else None
 
     @property
-    def member(self):
+    def member(self) -> Any:
         """The subscribing `Member`, if included (`with_member=True`),
         else `None`."""
         member_data = self._data.get("member")
@@ -417,12 +428,12 @@ class StageInstance(DiscordObject):
     `channel.create_stage_instance()`. `.id`, `.guild_id`, `.channel_id`,
     `.topic`, `.privacy_level`, `.guild_scheduled_event_id`."""
 
-    async def edit(self, **kwargs):
+    async def edit(self, **kwargs: Any) -> Any:
         """Update this Stage instance. Returns the updated `StageInstance`.
         Requires Stage moderator permissions."""
         return await stage_instances.edit_stage_instance(self.channel_id, **kwargs)
 
-    async def delete(self, **kwargs):
+    async def delete(self, **kwargs: Any) -> Any:
         """Delete this Stage instance. Requires Stage moderator permissions."""
         await stage_instances.delete_stage_instance(self.channel_id, **kwargs)
 
@@ -434,22 +445,22 @@ class GuildTemplate(DiscordObject):
     `.is_dirty`. Keyed by `code`, not `id`."""
 
     @property
-    def creator(self):
+    def creator(self) -> Any:
         """The `User` who created this template."""
         creator_data = self._data.get("creator")
         return User(creator_data) if creator_data is not None else None
 
-    async def sync(self, **kwargs):
+    async def sync(self, **kwargs: Any) -> Any:
         """Sync this template to its source guild's current state. Returns
         the updated `GuildTemplate`. Requires `MANAGE_GUILD`."""
         return await templates.sync_guild_template(self.source_guild_id, self.code, **kwargs)
 
-    async def edit(self, **kwargs):
+    async def edit(self, **kwargs: Any) -> Any:
         """Update this template's name/description. Returns the updated
         `GuildTemplate`. Requires `MANAGE_GUILD`."""
         return await templates.edit_guild_template(self.source_guild_id, self.code, **kwargs)
 
-    async def delete(self, **kwargs):
+    async def delete(self, **kwargs: Any) -> Any:
         """Delete this template. Returns the deleted `GuildTemplate`.
         Requires `MANAGE_GUILD`."""
         return await templates.delete_guild_template(self.source_guild_id, self.code, **kwargs)
@@ -466,31 +477,31 @@ class AuditLog(DiscordObject):
     model classes."""
 
     @property
-    def entries(self):
+    def entries(self) -> Any:
         return [AuditLogEntry(e) for e in self._data.get("audit_log_entries", [])]
 
     @property
-    def users(self):
+    def users(self) -> Any:
         return [User(u) for u in self._data.get("users", [])]
 
     @property
-    def webhooks(self):
+    def webhooks(self) -> Any:
         return [Webhook(w) for w in self._data.get("webhooks", [])]
 
     @property
-    def integrations(self):
+    def integrations(self) -> Any:
         return [Integration(i) for i in self._data.get("integrations", [])]
 
     @property
-    def threads(self):
+    def threads(self) -> Any:
         return [Thread(t) for t in self._data.get("threads", [])]
 
     @property
-    def auto_moderation_rules(self):
+    def auto_moderation_rules(self) -> Any:
         return [AutoModerationRule(r) for r in self._data.get("auto_moderation_rules", [])]
 
     @property
-    def guild_scheduled_events(self):
+    def guild_scheduled_events(self) -> Any:
         return [GuildScheduledEvent(e) for e in self._data.get("guild_scheduled_events", [])]
 
 
@@ -499,11 +510,11 @@ class Entitlement(DiscordObject):
     `.user_id`, `.guild_id`, `.type`, `.deleted`, `.starts_at`, `.ends_at`,
     `.consumed`."""
 
-    async def consume(self, **kwargs):
+    async def consume(self, **kwargs: Any) -> Any:
         """Mark this one-time-purchase consumable entitlement as consumed."""
         await entitlements.consume_entitlement(self.application_id, self.id, **kwargs)
 
-    async def delete(self, **kwargs):
+    async def delete(self, **kwargs: Any) -> Any:
         """Test entitlements only; a real purchase can't be deleted this way."""
         await entitlements.delete_test_entitlement(self.application_id, self.id, **kwargs)
 
@@ -526,7 +537,7 @@ class Application(DiscordObject):
     `.bot_public`, `.flags`, `.tags`, `.install_params`,
     `.integration_types_config`, and any other field Discord sends."""
 
-    async def edit(self, **kwargs):
+    async def edit(self, **kwargs: Any) -> Any:
         """Update the application's settings. Returns the updated
         `Application`."""
         return await application.edit_current_application(**kwargs)
@@ -546,14 +557,14 @@ class ApplicationCommand(DiscordObject):
     `.name`, `.description`, `.options`, `.type`, `.version`, and any other
     field Discord sends."""
 
-    async def edit(self, **kwargs):
+    async def edit(self, **kwargs: Any) -> Any:
         """Update this command. Returns the updated `ApplicationCommand`."""
         guild_id = self._data.get("guild_id")
         if guild_id:
             return await application_commands.edit_guild_command(self.application_id, guild_id, self.id, **kwargs)
         return await application_commands.edit_global_command(self.application_id, self.id, **kwargs)
 
-    async def delete(self, **kwargs):
+    async def delete(self, **kwargs: Any) -> Any:
         """Global commands take up to an hour to clear from every guild."""
         guild_id = self._data.get("guild_id")
         if guild_id:
@@ -561,7 +572,7 @@ class ApplicationCommand(DiscordObject):
         else:
             await application_commands.delete_global_command(self.application_id, self.id, **kwargs)
 
-    async def fetch_permissions(self, **kwargs):
+    async def fetch_permissions(self, **kwargs: Any) -> Any:
         """Fetch this guild command's permissions. Guild-scoped commands
         only."""
         return await application_commands.fetch_command_permissions(
