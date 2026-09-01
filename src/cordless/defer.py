@@ -1,9 +1,11 @@
+# pyright: strict
 """Deferred interaction support: async Lambda invoke and Discord followup webhook."""
 
 import json
 import threading
 import time
 from http.client import HTTPException, HTTPSConnection
+from typing import Any
 
 from ._useragent import USER_AGENT
 
@@ -11,11 +13,11 @@ _TIMEOUT = 10
 
 # Kept open across invocations in a warm Lambda container, so most requests
 # skip the TLS handshake instead of paying for it every time.
-_conn = None
+_conn: HTTPSConnection | None = None
 _conn_lock = threading.Lock()
 
 
-def _send(method, path, body, headers):
+def _send(method: str, path: str, body: bytes | None, headers: dict[str, str]) -> tuple[int, bytes]:
     global _conn
     with _conn_lock:
         if _conn is None:
@@ -40,7 +42,7 @@ try:
     from botocore.exceptions import NoRegionError as _NoRegionError
 
     try:
-        _lambda_client = _boto3.client("lambda")
+        _lambda_client: Any = _boto3.client("lambda")  # pyright: ignore[reportUnknownMemberType]
     except _NoRegionError:
         _lambda_client = None
 except ImportError:
@@ -53,13 +55,13 @@ _NO_DEPLOY_MSG = (
 )
 
 
-def invoke_worker(function_name, interaction):
+def invoke_worker(function_name: str, interaction: Any) -> None:
     client = _lambda_client
     if client is None:
         try:
             import boto3
 
-            client = boto3.client("lambda")
+            client = boto3.client("lambda")  # pyright: ignore[reportUnknownMemberType]
         except ImportError:
             raise RuntimeError(_NO_DEPLOY_MSG)
     resp = client.invoke(
@@ -73,7 +75,9 @@ def invoke_worker(function_name, interaction):
         )
 
 
-def _request(method, path, body=None, content_type=None, retry_404=False):
+def _request(
+    method: str, path: str, body: bytes | None = None, content_type: str | None = None, retry_404: bool = False
+) -> tuple[int, bytes]:
     """Make a webhooks/{app_id}/{token}/... call.
 
     Retries on 429 (honouring retry_after) always, and on 404 (a warm worker
@@ -109,7 +113,7 @@ def _request(method, path, body=None, content_type=None, retry_404=False):
     return status, body_out
 
 
-def patch_followup(app_id, token, payload):
+def patch_followup(app_id: str, token: str, payload: Any) -> tuple[int, bytes]:
     return _request(
         "PATCH",
         f"/api/v10/webhooks/{app_id}/{token}/messages/@original",
@@ -119,7 +123,9 @@ def patch_followup(app_id, token, payload):
     )
 
 
-def patch_followup_with_files(app_id, token, payload, files):
+def patch_followup_with_files(
+    app_id: str, token: str, payload: Any, files: list[tuple[str, bytes]]
+) -> tuple[int, bytes]:
     """PATCH the deferred interaction message with file attachments.
 
     `files` is a list of (filename, bytes) tuples; content types are guessed
@@ -133,17 +139,19 @@ def patch_followup_with_files(app_id, token, payload, files):
     )
 
 
-def patch_followup_with_file(app_id, token, payload, filename, file_bytes, content_type=None):
+def patch_followup_with_file(
+    app_id: str, token: str, payload: Any, filename: str, file_bytes: bytes, content_type: str | None = None
+) -> tuple[int, bytes]:
     """Back-compat single-file wrapper around patch_followup_with_files."""
     return patch_followup_with_files(app_id, token, payload, [(filename, file_bytes)])
 
 
-def post_followup(app_id, token, payload):
+def post_followup(app_id: str, token: str, payload: Any) -> tuple[int, bytes]:
     """POST a new followup message (creates an additional message, does not replace @original)."""
     return _request("POST", f"/api/v10/webhooks/{app_id}/{token}", json.dumps(payload).encode(), "application/json")
 
 
-def delete_original(app_id, token):
+def delete_original(app_id: str, token: str) -> int:
     """DELETE the deferred @original message."""
     status, _ = _request("DELETE", f"/api/v10/webhooks/{app_id}/{token}/messages/@original", retry_404=True)
     return status
