@@ -1,3 +1,4 @@
+# pyright: strict
 """Single source of truth for cordless's outbound User-Agent header.
 
 Discord sits behind Cloudflare, which blocks urllib's default
