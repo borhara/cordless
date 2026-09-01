@@ -1,3 +1,4 @@
+# pyright: strict
 """RESTMixin: the flat ``bot.<verb>_<resource>()`` surface.
 
 Each attribute is a thin async delegation to a resource module function,
@@ -52,7 +53,7 @@ def _delegate(
     every argument goes through unchanged."""
 
     @functools.wraps(fn)
-    async def method(self, *args, **kwargs):
+    async def method(self: object, *args: Any, **kwargs: Any) -> _R:
         return await fn(*args, **kwargs)
 
     return method
