@@ -841,7 +841,7 @@ class Cordless(RESTMixin):
         from .routes import build_response, request_method_path
 
         method, path = request_method_path(event)
-        if method is None or (method == "POST" and path == "/"):
+        if method is None or path is None or (method == "POST" and path == "/"):
             return None
 
         match = self.router.match_route(method, path)
