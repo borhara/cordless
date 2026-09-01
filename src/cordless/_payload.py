@@ -5,7 +5,20 @@ A leaf module: it depends only on errors, so importing it never drags in
 models.py or the resource layer.
 """
 
+# pyright: strict
+from typing import Any, cast
+
 from .errors import MessageTooLongError
+
+__all__ = [
+    "_FLAG_EPHEMERAL",
+    "_FLAG_UI_KIT",
+    "_attach_files",
+    "_contains_uikit",
+    "_validate_content_length",
+    "_validate_uikit",
+    "_with_guild_id",
+]
 
 _FLAG_EPHEMERAL = 64
 _FLAG_UI_KIT = 32768
@@ -18,13 +31,14 @@ _MAX_UIKIT_TEXT_LENGTH = 4000
 _UI_KIT_TYPES = {9, 10, 11, 12, 13, 14, 17}
 
 
-def _contains_uikit(components):
+def _contains_uikit(components: Any) -> bool:
     if not components:
         return False
     for c in components:
         if getattr(c, "is_ui_kit", False):
             return True
         if isinstance(c, dict):
+            c = cast("dict[str, Any]", c)
             if c.get("type") in _UI_KIT_TYPES:
                 return True
             if _contains_uikit(c.get("components")):
@@ -36,7 +50,7 @@ def _contains_uikit(components):
     return False
 
 
-def _count_components(components):
+def _count_components(components: Any) -> int:
     """Every component in the tree counts toward the 40 cap, including ones
     nested in a Container/Section/ActionRow and a Section's accessory."""
     if not components:
@@ -45,6 +59,7 @@ def _count_components(components):
     for c in components:
         total += 1
         if isinstance(c, dict):
+            c = cast("dict[str, Any]", c)
             total += _count_components(c.get("components"))
             if c.get("accessory") is not None:
                 total += 1
@@ -56,7 +71,7 @@ def _count_components(components):
     return total
 
 
-def _uikit_text_length(components):
+def _uikit_text_length(components: Any) -> int:
     """Total characters across every TextDisplay, which Discord caps at 4000
     for the whole message."""
     if not components:
@@ -64,6 +79,7 @@ def _uikit_text_length(components):
     total = 0
     for c in components:
         if isinstance(c, dict):
+            c = cast("dict[str, Any]", c)
             if c.get("type") == 10:
                 total += len(c.get("content") or "")
             total += _uikit_text_length(c.get("components"))
@@ -75,7 +91,7 @@ def _uikit_text_length(components):
     return total
 
 
-def _validate_content_length(content):
+def _validate_content_length(content: str | None) -> None:
     """Discord rejects an over-length message on its own end, after we have
     already returned 200 to API Gateway, so check it up front."""
     if content is not None and len(content) > _MAX_CONTENT_LENGTH:
@@ -85,7 +101,7 @@ def _validate_content_length(content):
         )
 
 
-def _validate_uikit(content, embeds, components):
+def _validate_uikit(content: str | None, embeds: Any, components: Any) -> None:
     """Reject a Components v2 message that also sets content or embeds, or
     that busts the component-count/text-length caps, before it is sent.
     Shared by the interaction path and the REST layer's create/edit message
@@ -107,7 +123,7 @@ def _validate_uikit(content, embeds, components):
         )
 
 
-def _attach_files(data, files):
+def _attach_files(data: dict[str, Any], files: list[tuple[str, bytes]]) -> None:
     """Add the attachments metadata array Discord expects alongside a multipart body.
 
     Appended after whatever is already in data["attachments"] (e.g. an edit's
@@ -115,11 +131,11 @@ def _attach_files(data, files):
     matching the "files[n]" part build_multipart_body gives it, while retained
     attachments keep their real snowflake id.
     """
-    existing = data.get("attachments") or []
+    existing: list[Any] = data.get("attachments") or []
     data["attachments"] = existing + [{"id": i, "filename": name} for i, (name, _) in enumerate(files)]
 
 
-def _with_guild_id(data, guild_id):
+def _with_guild_id(data: dict[str, Any] | None, guild_id: str | None) -> dict[str, Any] | None:
     """Discord's member and role payloads carry no guild_id of their own; it
     is implied by the endpoint. Stitch it in so member.add_role()/role.edit()
     and friends know which guild to act on."""

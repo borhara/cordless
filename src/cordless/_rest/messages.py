@@ -8,6 +8,7 @@ edit_channel_message directly.
 """
 
 import urllib.parse
+from typing import Any
 
 from .._payload import _FLAG_UI_KIT, _contains_uikit, _validate_content_length, _validate_uikit
 from ..models import Message, User
@@ -31,7 +32,7 @@ def _has_value(x):
     return x is not UNSET and x is not None
 
 
-def _or_none(x):
+def _or_none(x: object) -> Any:
     return None if x is UNSET else x
 
 
@@ -122,7 +123,7 @@ async def edit_channel_message(
         # Components v2; leaving them untouched (UNSET) does not.
         _validate_uikit(_or_none(content), _or_none(embeds), components)
     elif content is not UNSET:
-        _validate_content_length(content)
+        _validate_content_length(_or_none(content))
 
     if flags is not None or has_uikit:
         computed_flags = (flags or 0) | (_FLAG_UI_KIT if has_uikit else 0)

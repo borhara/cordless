@@ -25,7 +25,7 @@ import urllib.request
 # is time.monotonic(), so a test monkeypatching that module-level attribute
 # to control this retry loop would also corrupt asyncio's internal timeouts
 from time import monotonic, sleep
-from typing import IO, cast
+from typing import IO, Any, cast
 
 from .. import errors, ratelimit
 from .._multipart import build_multipart_body
@@ -213,7 +213,7 @@ def _request_raw_sync(method, path, payload=None, files=None, token=None, raw_bo
     if raw_body is not None:
         body, content_type = raw_body
     elif files:
-        _attach_files(payload, files)
+        _attach_files(cast("dict[str, Any]", payload), files)
         body, content_type = build_multipart_body(payload, files)
     elif payload is not None:
         body, content_type = json.dumps(payload).encode(), "application/json"
