@@ -1,3 +1,4 @@
+# pyright: strict
 """Optional cross-invocation coordination for outbound Discord rate limits.
 
 Enabled by setting `ratelimit = true` in [deploy] (cordless.toml), which
@@ -26,10 +27,12 @@ is exactly what it's stuck using until it learns the bucket for itself,
 still finds the block a warm sibling already recorded.
 """
 
+import email.message
 import os
 import random
 import re
 import time
+from collections.abc import Mapping
 from typing import Any
 
 from . import errors
@@ -52,19 +55,19 @@ _MAX_WAIT = 5.0
 _CONFIRMED_MAX_WAIT = 6.0
 _RETRY_JITTER_CAP = 2.0
 
-_local = {}
+_local: dict[str, tuple[int, float, bool]] = {}
 
 # route_key -> bucket id, learned from X-RateLimit-Bucket as responses come in.
 # In-memory only: a fresh route this warm container hasn't seen yet just falls
 # back to being keyed by its own route_key until a response teaches it otherwise.
-_route_buckets = {}
+_route_buckets: dict[str, str] = {}
 
 
-def enabled():
+def enabled() -> bool:
     return bool(os.environ.get(_TABLE_ENV_VAR))
 
 
-def jittered_wait(seconds, cap=_MAX_WAIT):
+def jittered_wait(seconds: float, cap: float = _MAX_WAIT) -> float:
     """Equal jitter: wait at least half the requested time, capped at cap.
 
     Concurrent callers given the same `seconds` (e.g. several requests that
@@ -76,7 +79,7 @@ def jittered_wait(seconds, cap=_MAX_WAIT):
     return capped / 2 + random.uniform(0, capped / 2)
 
 
-def retry_after_wait(retry_after):
+def retry_after_wait(retry_after: float) -> float:
     """How long to sleep before retrying a request Discord just 429'd,
     given the response's own retry_after. Unlike jittered_wait above, this
     must never sleep less than retry_after: retrying early just turns one
@@ -91,11 +94,11 @@ def retry_after_wait(retry_after):
     return retry_after + random.uniform(0, min(retry_after, _RETRY_JITTER_CAP))
 
 
-def _key(method, path):
+def _key(method: str, path: str) -> str:
     return f"{method} {path}"
 
 
-def _learn_bucket(route, headers):
+def _learn_bucket(route: str, headers: email.message.Message | Mapping[str, str] | None) -> None:
     """Record route's bucket id from a response's X-RateLimit-Bucket, if present."""
     bucket = headers.get("X-RateLimit-Bucket") if headers else None
     if bucket:
@@ -111,12 +114,12 @@ def _learn_bucket(route, headers):
 _MAJOR_PARAM_RE = re.compile(r"^/(channels|guilds|webhooks)/[^/]+")
 
 
-def _major_resource(path):
+def _major_resource(path: str) -> str:
     match = _MAJOR_PARAM_RE.match(path)
     return match.group(0) if match else ""
 
 
-def _mirror_under_route_key(key, route, blocked_until, confirmed):
+def _mirror_under_route_key(key: str, route: str, blocked_until: float, confirmed: bool) -> None:
     """When key (bucket-based) differs from route (the plain fallback
     identity), also publish the exact same shared state under route.
 
@@ -134,7 +137,7 @@ def _mirror_under_route_key(key, route, blocked_until, confirmed):
         _put_shared(route, blocked_until, confirmed=confirmed)
 
 
-def _effective_key(route, path):
+def _effective_key(route: str, path: str) -> str:
     """route's bucket id, combined with path's major resource, if this warm
     container has learned a bucket id for route; otherwise route itself
     (which already encodes everything needed, major resource included).
@@ -151,7 +154,7 @@ def _effective_key(route, path):
     return f"{bucket}:{major}" if major else bucket
 
 
-def record_response(method, path, headers):
+def record_response(method: str, path: str, headers: email.message.Message | Mapping[str, str]) -> None:
     """Cache the bucket state Discord returned, for next time this route is called."""
     if not enabled():
         return
@@ -175,7 +178,7 @@ def record_response(method, path, headers):
         _mirror_under_route_key(key, route, reset_at, confirmed=False)
 
 
-def wait_if_needed(method, path):
+def wait_if_needed(method: str, path: str) -> None:
     """Block until a bucket is clear, if local or shared state says it isn't.
 
     Raises DiscordHTTPError(429, ...) instead of blocking, without sending
@@ -209,7 +212,9 @@ def wait_if_needed(method, path):
     time.sleep(wait)
 
 
-def note_blocked(method, path, retry_after, headers=None):
+def note_blocked(
+    method: str, path: str, retry_after: float, headers: email.message.Message | Mapping[str, str] | None = None
+) -> None:
     """Record a 429 so other concurrent invocations see the same bucket is blocked.
 
     headers is the 429 response's own headers, not just its parsed body: a 429
@@ -229,11 +234,11 @@ def note_blocked(method, path, retry_after, headers=None):
     _mirror_under_route_key(key, route, blocked_until, confirmed=True)
 
 
-_tables = {}
+_tables: dict[str, Any] = {}
 _warned_degraded = False
 
 
-def _warn_degraded(action, exc):
+def _warn_degraded(action: str, exc: BaseException) -> None:
     """Print once when a DynamoDB call fails. Shared state is a best-effort
     optimisation, so a failure falls back to per-container state rather than
     raising, but staying silent hides a missing table or IAM permission for
@@ -247,21 +252,18 @@ def _warn_degraded(action, exc):
         )
 
 
-def _table():
+def _table() -> Any:
     name = os.environ[_TABLE_ENV_VAR]
     table = _tables.get(name)
     if table is None:
         import boto3
 
-        # boto3.resource()'s return type is generated dynamically, so pyright
-        # can't see .Table on it without the mypy-boto3-dynamodb stubs this
-        # project doesn't depend on
-        table = boto3.resource("dynamodb").Table(name)  # pyright: ignore[reportAttributeAccessIssue]
+        table = boto3.resource("dynamodb").Table(name)  # pyright: ignore[reportUnknownMemberType]
         _tables[name] = table
     return table
 
 
-def _shared_block(key):
+def _shared_block(key: str) -> tuple[float, bool] | None:
     """(blocked_until, confirmed), or None if key has no recorded block (or
     the table is unreachable/unconfigured, see the fail-open note below)."""
     try:
@@ -276,7 +278,7 @@ def _shared_block(key):
     return float(item["blocked_until"]), bool(item.get("confirmed", False))
 
 
-def _put_shared(key, blocked_until, confirmed):
+def _put_shared(key: str, blocked_until: float, confirmed: bool) -> None:
     try:
         _table().put_item(
             Item={
