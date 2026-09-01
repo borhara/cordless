@@ -1,3 +1,4 @@
+# pyright: strict
 """Discord webhook execution: send/edit/delete messages via a webhook id+token.
 
 Unlike send_message/edit_message in app.py, none of this needs DISCORD_BOT_TOKEN -
@@ -11,6 +12,7 @@ import re
 import threading
 import time
 from http.client import HTTPException, HTTPSConnection
+from typing import Any
 
 from ._multipart import build_multipart_body
 from ._payload import _FLAG_UI_KIT, _attach_files, _contains_uikit
@@ -41,7 +43,7 @@ _IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "PUT", "DELETE"})
 class _Unset:
     __slots__ = ()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "UNSET"
 
 
@@ -53,11 +55,11 @@ _URL_RE = re.compile(r"discord(?:app)?\.com/api(?:/v\d+)?/webhooks/(\d+)/([\w-]+
 
 # Kept open across invocations in a warm Lambda container, so most requests
 # skip the TLS handshake instead of paying for it every time.
-_conn = None
+_conn: HTTPSConnection | None = None
 _conn_lock = threading.Lock()
 
 
-def _send(method, path, body, headers):
+def _send(method: str, path: str, body: bytes | None, headers: dict[str, str]) -> tuple[int, bytes]:
     global _conn
     with _conn_lock:
         if _conn is None:
@@ -82,7 +84,7 @@ def _send(method, path, body, headers):
             return resp.status, resp.read()
 
 
-def parse_webhook_url(url):
+def parse_webhook_url(url: str) -> tuple[str, str]:
     """Extract (webhook_id, webhook_token) from a full Discord webhook URL."""
     match = _URL_RE.search(url)
     if not match:
@@ -96,8 +98,17 @@ def parse_webhook_url(url):
     return match.group(1), match.group(2)
 
 
-def build_payload(content, embeds, components, *, username=None, avatar_url=None, tts=False, allowed_mentions=None):
-    data = {}
+def build_payload(
+    content: Any,
+    embeds: Any,
+    components: Any,
+    *,
+    username: str | None = None,
+    avatar_url: str | None = None,
+    tts: bool = False,
+    allowed_mentions: Any = None,
+) -> dict[str, Any]:
+    data: dict[str, Any] = {}
     if content is not None:
         data["content"] = content
     if embeds is not None:
@@ -118,7 +129,7 @@ def build_payload(content, embeds, components, *, username=None, avatar_url=None
     return data
 
 
-def _request(method, path, body=None, content_type=None):
+def _request(method: str, path: str, body: bytes | None = None, content_type: str | None = None) -> tuple[int, bytes]:
     """Make a webhooks/{id}/{token}/... call, retrying on 429 (honouring retry_after).
 
     A webhook's id+token pair is its own credential and its own bucket, not
@@ -153,15 +164,15 @@ def _request(method, path, body=None, content_type=None):
     return status, data
 
 
-def _encode(payload, files):
+def _encode(payload: Any, files: Any) -> tuple[bytes, str]:
     if files:
         _attach_files(payload, files)
         return build_multipart_body(payload, files)
     return json.dumps(payload).encode(), "application/json"
 
 
-def _wait_qs(wait, thread_id):
-    query = []
+def _wait_qs(wait: bool, thread_id: str | None) -> str:
+    query: list[str] = []
     if wait:
         query.append("wait=true")
     if thread_id:
@@ -169,38 +180,49 @@ def _wait_qs(wait, thread_id):
     return ("?" + "&".join(query)) if query else ""
 
 
-def execute(webhook_id, webhook_token, payload, files=None, wait=False, thread_id=None):
+def execute(
+    webhook_id: str,
+    webhook_token: str,
+    payload: Any,
+    files: Any = None,
+    wait: bool = False,
+    thread_id: str | None = None,
+) -> tuple[int, bytes]:
     """POST a message to a webhook. Returns (status, body)."""
     body, content_type = _encode(payload, files)
     path = f"/api/v10/webhooks/{webhook_id}/{webhook_token}{_wait_qs(wait, thread_id)}"
     return _request("POST", path, body, content_type)
 
 
-def execute_slack_compatible(webhook_id, webhook_token, payload, wait=False, thread_id=None):
+def execute_slack_compatible(
+    webhook_id: str, webhook_token: str, payload: Any, wait: bool = False, thread_id: str | None = None
+) -> tuple[int, bytes]:
     """POST a Slack-formatted payload straight through to Discord."""
     body = json.dumps(payload).encode()
     path = f"/api/v10/webhooks/{webhook_id}/{webhook_token}/slack{_wait_qs(wait, thread_id)}"
     return _request("POST", path, body, "application/json")
 
 
-def execute_github_compatible(webhook_id, webhook_token, payload, wait=False, thread_id=None):
+def execute_github_compatible(
+    webhook_id: str, webhook_token: str, payload: Any, wait: bool = False, thread_id: str | None = None
+) -> tuple[int, bytes]:
     """POST a GitHub-formatted payload straight through to Discord."""
     body = json.dumps(payload).encode()
     path = f"/api/v10/webhooks/{webhook_id}/{webhook_token}/github{_wait_qs(wait, thread_id)}"
     return _request("POST", path, body, "application/json")
 
 
-def get_webhook(webhook_id, webhook_token):
+def get_webhook(webhook_id: str, webhook_token: str) -> tuple[int, bytes]:
     """GET the webhook itself, authenticated with its own token. The
     returned object omits `user`, unlike the bot-token equivalent."""
     return _request("GET", f"/api/v10/webhooks/{webhook_id}/{webhook_token}")
 
 
-def edit_webhook(webhook_id, webhook_token, name=UNSET, avatar=UNSET):
+def edit_webhook(webhook_id: str, webhook_token: str, name: Any = UNSET, avatar: Any = UNSET) -> tuple[int, bytes]:
     """PATCH the webhook's own name/avatar, authenticated with its own
     token. Unlike the bot-token equivalent, this can't move it to a
     different channel_id. avatar can be cleared by passing None."""
-    payload = {}
+    payload: dict[str, Any] = {}
     if name is not UNSET:
         payload["name"] = name
     if avatar is not UNSET:
@@ -209,25 +231,27 @@ def edit_webhook(webhook_id, webhook_token, name=UNSET, avatar=UNSET):
     return _request("PATCH", f"/api/v10/webhooks/{webhook_id}/{webhook_token}", body, "application/json")
 
 
-def get_message(webhook_id, webhook_token, message_id="@original"):
+def get_message(webhook_id: str, webhook_token: str, message_id: str = "@original") -> tuple[int, bytes]:
     """GET a message previously sent through this webhook."""
     path = f"/api/v10/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}"
     return _request("GET", path)
 
 
-def edit_message(webhook_id, webhook_token, message_id, payload, files=None):
+def edit_message(
+    webhook_id: str, webhook_token: str, message_id: str, payload: Any, files: Any = None
+) -> tuple[int, bytes]:
     """PATCH a message previously sent through this webhook."""
     body, content_type = _encode(payload, files)
     path = f"/api/v10/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}"
     return _request("PATCH", path, body, content_type)
 
 
-def delete_message(webhook_id, webhook_token, message_id):
+def delete_message(webhook_id: str, webhook_token: str, message_id: str) -> tuple[int, bytes]:
     """DELETE a message previously sent through this webhook."""
     path = f"/api/v10/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}"
     return _request("DELETE", path)
 
 
-def delete_webhook(webhook_id, webhook_token):
+def delete_webhook(webhook_id: str, webhook_token: str) -> tuple[int, bytes]:
     """DELETE the webhook itself, authenticated with its own token (no bot token needed)."""
     return _request("DELETE", f"/api/v10/webhooks/{webhook_id}/{webhook_token}")
