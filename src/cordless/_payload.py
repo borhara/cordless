@@ -1,3 +1,4 @@
+# pyright: strict
 """Message payload helpers shared by the interaction path (context.py), the
 REST layer (_rest/) and webhook execution (webhook.py).
 
@@ -5,7 +6,6 @@ A leaf module: it depends only on errors, so importing it never drags in
 models.py or the resource layer.
 """
 
-# pyright: strict
 from typing import Any, cast
 
 from .errors import MessageTooLongError
