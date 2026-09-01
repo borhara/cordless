@@ -1,6 +1,7 @@
+# pyright: strict
 import base64
 import json
-from typing import Any
+from typing import Any, cast
 
 from ._multipart import build_multipart_body
 from ._payload import (
@@ -12,7 +13,16 @@ from ._payload import (
     _validate_uikit,
     _with_guild_id,
 )
-from .models import Attachment, Channel, Guild, Member, Message, Role, User, _wrap
+from .models import (
+    Attachment,
+    Channel,
+    Guild,
+    Member,
+    Message,
+    Role,
+    User,
+    _wrap,  # pyright: ignore[reportPrivateUsage]
+)
 
 _CHANNEL_MESSAGE_WITH_SOURCE = 4
 _UPDATE_MESSAGE = 7
@@ -22,7 +32,7 @@ _AUTOCOMPLETE_RESULT = 8
 _MODAL = 9
 
 
-def _leaf_options(data):
+def _leaf_options(data: Any) -> Any:
     """Descend through subcommand/group wrappers to the actual value options."""
     options = data.get("options", [])
     while options and options[0].get("type") in (1, 2):
@@ -30,7 +40,14 @@ def _leaf_options(data):
     return options
 
 
-def _build_message_data(msg, content, embeds, components, ephemeral=False, allowed_mentions=None):
+def _build_message_data(
+    msg: Any,
+    content: Any,
+    embeds: Any,
+    components: Any,
+    ephemeral: bool = False,
+    allowed_mentions: Any = None,
+) -> dict[str, Any]:
     _content = content if content is not None else msg
     is_uikit = _contains_uikit(components)
     if is_uikit:
@@ -38,7 +55,7 @@ def _build_message_data(msg, content, embeds, components, ephemeral=False, allow
     else:
         _validate_content_length(_content)
 
-    data = {}
+    data: dict[str, Any] = {}
     if _content is not None:
         data["content"] = _content
     if embeds is not None:
@@ -58,12 +75,12 @@ def _build_message_data(msg, content, embeds, components, ephemeral=False, allow
     return data
 
 
-def _wrap_members(members, users, guild_id):
+def _wrap_members(members: Any, users: Any, guild_id: str | None) -> dict[str, Member]:
     """Discord's resolved.members entries omit the nested `user` object
     that's normally embedded on a member payload - it lives separately in
     resolved.users instead. Stitch it back in so `.user` works on a
     resolved `Member` the same way it does everywhere else."""
-    result = {}
+    result: dict[str, Member] = {}
     for member_id, member_data in members.items():
         user_data = users.get(member_id)
         if user_data is not None and "user" not in member_data:
@@ -109,7 +126,7 @@ class Context:
     returning `None`.
     """
 
-    def __init__(self, interaction, *, _worker_mode=False):
+    def __init__(self, interaction: Any, *, _worker_mode: bool = False) -> None:
         self.interaction = interaction
         self.response: dict[str, Any] | None = None
         self._response_kind = None
@@ -121,7 +138,9 @@ class Context:
         self.custom_id_args = []
         self.options = {opt["name"]: opt["value"] for opt in _leaf_options(data) if "value" in opt}
         guild_id = interaction.get("guild_id")
-        self.user = _wrap(User, (interaction.get("member") or {}).get("user") or interaction.get("user"))
+        self.user = _wrap(
+            User, cast("dict[str, Any]", interaction.get("member") or {}).get("user") or interaction.get("user")
+        )
         self.member = _wrap(Member, _with_guild_id(interaction.get("member"), guild_id))
         self.message = _wrap(Message, interaction.get("message"))
         self.channel = _wrap(Channel, interaction.get("channel"))
@@ -143,7 +162,7 @@ class Context:
                 self.focused_value = opt.get("value")
 
         # Modal submission: flat dict of component custom_id → value
-        self.modal_values = {}
+        self.modal_values: dict[str, Any] = {}
         for row in data.get("components", []):
             for comp in row.get("components", []):
                 if "custom_id" in comp:
@@ -172,15 +191,15 @@ class Context:
 
     async def send(
         self,
-        msg=None,
+        msg: Any = None,
         *,
-        content=None,
-        ephemeral=False,
-        embeds=None,
-        components=None,
-        files=None,
-        allowed_mentions=None,
-    ):
+        content: Any = None,
+        ephemeral: bool = False,
+        embeds: Any = None,
+        components: Any = None,
+        files: Any = None,
+        allowed_mentions: Any = None,
+    ) -> dict[str, Any]:
         """Send the response. `msg` and `content` are interchangeable
         (positional vs keyword). `files` is a list of `(filename, bytes)`
         tuples. In a deferred handler, `send` edits the loading message
@@ -207,15 +226,15 @@ class Context:
 
     async def followup(
         self,
-        msg=None,
+        msg: Any = None,
         *,
-        content=None,
-        ephemeral=False,
-        embeds=None,
-        components=None,
-        files=None,
-        allowed_mentions=None,
-    ):
+        content: Any = None,
+        ephemeral: bool = False,
+        embeds: Any = None,
+        components: Any = None,
+        files: Any = None,
+        allowed_mentions: Any = None,
+    ) -> dict[str, Any]:
         """Manual replica of what decorator `defer=True` sends automatically:
         same shape as `send`. You normally don't call this yourself, it's
         what `send`/`edit` fall through to in worker mode."""
@@ -234,8 +253,15 @@ class Context:
         return self.response
 
     async def send_followup(
-        self, msg=None, *, content=None, ephemeral=False, embeds=None, components=None, allowed_mentions=None
-    ):
+        self,
+        msg: Any = None,
+        *,
+        content: Any = None,
+        ephemeral: bool = False,
+        embeds: Any = None,
+        components: Any = None,
+        allowed_mentions: Any = None,
+    ) -> dict[str, Any]:
         """Deferred handlers only: post an additional, separate message
         (doesn't touch the original loading message)."""
         from .defer import post_followup
@@ -244,13 +270,22 @@ class Context:
         post_followup(self.interaction.get("application_id"), self.token, data)
         return {"_cordless_followup": True}
 
-    async def delete_original(self):
+    async def delete_original(self) -> None:
         """Deferred handlers only: delete the original loading message."""
         from .defer import delete_original as _delete
 
         _delete(self.interaction.get("application_id"), self.token)
 
-    async def edit(self, msg=None, *, content=None, embeds=None, components=None, files=None, allowed_mentions=None):
+    async def edit(
+        self,
+        msg: Any = None,
+        *,
+        content: Any = None,
+        embeds: Any = None,
+        components: Any = None,
+        files: Any = None,
+        allowed_mentions: Any = None,
+    ) -> dict[str, Any]:
         """Update the message the component sits on (buttons/selects). No
         `ephemeral`: a message's visibility can't change after creation."""
         if self._worker_mode:
@@ -271,28 +306,28 @@ class Context:
             self.response = _response(payload)
         return self.response
 
-    async def defer(self, ephemeral=False):
+    async def defer(self, ephemeral: bool = False) -> dict[str, Any]:
         """Loading state, for commands/modals. You don't normally call this
         yourself; decorator `defer=True` handles the ack and runs your
         handler on the worker."""
-        data: dict = {"type": _DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE}
+        data: dict[str, Any] = {"type": _DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE}
         if ephemeral:
             data["data"] = {"flags": _FLAG_EPHEMERAL}
         self.response = _response(data)
         return self.response
 
-    async def defer_edit(self):
+    async def defer_edit(self) -> dict[str, Any]:
         """Defer a component interaction: tells Discord we'll update this message async (type 6)."""
         self.response = _response({"type": _DEFERRED_UPDATE_MESSAGE})
         return self.response
 
-    async def send_modal(self, modal):
+    async def send_modal(self, modal: Any) -> dict[str, Any]:
         """Show a `Modal`. Must be the first response; you can't defer, then
         open a modal."""
         self.response = _response({"type": _MODAL, "data": modal.to_dict()})
         return self.response
 
-    async def respond_autocomplete(self, choices):
+    async def respond_autocomplete(self, choices: Any) -> dict[str, Any]:
         """The manual piece underneath an `@bot.autocomplete` handler's
         returned list. You don't normally call this yourself."""
         self.response = _response({"type": _AUTOCOMPLETE_RESULT, "data": {"choices": choices}})
@@ -300,7 +335,7 @@ class Context:
         return self.response
 
 
-def _response(payload):
+def _response(payload: Any) -> dict[str, Any]:
     return {
         "statusCode": 200,
         "headers": {"Content-Type": "application/json"},
@@ -308,7 +343,7 @@ def _response(payload):
     }
 
 
-def _multipart_response(payload, files):
+def _multipart_response(payload: Any, files: Any) -> dict[str, Any]:
     """Like _response(), but for an interaction response that carries file
     attachments. Discord accepts multipart/form-data for the initial response,
     same as followup messages; API Gateway needs the body base64-encoded plus
