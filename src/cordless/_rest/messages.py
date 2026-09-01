@@ -1,3 +1,4 @@
+# pyright: strict
 """Message and reaction REST endpoints (Discord API v10).
 
 Cordless.send_message/edit_message/delete_message (app.py) are the shipped
@@ -8,7 +9,7 @@ edit_channel_message directly.
 """
 
 import urllib.parse
-from typing import Any
+from typing import Any, cast
 
 from .._payload import _FLAG_UI_KIT, _contains_uikit, _validate_content_length, _validate_uikit
 from ..models import Message, User
@@ -17,17 +18,17 @@ from ._client import UNSET
 from .models import MessageSearchResult
 
 
-def _quote_emoji(emoji):
+def _quote_emoji(emoji: str) -> str:
     # Discord's reaction routes take a bare unicode emoji or `name:id` for a
     # custom one, URL-encoded into the path.
     return urllib.parse.quote(emoji)
 
 
-def _to_dicts(components):
+def _to_dicts(components: Any) -> list[Any]:
     return [c.to_dict() if hasattr(c, "to_dict") else c for c in components]
 
 
-def _has_value(x):
+def _has_value(x: object) -> bool:
     # an actual value to send, as opposed to UNSET (omit) or None (clear).
     return x is not UNSET and x is not None
 
@@ -36,7 +37,15 @@ def _or_none(x: object) -> Any:
     return None if x is UNSET else x
 
 
-async def fetch_channel_messages(channel_id, *, around=None, before=None, after=None, limit=None, token=None):
+async def fetch_channel_messages(
+    channel_id: str,
+    *,
+    around: str | None = None,
+    before: str | None = None,
+    after: str | None = None,
+    limit: int | None = None,
+    token: str | None = None,
+) -> list[Message]:
     """around/before/after are mutually exclusive; each anchors the page on a
     different message id."""
     qs = _client.query_string(around=around, before=before, after=after, limit=limit)
@@ -44,29 +53,29 @@ async def fetch_channel_messages(channel_id, *, around=None, before=None, after=
     return [Message(m) for m in data]
 
 
-async def fetch_message(channel_id, message_id, *, token=None):
+async def fetch_message(channel_id: str, message_id: str, *, token: str | None = None) -> Message:
     """The full `Message`. For a page of recent messages use fetch_channel_messages."""
     data = await _client.request("GET", f"/channels/{channel_id}/messages/{message_id}", token=token)
     return Message(data)
 
 
 async def create_message(
-    channel_id,
+    channel_id: str,
     *,
-    content=None,
-    embeds=None,
-    components=None,
-    files=None,
-    tts=None,
-    nonce=None,
-    allowed_mentions=None,
-    message_reference=None,
-    sticker_ids=None,
-    flags=None,
-    enforce_nonce=None,
-    poll=None,
-    token=None,
-):
+    content: Any = None,
+    embeds: Any = None,
+    components: Any = None,
+    files: list[tuple[str, bytes]] | None = None,
+    tts: Any = None,
+    nonce: Any = None,
+    allowed_mentions: Any = None,
+    message_reference: Any = None,
+    sticker_ids: Any = None,
+    flags: int | None = None,
+    enforce_nonce: Any = None,
+    poll: Any = None,
+    token: str | None = None,
+) -> Message:
     """The raw Create Message endpoint. channel.send() wraps it with the
     conveniences most callers want."""
     is_uikit = _contains_uikit(components)
@@ -95,25 +104,25 @@ async def create_message(
     return Message(data)
 
 
-async def crosspost_message(channel_id, message_id, *, token=None):
+async def crosspost_message(channel_id: str, message_id: str, *, token: str | None = None) -> Message:
     """Announcement channels only. Returns the crossposted `Message`."""
     data = await _client.request("POST", f"/channels/{channel_id}/messages/{message_id}/crosspost", token=token)
     return Message(data)
 
 
 async def edit_channel_message(
-    channel_id,
-    message_id,
+    channel_id: str,
+    message_id: str,
     *,
-    content=UNSET,
-    embeds=UNSET,
-    components=UNSET,
-    files=None,
-    allowed_mentions=UNSET,
-    flags=None,
-    attachments=UNSET,
-    token=None,
-):
+    content: Any = UNSET,
+    embeds: Any = UNSET,
+    components: Any = UNSET,
+    files: list[tuple[str, bytes]] | None = None,
+    allowed_mentions: Any = UNSET,
+    flags: int | None = None,
+    attachments: Any = UNSET,
+    token: str | None = None,
+) -> Message:
     """Pass None for content/embeds/allowed_mentions/attachments to clear them;
     omit them to leave them untouched. flags is a plain bitfield, so it takes
     the omit-unless-set convention rather than None-clears."""
@@ -144,12 +153,12 @@ async def edit_channel_message(
     return Message(data)
 
 
-async def delete_channel_message(channel_id, message_id, *, token=None):
+async def delete_channel_message(channel_id: str, message_id: str, *, token: str | None = None) -> None:
     """Anyone else's message needs MANAGE_MESSAGES."""
     await _client.request("DELETE", f"/channels/{channel_id}/messages/{message_id}", token=token)
 
 
-async def bulk_delete_messages(channel_id, message_ids, *, token=None):
+async def bulk_delete_messages(channel_id: str, message_ids: Any, *, token: str | None = None) -> None:
     """Guild channels only, and nothing older than two weeks. Requires
     MANAGE_MESSAGES."""
     await _client.request(
@@ -157,25 +166,36 @@ async def bulk_delete_messages(channel_id, message_ids, *, token=None):
     )
 
 
-async def create_reaction(channel_id, message_id, emoji, *, token=None):
+async def create_reaction(channel_id: str, message_id: str, emoji: str, *, token: str | None = None) -> None:
     """Needs ADD_REACTIONS unless someone has already reacted with this emoji."""
     path = f"/channels/{channel_id}/messages/{message_id}/reactions/{_quote_emoji(emoji)}/@me"
     await _client.request("PUT", path, token=token)
 
 
-async def delete_own_reaction(channel_id, message_id, emoji, *, token=None):
+async def delete_own_reaction(channel_id: str, message_id: str, emoji: str, *, token: str | None = None) -> None:
     """Removes just the bot's own reaction; needs no permission."""
     path = f"/channels/{channel_id}/messages/{message_id}/reactions/{_quote_emoji(emoji)}/@me"
     await _client.request("DELETE", path, token=token)
 
 
-async def delete_user_reaction(channel_id, message_id, emoji, user_id, *, token=None):
+async def delete_user_reaction(
+    channel_id: str, message_id: str, emoji: str, user_id: str, *, token: str | None = None
+) -> None:
     """Requires MANAGE_MESSAGES."""
     path = f"/channels/{channel_id}/messages/{message_id}/reactions/{_quote_emoji(emoji)}/{user_id}"
     await _client.request("DELETE", path, token=token)
 
 
-async def fetch_reactions(channel_id, message_id, emoji, *, type=None, after=None, limit=None, token=None):
+async def fetch_reactions(
+    channel_id: str,
+    message_id: str,
+    emoji: str,
+    *,
+    type: int | None = None,
+    after: str | None = None,
+    limit: int | None = None,
+    token: str | None = None,
+) -> list[User]:
     """type=1 selects super (burst) reactions instead of normal ones."""
     qs = _client.query_string(type=type, after=after, limit=limit)
     data = await _client.request_json(
@@ -184,18 +204,28 @@ async def fetch_reactions(channel_id, message_id, emoji, *, type=None, after=Non
     return [User(u) for u in data]
 
 
-async def delete_all_reactions(channel_id, message_id, *, token=None):
+async def delete_all_reactions(channel_id: str, message_id: str, *, token: str | None = None) -> None:
     """Requires MANAGE_MESSAGES."""
     await _client.request("DELETE", f"/channels/{channel_id}/messages/{message_id}/reactions", token=token)
 
 
-async def delete_all_reactions_for_emoji(channel_id, message_id, emoji, *, token=None):
+async def delete_all_reactions_for_emoji(
+    channel_id: str, message_id: str, emoji: str, *, token: str | None = None
+) -> None:
     """Requires MANAGE_MESSAGES. Leaves other emoji's reactions in place."""
     path = f"/channels/{channel_id}/messages/{message_id}/reactions/{_quote_emoji(emoji)}"
     await _client.request("DELETE", path, token=token)
 
 
-async def fetch_poll_answer_voters(channel_id, message_id, answer_id, *, after=None, limit=None, token=None):
+async def fetch_poll_answer_voters(
+    channel_id: str,
+    message_id: str,
+    answer_id: str,
+    *,
+    after: str | None = None,
+    limit: int | None = None,
+    token: str | None = None,
+) -> list[User]:
     """The `User` list that voted for one poll answer, paginated by user id."""
     qs = _client.query_string(after=after, limit=limit)
     path = f"/channels/{channel_id}/polls/{message_id}/answers/{answer_id}{qs}"
@@ -203,21 +233,21 @@ async def fetch_poll_answer_voters(channel_id, message_id, answer_id, *, after=N
     return [User(u) for u in data["users"]]
 
 
-async def expire_poll(channel_id, message_id, *, token=None):
+async def expire_poll(channel_id: str, message_id: str, *, token: str | None = None) -> Message:
     """Ends the poll now rather than at its scheduled time. Returns the
     updated `Message`."""
     data = await _client.request("POST", f"/channels/{channel_id}/polls/{message_id}/expire", token=token)
     return Message(data)
 
 
-def _array_qs(**fields):
+def _array_qs(**fields: Any) -> str:
     # Discord's array query params repeat the key (author_id=1&author_id=2)
     # rather than comma-joining.
-    parts = []
+    parts: list[str] = []
     for key, value in fields.items():
         if value is None:
             continue
-        values = value if isinstance(value, (list, tuple)) else [value]
+        values = cast("list[Any]", value if isinstance(value, (list, tuple)) else [value])
         for v in values:
             if isinstance(v, bool):
                 v = "true" if v else "false"
@@ -226,34 +256,34 @@ def _array_qs(**fields):
 
 
 async def search_guild_messages(
-    guild_id,
+    guild_id: str,
     *,
-    limit=None,
-    offset=None,
-    max_id=None,
-    min_id=None,
-    slop=None,
-    content=None,
-    channel_id=None,
-    author_type=None,
-    author_id=None,
-    mentions=None,
-    mentions_role_id=None,
-    mention_everyone=None,
-    replied_to_user_id=None,
-    replied_to_message_id=None,
-    pinned=None,
-    has=None,
-    embed_type=None,
-    embed_provider=None,
-    link_hostname=None,
-    attachment_filename=None,
-    attachment_extension=None,
-    sort_by=None,
-    sort_order=None,
-    include_nsfw=None,
-    token=None,
-):
+    limit: Any = None,
+    offset: Any = None,
+    max_id: Any = None,
+    min_id: Any = None,
+    slop: Any = None,
+    content: Any = None,
+    channel_id: Any = None,
+    author_type: Any = None,
+    author_id: Any = None,
+    mentions: Any = None,
+    mentions_role_id: Any = None,
+    mention_everyone: Any = None,
+    replied_to_user_id: Any = None,
+    replied_to_message_id: Any = None,
+    pinned: Any = None,
+    has: Any = None,
+    embed_type: Any = None,
+    embed_provider: Any = None,
+    link_hostname: Any = None,
+    attachment_filename: Any = None,
+    attachment_extension: Any = None,
+    sort_by: Any = None,
+    sort_order: Any = None,
+    include_nsfw: Any = None,
+    token: str | None = None,
+) -> MessageSearchResult:
     """Preview endpoint. Requires READ_MESSAGE_HISTORY and, per your app's
     config, the MESSAGE_CONTENT intent. Results may come back empty while
     Discord is still indexing the guild. Any array field accepts a list."""
