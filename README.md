@@ -13,9 +13,11 @@ from cordless import Cordless
 
 bot = Cordless(public_key=os.environ["DISCORD_PUBLIC_KEY"])
 
+
 @bot.command("ping", description="Say hello")
 async def ping(ctx):
     await ctx.send("pong")
+
 
 handler = bot.handler()
 ```
