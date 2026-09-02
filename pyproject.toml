@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 
@@ -55,11 +55,8 @@ pythonpath = ["src"]
 
 [dependency-groups]
 dev = [
-    "boto3>=1.20",
     "boto3-stubs[full]",
-    "botocore[crt]",
     "moto[iam,awslambda-simple,apigatewayv2,events,logs,s3]>=5.0",
-    "pynacl>=1.5",
     "pyright>=1.1",
     "pytest>=8.0",
     "pytest-cov>=5.0",

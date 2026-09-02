@@ -317,11 +317,8 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "boto3" },
     { name = "boto3-stubs", extra = ["full"] },
-    { name = "botocore", extra = ["crt"] },
     { name = "moto", extra = ["apigatewayv2", "events", "s3"] },
-    { name = "pynacl" },
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -338,11 +335,8 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "boto3", specifier = ">=1.20" },
     { name = "boto3-stubs", extras = ["full"] },
-    { name = "botocore", extras = ["crt"] },
     { name = "moto", extras = ["iam", "awslambda-simple", "apigatewayv2", "events", "logs", "s3"], specifier = ">=5.0" },
-    { name = "pynacl", specifier = ">=1.5" },
     { name = "pyright", specifier = ">=1.1" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-cov", specifier = ">=5.0" },
