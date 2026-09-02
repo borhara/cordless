@@ -45,6 +45,9 @@ cordless = "cordless.cli:main"
 [tool.setuptools]
 package-dir = {"" = "src"}
 
+[tool.setuptools.package-data]
+cordless = ["py.typed"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
