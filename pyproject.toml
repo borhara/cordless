@@ -88,7 +88,6 @@ reportUnknownLambdaType = false
 reportMissingTypeStubs = false
 reportUnusedFunction = false
 reportUnusedVariable = false
-reportTypedDictNotRequiredAccess = false
 # tests exercise module-private helpers and protected attributes directly, by design
 reportPrivateUsage = false
 

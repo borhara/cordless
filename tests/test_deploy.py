@@ -682,7 +682,7 @@ def test_deploy_sets_log_retention_by_default(deploy_patches, monkeypatch):
 
     logs = boto3.client("logs", region_name=REGION)
     [group] = logs.describe_log_groups(logGroupNamePrefix="/aws/lambda/my-bot")["logGroups"]
-    assert group["retentionInDays"] == cordless.deploy.DEFAULT_LOG_RETENTION_DAYS
+    assert group.get("retentionInDays") == cordless.deploy.DEFAULT_LOG_RETENTION_DAYS
 
 
 @mock_aws
@@ -884,7 +884,7 @@ def test_deploy_syncs_routes_on_explicit_api_gateway(deploy_patches, monkeypatch
     monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
     deploy(**_base_deploy_kwargs(deploy_patches, endpoint="api_gateway", routes=[("POST", "/stripe/webhook")]))
     apigw = boto3.client("apigatewayv2", region_name=REGION)
-    api_id = next(a["ApiId"] for a in apigw.get_apis()["Items"] if a["Name"] == "my-bot-api")
+    api_id = next(a["ApiId"] for a in cast("list[Any]", apigw.get_apis()["Items"]) if a["Name"] == "my-bot-api")
     assert "POST /stripe/webhook" in {r["RouteKey"] for r in _list_all_routes(apigw, api_id)}
 
 
@@ -935,7 +935,7 @@ def test_deploy_wires_crons(deploy_patches, monkeypatch):
     deploy(**_base_deploy_kwargs(deploy_patches, crons={"daily": "rate(1 day)"}))
     events = boto3.client("events", region_name=REGION)
     rules = events.list_rules(NamePrefix="my-bot-cron-")["Rules"]
-    assert any(r["Name"] == "my-bot-cron-daily" for r in rules)
+    assert any(r.get("Name") == "my-bot-cron-daily" for r in rules)
 
 
 @mock_aws
@@ -1070,7 +1070,7 @@ def test_destroy_removes_worker(deploy_patches, monkeypatch):
 def test_ensure_ratelimit_table_creates_table():
     dynamodb = boto3.client("dynamodb", region_name=REGION)
     ensure_ratelimit_table(dynamodb, "my-bot-ratelimit")
-    assert dynamodb.describe_table(TableName="my-bot-ratelimit")["Table"]["TableStatus"] == "ACTIVE"
+    assert dynamodb.describe_table(TableName="my-bot-ratelimit")["Table"].get("TableStatus") == "ACTIVE"
 
 
 @mock_aws
@@ -1086,7 +1086,7 @@ def test_deploy_creates_ratelimit_table_when_enabled(deploy_patches, monkeypatch
     monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
     deploy(**_base_deploy_kwargs(deploy_patches, ratelimit=True))
     dynamodb = boto3.client("dynamodb", region_name=REGION)
-    assert dynamodb.describe_table(TableName="my-bot-ratelimit")["Table"]["TableStatus"] == "ACTIVE"
+    assert dynamodb.describe_table(TableName="my-bot-ratelimit")["Table"].get("TableStatus") == "ACTIVE"
 
 
 @mock_aws
@@ -1155,7 +1155,7 @@ def test_destroy_leaves_ratelimit_table_when_flag_omitted(deploy_patches, monkey
     deploy(**_base_deploy_kwargs(deploy_patches, ratelimit=True))
     destroy("my-bot", "my-bot-role", REGION)
     dynamodb = boto3.client("dynamodb", region_name=REGION)
-    assert dynamodb.describe_table(TableName=ratelimit_table_name("my-bot"))["Table"]["TableStatus"] == "ACTIVE"
+    assert dynamodb.describe_table(TableName=ratelimit_table_name("my-bot"))["Table"].get("TableStatus") == "ACTIVE"
 
 
 @mock_aws

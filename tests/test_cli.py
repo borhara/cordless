@@ -642,7 +642,7 @@ def test_doctor_all_checks_pass(tmp_path, monkeypatch, capsys):
         role_arn = iam.create_role(RoleName="my-fn-role", AssumeRolePolicyDocument=trust_policy)["Role"]["Arn"]
         policy_arn = iam.create_policy(PolicyName="AWSLambdaBasicExecutionRole", PolicyDocument=basic_policy_doc)[
             "Policy"
-        ]["Arn"]
+        ].get("Arn", "")
         iam.attach_role_policy(RoleName="my-fn-role", PolicyArn=policy_arn)
 
         zip_path = tmp_path / "fn.zip"
