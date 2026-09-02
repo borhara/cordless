@@ -1,3 +1,4 @@
+# pyright: strict
 """Local development server. Iterate on your bot without deploying.
 
 Wraps bot.handle() in a plain HTTP server, hot-reloads your code on change,
@@ -17,31 +18,32 @@ import threading
 import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any, cast
 
-from ._progress import _DIM, _GREEN, _RED, _RESET, _YELLOW, Spinner, _tty
+from ._progress import _DIM, _GREEN, _RED, _RESET, _YELLOW, Spinner, _tty  # pyright: ignore[reportPrivateUsage]
 from .router import (
     APPLICATION_COMMAND,
     APPLICATION_COMMAND_AUTOCOMPLETE,
     MESSAGE_COMPONENT,
     MODAL_SUBMIT,
     PING,
-    _resolve_command_key,
+    _resolve_command_key,  # pyright: ignore[reportPrivateUsage]
 )
 
 _WATCH_EXCLUDE = {".git", ".venv", "venv", "__pycache__", "node_modules", ".pytest_cache", "dist", "build"}
 _MAX_LOGGED_BODY = 2000  # characters; longer bodies (big modals, autocomplete choice lists) get truncated
 
 
-def _describe_interaction(body):
+def _describe_interaction(body: Any) -> str:
     """A short label for the log line: `/command sub`, `button custom_id`,
     `select custom_id`, `modal custom_id`, `ping`, or the raw type number
     for anything unrecognized."""
     try:
-        payload = json.loads(body)
+        payload: Any = json.loads(body)
     except (json.JSONDecodeError, TypeError):
         return "?"
     itype = payload.get("type")
-    data = payload.get("data") or {}
+    data: Any = payload.get("data") or {}
 
     if itype == PING:
         return "ping"
@@ -59,11 +61,11 @@ def _describe_interaction(body):
     return f"type {itype}"
 
 
-def _timestamp():
+def _timestamp() -> str:
     return time.strftime("%H:%M:%S")
 
 
-def _status_color(status):
+def _status_color(status: int) -> str:
     if status < 300:
         return _GREEN
     if status < 500:
@@ -71,7 +73,7 @@ def _status_color(status):
     return _RED
 
 
-def _pretty_body(body):
+def _pretty_body(body: Any) -> str:
     if not body:
         return ""
     try:
@@ -83,7 +85,7 @@ def _pretty_body(body):
     return text
 
 
-def _log_request(label, status, elapsed_ms, body, verbose=False):
+def _log_request(label: str, status: int, elapsed_ms: float, body: Any, verbose: bool = False) -> None:
     color = _status_color(status) if _tty else ""
     dim = _DIM if _tty else ""
     reset = _RESET if _tty else ""
@@ -99,15 +101,15 @@ def _log_request(label, status, elapsed_ms, body, verbose=False):
 class Reloader:
     """Loads MODULE:ATTR and reloads it whenever a watched .py file changes."""
 
-    def __init__(self, target, root):
+    def __init__(self, target: str, root: str) -> None:
         self.target = target
         self.root = os.path.abspath(root)
-        self.bot = None
-        self._mtimes = None
+        self.bot: Any = None
+        self._mtimes: dict[str, float] | None = None
         self._lock = threading.Lock()
 
-    def _scan(self):
-        snapshot = {}
+    def _scan(self) -> dict[str, float]:
+        snapshot: dict[str, float] = {}
         for dirpath, dirs, files in os.walk(self.root):
             dirs[:] = [d for d in dirs if d not in _WATCH_EXCLUDE]
             for fname in files:
@@ -119,13 +121,13 @@ class Reloader:
                         pass
         return snapshot
 
-    def _purge(self):
+    def _purge(self) -> None:
         for name, mod in list(sys.modules.items()):
             f = getattr(mod, "__file__", None)
             if f and os.path.abspath(f).startswith(self.root + os.sep):
                 del sys.modules[name]
 
-    def get(self):
+    def get(self) -> Any:
         with self._lock:
             snapshot = self._scan()
             if self.bot is None or snapshot != self._mtimes:
@@ -141,10 +143,10 @@ class Reloader:
             return self.bot
 
 
-def _local_invoke_worker(reloader):
+def _local_invoke_worker(reloader: Any) -> Any:
     """Stand-in for the Lambda async invoke: run the worker handler on a thread."""
 
-    def invoke(function_name, interaction):
+    def invoke(function_name: str, interaction: Any) -> None:
         from .worker import make_worker_handler
 
         handler = make_worker_handler(reloader.get())
@@ -153,7 +155,7 @@ def _local_invoke_worker(reloader):
     return invoke
 
 
-def _load_env(source_dir, environment=None):
+def _load_env(source_dir: str, environment: str | None = None) -> None:
     """Export [deploy.env] from cordless.toml and any .env/.env.<environment> files, without clobbering the shell."""
     from ._env import load_dotenv
     from .deploy import load_config
@@ -164,9 +166,9 @@ def _load_env(source_dir, environment=None):
     load_dotenv(source_dir, environment)
 
 
-def _make_handler(reloader, verbose=False):
+def _make_handler(reloader: Any, verbose: bool = False) -> type[BaseHTTPRequestHandler]:
     class DevHandler(BaseHTTPRequestHandler):
-        def _serve(self):
+        def _serve(self) -> None:
             split = urllib.parse.urlsplit(self.path)
             path = "/" + "/".join(s for s in split.path.split("/") if s)
             method = self.command
@@ -218,6 +220,7 @@ def _make_handler(reloader, verbose=False):
                 }
             elapsed_ms = (time.perf_counter() - start) * 1000
 
+            result = cast("dict[str, Any]", result)
             body_out = result.get("body", "")
             # mirrors API Gateway's Lambda proxy integration: a base64Encoded
             # body carries binary data (e.g. multipart file attachments)
@@ -243,13 +246,13 @@ def _make_handler(reloader, verbose=False):
         do_PATCH = _serve
         do_DELETE = _serve
 
-        def log_message(self, fmt, *args):
+        def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
             return  # _serve already logs a richer line
 
     return DevHandler
 
 
-def _start_tunnel(port):
+def _start_tunnel(port: int) -> tuple[Any, str | None]:
     """Spawn a cloudflared quick tunnel; returns (process, url) or (None, None)."""
     if not shutil.which("cloudflared"):
         return None, None
@@ -262,7 +265,7 @@ def _start_tunnel(port):
     )
     assert proc.stderr is not None
     stderr = proc.stderr
-    url = None
+    url: str | None = None
     with Spinner("starting tunnel"):
         for line in stderr:
             match = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", line)
@@ -274,7 +277,14 @@ def _start_tunnel(port):
     return proc, url
 
 
-def run_dev(target, port=8787, tunnel=True, source_dir=".", environment=None, verbose=False):
+def run_dev(
+    target: str,
+    port: int = 8787,
+    tunnel: bool = True,
+    source_dir: str = ".",
+    environment: str | None = None,
+    verbose: bool = False,
+) -> None:
     source_dir = os.path.abspath(source_dir)
     sys.path.insert(0, source_dir)
     _load_env(source_dir, environment)
