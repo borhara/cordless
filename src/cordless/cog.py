@@ -1,3 +1,4 @@
+# pyright: strict
 """
 Cog support: group related handlers into a module.
 
@@ -17,36 +18,41 @@ Usage:
     bot.add_cog(cog)
 """
 
+from collections.abc import Callable
+from typing import Any, Literal, TypeVar
+
+_F = TypeVar("_F")
+
 
 class Cog:
     """Group related handlers. Decorate functions with @cog.command, @cog.button, etc."""
 
-    def __init__(self):
-        self._handlers = []
+    def __init__(self) -> None:
+        self._handlers: list[tuple[str, Any, dict[str, Any]]] = []
 
     def command(
         self,
-        name,
-        description="No description provided.",
-        options=None,
-        defer=False,
-        dm_permission=True,
-        default_member_permissions=None,
-        nsfw=False,
-        ephemeral=False,
-        guild_ids=None,
-        user_installable=False,
-        name_localizations=None,
-        description_localizations=None,
-        group_description=None,
-        group_name_localizations=None,
-        group_description_localizations=None,
-        parent_name_localizations=None,
-    ):
+        name: str,
+        description: str = "No description provided.",
+        options: Any = None,
+        defer: bool = False,
+        dm_permission: bool = True,
+        default_member_permissions: Any = None,
+        nsfw: bool = False,
+        ephemeral: bool = False,
+        guild_ids: Any = None,
+        user_installable: bool | Literal["only"] = False,
+        name_localizations: Any = None,
+        description_localizations: Any = None,
+        group_description: str | None = None,
+        group_name_localizations: Any = None,
+        group_description_localizations: Any = None,
+        parent_name_localizations: Any = None,
+    ) -> Callable[[_F], _F]:
         """Same parameters as `Cordless.command`. Handlers registered here
         take effect once the cog is passed to `bot.add_cog(cog)`."""
 
-        def decorator(func):
+        def decorator(func: _F) -> _F:
             self._handlers.append(
                 (
                     "command",
@@ -75,46 +81,46 @@ class Cog:
 
         return decorator
 
-    def button(self, custom_id, defer=False):
+    def button(self, custom_id: str, defer: bool = False) -> Callable[[_F], _F]:
         """Same as `Cordless.button`."""
 
-        def decorator(func):
+        def decorator(func: _F) -> _F:
             self._handlers.append(("button", func, {"custom_id": custom_id, "defer": defer}))
             return func
 
         return decorator
 
-    def select(self, custom_id, defer=False):
+    def select(self, custom_id: str, defer: bool = False) -> Callable[[_F], _F]:
         """Same as `Cordless.select`."""
 
-        def decorator(func):
+        def decorator(func: _F) -> _F:
             self._handlers.append(("select", func, {"custom_id": custom_id, "defer": defer}))
             return func
 
         return decorator
 
-    def modal(self, custom_id, defer=False):
+    def modal(self, custom_id: str, defer: bool = False) -> Callable[[_F], _F]:
         """Same as `Cordless.modal`."""
 
-        def decorator(func):
+        def decorator(func: _F) -> _F:
             self._handlers.append(("modal", func, {"custom_id": custom_id, "defer": defer}))
             return func
 
         return decorator
 
-    def route(self, method, path):
+    def route(self, method: str, path: str) -> Callable[[_F], _F]:
         """Same as `Cordless.route`."""
 
-        def decorator(func):
+        def decorator(func: _F) -> _F:
             self._handlers.append(("route", func, {"method": method, "path": path}))
             return func
 
         return decorator
 
-    def autocomplete(self, cmd_name, option_name):
+    def autocomplete(self, cmd_name: str, option_name: str | None) -> Callable[[_F], _F]:
         """Same as `Cordless.autocomplete`."""
 
-        def decorator(func):
+        def decorator(func: _F) -> _F:
             self._handlers.append(
                 (
                     "autocomplete",
@@ -131,17 +137,17 @@ class Cog:
 
     def user_command(
         self,
-        name,
-        dm_permission=True,
-        default_member_permissions=None,
-        nsfw=False,
-        guild_ids=None,
-        user_installable=False,
-        name_localizations=None,
-    ):
+        name: str,
+        dm_permission: bool = True,
+        default_member_permissions: Any = None,
+        nsfw: bool = False,
+        guild_ids: Any = None,
+        user_installable: bool | Literal["only"] = False,
+        name_localizations: Any = None,
+    ) -> Callable[[_F], _F]:
         """Same as `Cordless.user_command`."""
 
-        def decorator(func):
+        def decorator(func: _F) -> _F:
             self._handlers.append(
                 (
                     "user_command",
@@ -163,17 +169,17 @@ class Cog:
 
     def message_command(
         self,
-        name,
-        dm_permission=True,
-        default_member_permissions=None,
-        nsfw=False,
-        guild_ids=None,
-        user_installable=False,
-        name_localizations=None,
-    ):
+        name: str,
+        dm_permission: bool = True,
+        default_member_permissions: Any = None,
+        nsfw: bool = False,
+        guild_ids: Any = None,
+        user_installable: bool | Literal["only"] = False,
+        name_localizations: Any = None,
+    ) -> Callable[[_F], _F]:
         """Same as `Cordless.message_command`."""
 
-        def decorator(func):
+        def decorator(func: _F) -> _F:
             self._handlers.append(
                 (
                     "message_command",
