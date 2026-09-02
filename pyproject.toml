@@ -52,6 +52,15 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = "--cov=src/cordless --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["src/cordless"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
 
 [dependency-groups]
 dev = [
