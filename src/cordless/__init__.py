@@ -1,3 +1,4 @@
+# pyright: strict
 from .app import Cordless, choice, option
 from .cog import Cog
 from .components import (
