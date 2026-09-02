@@ -1,15 +1,16 @@
+# pyright: strict, reportTypedDictNotRequiredAccess=false
 import argparse
 import importlib
 import os
 import sys
-from typing import Any
+from typing import Any, cast
 
 from ._env import load_dotenv, read_dotenv, resolve_environment
 
 _ENV_HELP = "Environment name - loads .env.<NAME> over .env (or set $ENV)"
 
 
-def _load_bot(target, path=None):
+def _load_bot(target: str, path: str | None = None) -> Any:
     module_name, _, attr = target.partition(":")
 
     if not attr:
@@ -24,7 +25,7 @@ def _load_bot(target, path=None):
         raise SystemExit(f"Module '{module_name}' has no attribute '{attr}'")
 
 
-def _pick(*values) -> Any:
+def _pick(*values: Any) -> Any:
     """First value that is not None, so 0 and "" survive (unlike `or`)."""
     for v in values:
         if v is not None:
@@ -32,7 +33,7 @@ def _pick(*values) -> Any:
     return None
 
 
-def _detect_bot_target(source_dir):
+def _detect_bot_target(source_dir: str) -> str | None:
     """Scan source_dir for a Cordless() assignment; returns 'module:attr' or None."""
     import ast
 
@@ -42,7 +43,7 @@ def _detect_bot_target(source_dir):
         return None
 
     # lambda_function.py first (conventional entry point), then other root-level .py files
-    candidates = []
+    candidates: list[str] = []
     if "lambda_function.py" in files:
         candidates.append("lambda_function.py")
     candidates.extend(
@@ -79,7 +80,7 @@ def _detect_bot_target(source_dir):
     return None
 
 
-def _resolve_bot(explicit, source_dir, cfg=None):
+def _resolve_bot(explicit: Any, source_dir: str, cfg: Any = None) -> Any:
     """Resolve bot target: explicit arg → cordless.toml → AST scan."""
     if explicit:
         return explicit
@@ -88,7 +89,7 @@ def _resolve_bot(explicit, source_dir, cfg=None):
     return _detect_bot_target(source_dir)
 
 
-def _run_register(bot, token, client_id, client_secret, guild_id=None):
+def _run_register(bot: Any, token: Any, client_id: Any, client_secret: Any, guild_id: Any = None) -> tuple[Any, str]:
     commands = bot.sync_commands(
         bot_token=token,
         client_id=client_id,
@@ -98,7 +99,7 @@ def _run_register(bot, token, client_id, client_secret, guild_id=None):
     return commands, ", ".join(c["name"] for c in commands) or "(none)"
 
 
-def _register(args):
+def _register(args: argparse.Namespace) -> None:
     from .deploy import load_config
 
     source_dir = os.getcwd()
@@ -141,7 +142,7 @@ def _register(args):
     print(f"Registered {len(commands)} command(s) {scope}: {names}")
 
 
-def _upload(args):
+def _upload(args: argparse.Namespace) -> None:
     from .deploy import load_config
     from .upload import upload
 
@@ -154,9 +155,9 @@ def _upload(args):
     )
 
 
-def _deploy(args):
+def _deploy(args: argparse.Namespace) -> None:
     from . import _progress
-    from .deploy import _DEFAULT_LOG_RETENTION_DAYS, deploy, load_config
+    from .deploy import _DEFAULT_LOG_RETENTION_DAYS, deploy, load_config  # pyright: ignore[reportPrivateUsage]
 
     _progress.verbose = args.verbose
 
@@ -171,9 +172,9 @@ def _deploy(args):
         setup_fn()
         print("  ✓ setup")
 
-    env = {}
-    env_flag_environment = None
-    for pair in args.env or []:
+    env: dict[str, str] = {}
+    env_flag_environment: Any = None
+    for pair in cast("list[str]", args.env or []):
         if "=" not in pair:
             # a bare --env value (no "="), e.g. `--env prod`, picks the environment overlay instead
             env_flag_environment = pair
@@ -186,7 +187,7 @@ def _deploy(args):
     defer_worker = args.defer_worker or cfg.get("defer_worker")
 
     environment = resolve_environment(args.environment or env_flag_environment)
-    merged_env = {**read_dotenv(source_dir, environment), **cfg.get("env", {}), **env}
+    merged_env: dict[str, Any] = {**read_dotenv(source_dir, environment), **cfg.get("env", {}), **env}
     # CI runners rarely ship a .env file (rightly, it'd mean committing secrets) - fall
     # back to whatever's already in the process environment for the two Discord
     # credentials nearly every deploy needs, same as `register` already does.
@@ -249,7 +250,7 @@ def _deploy(args):
         print(f"  ✓ registered {len(commands)} command(s): {names}")
 
 
-def _destroy(args):
+def _destroy(args: argparse.Namespace) -> None:
     from .deploy import destroy, load_config
 
     cfg = load_config(os.getcwd())
@@ -343,7 +344,7 @@ How should Discord reach your bot? Pick one:
 """
 
 
-def _prompt_endpoint():
+def _prompt_endpoint() -> str:
     print(_ENDPOINT_EXPLANATION)
     while True:
         answer = input("Choose [1=function_url / 2=api_gateway]: ").strip().lower()
@@ -354,7 +355,7 @@ def _prompt_endpoint():
         print("  Please enter 1 or 2.")
 
 
-def _init(args):
+def _init(args: argparse.Namespace) -> None:
     name = args.name or os.path.basename(os.getcwd())
 
     endpoint = args.endpoint
@@ -381,7 +382,7 @@ def _init(args):
     print("\nNext: fill in .env, then run `cordless deploy`")
 
 
-def _dev(args):
+def _dev(args: argparse.Namespace) -> None:
     from .deploy import load_config
     from .dev import run_dev
 
@@ -403,7 +404,7 @@ def _dev(args):
     )
 
 
-def _cron(args):
+def _cron(args: argparse.Namespace) -> None:
     from .deploy import load_config
 
     source_dir = os.path.abspath(args.source)
@@ -421,7 +422,7 @@ def _cron(args):
     asyncio.run(bot.crons[args.name]["handler"]())
 
 
-def _logs(args):
+def _logs(args: argparse.Namespace) -> None:
     import time
 
     from ._aws import get_session
@@ -448,9 +449,9 @@ def _logs(args):
     cw = session.client("logs")
     log_group = f"/aws/lambda/{function}"
     start_ms = int((time.time() - args.since * 60) * 1000)
-    seen = set()
+    seen: set[str] = set()
 
-    def fetch_and_print(since_ms):
+    def fetch_and_print(since_ms: int) -> int:
         latest = since_ms
         kwargs = {"logGroupName": log_group, "startTime": since_ms, "interleaved": True}
         while True:
@@ -481,7 +482,7 @@ def _logs(args):
     try:
         latest_ms = fetch_and_print(start_ms)
     except NoCredentialsError:
-        from ._aws import _NO_CREDENTIALS_MSG
+        from ._aws import _NO_CREDENTIALS_MSG  # pyright: ignore[reportPrivateUsage]
 
         raise SystemExit(_NO_CREDENTIALS_MSG)
     if args.follow:
@@ -494,7 +495,7 @@ def _logs(args):
             print()
 
 
-def _doctor(args):
+def _doctor(args: argparse.Namespace) -> None:
     from . import doctor
     from .deploy import load_config
 
@@ -526,9 +527,9 @@ def _doctor(args):
     crons = {name: entry["schedule"] for name, entry in bot.crons.items()} if bot else None
     routes = bot.router.route_defs() if bot else None
 
-    from ._progress import _DIM, _RESET
+    from ._progress import _DIM, _RESET  # pyright: ignore[reportPrivateUsage]
 
-    def _print_as_it_goes(title, checks):
+    def _print_as_it_goes(title: str, checks: Any) -> None:
         doctor.print_section(title, checks)
         sys.stdout.flush()
 
@@ -549,7 +550,7 @@ def _doctor(args):
         raise SystemExit(1)
 
 
-def _environment_from_argv(argv):
+def _environment_from_argv(argv: list[str]) -> str | None:
     """Scan for --environment/-E/--env ahead of argparse, so it can seed .env loading before subcommand
     args exist. On `deploy`, --env doubles as a literal KEY=VALUE Lambda env var, so a value containing
     "=" is left for that instead of being read as an environment name."""
@@ -569,7 +570,7 @@ def _environment_from_argv(argv):
     return None
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> None:
     argv = sys.argv[1:] if argv is None else argv
     load_dotenv(os.getcwd(), resolve_environment(_environment_from_argv(argv)))
     parser = argparse.ArgumentParser(prog="cordless", description="cordless command-line tools", allow_abbrev=False)
