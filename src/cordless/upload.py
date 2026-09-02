@@ -3,7 +3,7 @@ import importlib.util
 import os
 import tempfile
 import zipfile
-from typing import Any
+from typing import Any, cast
 
 _LAMBDA_RUNTIMES: list[Any] = ["python3.10", "python3.11", "python3.12", "python3.13", "python3.14"]
 
@@ -106,7 +106,7 @@ def upload(function_name: str, layer_name: str, region: str | None, python_versi
 
         print(f"Attaching to '{function_name}'...", flush=True)
         config = lam.get_function_configuration(FunctionName=function_name)
-        existing = [layer["Arn"] for layer in config.get("Layers") or []]
+        existing = [layer["Arn"] for layer in cast("list[Any]", config.get("Layers") or [])]
         kept = [arn for arn in existing if f":layer:{layer_name}:" not in arn]
 
         lam.update_function_configuration(

@@ -1,3 +1,4 @@
+# pyright: strict, reportTypedDictNotRequiredAccess=false
 import ast
 import hashlib
 import json
@@ -8,7 +9,7 @@ import tempfile
 import time
 import tomllib
 import zipfile
-from typing import Any
+from typing import Any, cast
 
 _EXCLUDE_DIRS = {
     "__pycache__",
@@ -29,11 +30,11 @@ _EXCLUDE_FILES = {".env", "cordless.toml", ".DS_Store"}
 _EXCLUDE_SUFFIXES = (".pyc", ".pyo")
 
 
-def _exclude_dir(d):
+def _exclude_dir(d: str) -> bool:
     return d in _EXCLUDE_DIRS or d.endswith(".egg-info")
 
 
-def _exclude_file(f):
+def _exclude_file(f: str) -> bool:
     return f in _EXCLUDE_FILES or f.endswith(_EXCLUDE_SUFFIXES) or f.startswith(".env.")
 
 
@@ -82,12 +83,12 @@ _DEFAULT_KEEPWARM_SCHEDULE = "rate(5 minutes)"
 _DEFAULT_LOG_RETENTION_DAYS = 30
 
 
-def load_config(source_dir):
+def load_config(source_dir: str) -> Any:
     path = os.path.join(source_dir, "cordless.toml")
     if not os.path.exists(path):
         return {}
     with open(path, "rb") as f:
-        cfg = tomllib.load(f).get("deploy", {})
+        cfg: Any = tomllib.load(f).get("deploy", {})
     unknown = set(cfg) - _KNOWN_DEPLOY_KEYS
     for key in sorted(unknown):
         print(f"cordless: unknown [deploy] key {key!r} in cordless.toml (ignored)")
@@ -121,10 +122,10 @@ _DIST_TO_IMPORT_NAME = {
 _SCAN_EXCLUDE_DIRS = {"tests", "test"}
 
 
-def _declared_package_names(packages):
+def _declared_package_names(packages: Any) -> set[str]:
     """Bare, lowercase distribution names from `packages`, stripped of version
     specifiers/extras/markers, e.g. "pillow==11.2.0" -> "pillow"."""
-    names = set()
+    names: set[str] = set()
     for spec in packages or ():
         name = re.split(r"[<>=!~\[; ]", spec, maxsplit=1)[0].strip().lower()
         if name:
@@ -132,10 +133,10 @@ def _declared_package_names(packages):
     return names
 
 
-def _local_module_names(source_dir):
+def _local_module_names(source_dir: str) -> set[str]:
     """Top-level modules/packages that are this project's own code, not a pip
     dependency - anything sitting directly in source_dir."""
-    names = set()
+    names: set[str] = set()
     try:
         entries = os.listdir(source_dir)
     except OSError:
@@ -148,11 +149,11 @@ def _local_module_names(source_dir):
     return names
 
 
-def _imported_top_level_names(source_dir):
+def _imported_top_level_names(source_dir: str) -> set[str]:
     """Every top-level module name imported anywhere in the files that get
     bundled into the zip. Static (ast-based), so it can't see imports gated
     behind a runtime condition (try/except ImportError, sys.version checks)."""
-    names = set()
+    names: set[str] = set()
     for root, dirs, files in os.walk(source_dir):
         dirs[:] = [d for d in dirs if not _exclude_dir(d) and d not in _SCAN_EXCLUDE_DIRS]
         for fname in files:
@@ -174,7 +175,7 @@ def _imported_top_level_names(source_dir):
     return names
 
 
-def scan_missing_packages(source_dir, packages=None):
+def scan_missing_packages(source_dir: str, packages: Any = None) -> list[str]:
     """Best-effort: top-level imports in the bundled source that resolve to
     neither the standard library, this project's own local code, nor a
     declared `packages` entry - almost always a forgotten `packages` line
@@ -190,7 +191,7 @@ def scan_missing_packages(source_dir, packages=None):
     local = _local_module_names(source_dir)
     stdlib = set(sys.stdlib_module_names)
 
-    missing = set()
+    missing: set[str] = set()
     for name in _imported_top_level_names(source_dir):
         if name in local or name.lower() in stdlib or name.lower() in resolved:
             continue
@@ -198,15 +199,21 @@ def scan_missing_packages(source_dir, packages=None):
     return sorted(missing)
 
 
-def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_version="3.12", architecture="x86_64"):
+def build_function_zip(
+    source_dir: str,
+    bundle_cordless: bool = False,
+    packages: Any = None,
+    python_version: str = "3.12",
+    architecture: str = "x86_64",
+) -> Any:
     tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
     tmp.close()
     # pynacl (bundle_cordless extras) and a user's own `packages = ["pynacl"]`
     # can resolve to the same cache dir, so this dedupes to avoid writing the
     # same file into the zip twice
-    written = set()
+    written: set[str] = set()
 
-    def _write(zf, abs_path, arcname):
+    def _write(zf: Any, abs_path: str, arcname: str) -> Any:
         if arcname in written:
             return
         written.add(arcname)
@@ -222,7 +229,11 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
                 _write(zf, abs_path, os.path.relpath(abs_path, source_dir))
 
         if bundle_cordless:
-            from .upload import _cordless_package_dir, _is_runtime_file, _layer_extras_dir
+            from .upload import (
+                _cordless_package_dir,  # pyright: ignore[reportPrivateUsage]
+                _is_runtime_file,  # pyright: ignore[reportPrivateUsage]
+                _layer_extras_dir,  # pyright: ignore[reportPrivateUsage]
+            )
 
             pkg_dir = _cordless_package_dir()
             pkg_parent = os.path.dirname(pkg_dir)
@@ -268,12 +279,12 @@ def build_function_zip(source_dir, bundle_cordless=False, packages=None, python_
     return tmp.name
 
 
-def _packages_cache_dir(packages, python_version, architecture="x86_64"):
+def _packages_cache_dir(packages: Any, python_version: str, architecture: str = "x86_64") -> Any:
     key = hashlib.sha256(json.dumps([sorted(packages), python_version, architecture]).encode()).hexdigest()[:16]
     return os.path.join(os.path.expanduser("~"), ".cache", "cordless", "packages", key)
 
 
-def _ensure_packages(packages, python_version, architecture="x86_64"):
+def _ensure_packages(packages: Any, python_version: str, architecture: str = "x86_64") -> str:
     """uv-install Lambda-compatible wheels, cached across deploys.
 
     The cache key is the exact packages list + python version, so unpinned
@@ -329,7 +340,8 @@ def _ensure_packages(packages, python_version, architecture="x86_64"):
     return cache_dir
 
 
-def ensure_iam_role(iam, role_name, extra_policies=None):
+def ensure_iam_role(iam: Any, role_name: str, extra_policies: Any = None) -> Any:
+    role_arn: Any = None
     existing = True
     try:
         role_arn = iam.get_role(RoleName=role_name)["Role"]["Arn"]
@@ -343,19 +355,21 @@ def ensure_iam_role(iam, role_name, extra_policies=None):
         )["Role"]["Arn"]
         iam.attach_role_policy(RoleName=role_name, PolicyArn=_LAMBDA_BASIC_EXECUTION_POLICY)
 
-    for arn in extra_policies or []:
+    for arn in cast("list[Any]", extra_policies or []):
         iam.attach_role_policy(RoleName=role_name, PolicyArn=arn)
 
     return role_arn
 
 
-def _cordless_version():
+def _cordless_version() -> str:
     from importlib.metadata import version
 
     return version("cordless")
 
 
-def _publish_cordless_layer(lam, layer_name, python_version=None, architecture="x86_64"):
+def _publish_cordless_layer(
+    lam: Any, layer_name: str, python_version: str | None = None, architecture: str = "x86_64"
+) -> Any:
     from .upload import build_layer_zip
 
     current_version = _cordless_version()
@@ -374,9 +388,9 @@ def _publish_cordless_layer(lam, layer_name, python_version=None, architecture="
     except lam.exceptions.ResourceNotFoundException:
         pass
 
-    from .upload import _LAMBDA_RUNTIMES
+    from .upload import _LAMBDA_RUNTIMES  # pyright: ignore[reportPrivateUsage]
 
-    runtimes = [f"python{python_version}"] if python_version else _LAMBDA_RUNTIMES
+    runtimes: Any = [f"python{python_version}"] if python_version else _LAMBDA_RUNTIMES
 
     zip_path = build_layer_zip(python_version, architecture)
     try:
@@ -393,24 +407,24 @@ def _publish_cordless_layer(lam, layer_name, python_version=None, architecture="
         os.unlink(zip_path)
 
 
-def _list_all_apis(apigw):
+def _list_all_apis(apigw: Any) -> Any:
     return apigw.get_paginator("get_apis").paginate().build_full_result()["Items"]
 
 
-def _list_all_layer_versions(lam, layer_name):
+def _list_all_layer_versions(lam: Any, layer_name: str) -> Any:
     paginator = lam.get_paginator("list_layer_versions")
     return paginator.paginate(LayerName=layer_name).build_full_result()["LayerVersions"]
 
 
-def _list_all_routes(apigw, api_id):
+def _list_all_routes(apigw: Any, api_id: str) -> Any:
     return apigw.get_paginator("get_routes").paginate(ApiId=api_id).build_full_result()["Items"]
 
 
-def _list_all_rules(events, prefix):
+def _list_all_rules(events: Any, prefix: str) -> Any:
     return events.get_paginator("list_rules").paginate(NamePrefix=prefix).build_full_result()["Rules"]
 
 
-def _function_exists(lam, function_name):
+def _function_exists(lam: Any, function_name: str) -> tuple[bool, Any]:
     try:
         config = lam.get_function_configuration(FunctionName=function_name)
         return True, config["FunctionArn"]
@@ -418,11 +432,11 @@ def _function_exists(lam, function_name):
         return False, None
 
 
-def _env_vars(env) -> Any:
+def _env_vars(env: Any) -> Any:
     return {"Variables": env or {}}
 
 
-def _ensure_log_retention(logs, function_name, days):
+def _ensure_log_retention(logs: Any, function_name: str, days: int | None) -> Any:
     """Lambda's implicit log group otherwise defaults to never expire, so make
     sure one exists and carries a retention policy. `days` of 0/None keeps that
     never-expire default, for anyone who wants to opt back out."""
@@ -436,18 +450,19 @@ def _ensure_log_retention(logs, function_name, days):
 
 
 def _create_function(
-    lam,
-    function_name,
-    zip_path,
-    role_arn,
-    handler,
-    runtime,
-    layer_arn,
-    env,
-    timeout=10,
-    memory_size=256,
-    architecture="x86_64",
-):
+    lam: Any,
+    function_name: str,
+    zip_path: str,
+    role_arn: str,
+    handler: str,
+    runtime: str,
+    layer_arn: Any,
+    env: Any,
+    timeout: int = 10,
+    memory_size: int = 256,
+    architecture: str = "x86_64",
+) -> Any:
+    resp: Any = None
     with open(zip_path, "rb") as f:
         zip_bytes = f.read()
 
@@ -477,8 +492,17 @@ def _create_function(
 
 
 def _update_function(
-    lam, function_name, zip_path, handler, runtime, layer_arn, env, timeout=10, memory_size=256, architecture="x86_64"
-):
+    lam: Any,
+    function_name: str,
+    zip_path: str,
+    handler: str,
+    runtime: str,
+    layer_arn: str,
+    env: Any,
+    timeout: int = 10,
+    memory_size: int = 256,
+    architecture: str = "x86_64",
+) -> Any:
     with open(zip_path, "rb") as f:
         lam.update_function_code(FunctionName=function_name, ZipFile=f.read(), Architectures=[architecture])
     lam.get_waiter("function_updated").wait(FunctionName=function_name)
@@ -495,7 +519,7 @@ def _update_function(
     lam.get_waiter("function_updated").wait(FunctionName=function_name)
 
 
-def _ensure_integration(apigw, api_id, function_arn):
+def _ensure_integration(apigw: Any, api_id: str, function_arn: str) -> Any:
     """Return the id of this API's AWS_PROXY integration to the function,
     creating it if absent. Every route shares the one integration."""
     for integration in apigw.get_integrations(ApiId=api_id).get("Items", []):
@@ -509,7 +533,7 @@ def _ensure_integration(apigw, api_id, function_arn):
     )["IntegrationId"]
 
 
-def _api_route_key(method, path):
+def _api_route_key(method: str, path: str) -> str:
     """AWS HTTP APIs only accept {proxy+} for the greedy segment; cordless
     allows any name and resolves it from its own matcher, so rewrite it
     just for the wire key."""
@@ -517,7 +541,15 @@ def _api_route_key(method, path):
     return f"{method} {wire_path}"
 
 
-def _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id, routes=None):
+def _ensure_api_gateway(
+    apigw: Any,
+    lam: Any,
+    function_name: str,
+    function_arn: str,
+    region: str | None,
+    account_id: str,
+    routes: Any = None,
+) -> Any:
     api_name = f"{function_name}-api"
 
     # Reuse existing API if one with this name exists
@@ -539,7 +571,7 @@ def _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account
     # POST / is Discord's interaction endpoint; the rest come from @bot.route.
     # Sync them like slash commands: create the missing, drop the stale. When
     # routes is None the bot never loaded, so ensure POST / but prune nothing.
-    wanted = {"POST /"} | {_api_route_key(method, path) for method, path in (routes or [])}
+    wanted = {"POST /"} | {_api_route_key(method, path) for method, path in cast("list[Any]", routes or [])}
     present = {r["RouteKey"]: r["RouteId"] for r in _list_all_routes(apigw, api_id)}
     for key in wanted - set(present):
         apigw.create_route(ApiId=api_id, RouteKey=key, Target=target)
@@ -565,12 +597,12 @@ def _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account
     return endpoint
 
 
-def _has_api_gateway(apigw, function_name):
+def _has_api_gateway(apigw: Any, function_name: str) -> Any:
     api_name = f"{function_name}-api"
     return any(a["Name"] == api_name for a in _list_all_apis(apigw))
 
 
-def _has_function_url(lam, function_name):
+def _has_function_url(lam: Any, function_name: str) -> Any:
     try:
         lam.get_function_url_config(FunctionName=function_name)
         return True
@@ -578,7 +610,7 @@ def _has_function_url(lam, function_name):
         return False
 
 
-def _ensure_function_url(lam, function_name):
+def _ensure_function_url(lam: Any, function_name: str) -> Any:
     """Like _ensure_api_gateway, but a direct Lambda Function URL - no API
     Gateway hop, no separate service to provision or tear down (deleting the
     function removes its Function URL along with it).
@@ -628,7 +660,7 @@ def _ensure_function_url(lam, function_name):
     return config["FunctionUrl"]
 
 
-def _allow_worker_invoke(iam, role_name, worker_arn):
+def _allow_worker_invoke(iam: Any, role_name: str, worker_arn: str) -> Any:
     iam.put_role_policy(
         RoleName=role_name,
         PolicyName="cordless-worker-invoke",
@@ -647,11 +679,11 @@ def _allow_worker_invoke(iam, role_name, worker_arn):
     )
 
 
-def ratelimit_table_name(function_name):
+def ratelimit_table_name(function_name: str) -> str:
     return f"{function_name}-ratelimit"
 
 
-def ensure_ratelimit_table(dynamodb, table_name):
+def ensure_ratelimit_table(dynamodb: Any, table_name: str) -> Any:
     try:
         dynamodb.describe_table(TableName=table_name)
         return
@@ -671,7 +703,7 @@ def ensure_ratelimit_table(dynamodb, table_name):
     )
 
 
-def _allow_ratelimit_table(iam, role_name, table_arn):
+def _allow_ratelimit_table(iam: Any, role_name: str, table_arn: str) -> Any:
     iam.put_role_policy(
         RoleName=role_name,
         PolicyName="cordless-ratelimit-table",
@@ -691,37 +723,43 @@ def _allow_ratelimit_table(iam, role_name, table_arn):
 
 
 def deploy(
-    function_name,
-    role_name,
-    handler,
-    source_dir,
-    runtime,
-    layer_name,
-    env,
-    region,
-    timeout=10,
-    memory=256,
-    bundle_cordless=False,
-    packages=None,
-    python_version="3.12",
-    defer_worker=None,
-    defer_handler="lambda_function.worker_handler",
-    defer_timeout=30,
-    defer_memory=256,
-    policies=None,
-    crons=None,
-    architecture=None,
-    ratelimit=False,
-    endpoint=None,
-    keep_warm=None,
-    log_retention_days=_DEFAULT_LOG_RETENTION_DAYS,
-    routes=None,
-):
+    function_name: str,
+    role_name: str,
+    handler: str,
+    source_dir: str,
+    runtime: str,
+    layer_name: str,
+    env: Any,
+    region: str | None,
+    timeout: int = 10,
+    memory: int = 256,
+    bundle_cordless: bool = False,
+    packages: Any = None,
+    python_version: str = "3.12",
+    defer_worker: Any = None,
+    defer_handler: str = "lambda_function.worker_handler",
+    defer_timeout: int = 30,
+    defer_memory: int = 256,
+    policies: Any = None,
+    crons: Any = None,
+    architecture: str | None = None,
+    ratelimit: bool = False,
+    endpoint: Any = None,
+    keep_warm: Any = None,
+    log_retention_days: int = _DEFAULT_LOG_RETENTION_DAYS,
+    routes: Any = None,
+) -> Any:
     if not function_name:
         raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
 
     from ._aws import get_session
-    from ._progress import _DIM, _RESET, Spinner, _tty, success, summary
+    from ._progress import _DIM, _RESET, Spinner, _tty, success, summary  # pyright: ignore[reportPrivateUsage]
+
+    zip_path: str = ""
+    layer_arn: Any = None
+    worker_arn: Any = None
+    role_arn: Any = None
+    url: str = ""
 
     session = get_session(region)
     region = region or session.region_name
@@ -740,6 +778,7 @@ def deploy(
             architecture = existing_config.get("Architectures", ["x86_64"])[0]
         except lam.exceptions.ResourceNotFoundException:
             architecture = "arm64"
+    assert architecture is not None
 
     if endpoint is None:
         # keep whichever endpoint an existing function already has; only a
@@ -926,24 +965,24 @@ def deploy(
 
 
 def _health_check(
-    lam,
-    apigw,
-    events,
-    dynamodb,
-    function_name,
-    defer_worker,
-    endpoint,
-    crons,
-    keep_warm,
-    ratelimit,
-    table_name,
-    routes=None,
-):
+    lam: Any,
+    apigw: Any,
+    events: Any,
+    dynamodb: Any,
+    function_name: str,
+    defer_worker: Any,
+    endpoint: Any,
+    crons: Any,
+    keep_warm: Any,
+    ratelimit: bool,
+    table_name: str | None,
+    routes: Any = None,
+) -> list[Any]:
     """Describe-only post-deploy checks - no invocations, no AWS cost. Confirms
     the pieces deploy() just wired are actually present and in the expected
     shape, not just that the API calls that created them didn't raise.
     Returns a list of (ok, label, detail) tuples for summary()."""
-    checks = []
+    checks: list[Any] = []
 
     try:
         config = lam.get_function_configuration(FunctionName=function_name)
@@ -982,7 +1021,7 @@ def _health_check(
             checks.append((api is not None, "API Gateway", "present" if api else "not found"))
             if api is not None and routes:
                 have = {r["RouteKey"] for r in _list_all_routes(apigw, api["ApiId"])}
-                want = {"POST /"} | {_api_route_key(method, path) for method, path in routes}
+                want = {"POST /"} | {_api_route_key(method, path) for method, path in cast("list[Any]", routes)}
                 missing = want - have
                 detail = "all present" if not missing else f"missing: {', '.join(sorted(missing))}"
                 checks.append((not missing, "API routes", detail))
@@ -992,12 +1031,12 @@ def _health_check(
     if routes and endpoint == "function_url":
         # nothing to verify against AWS: on a Function URL every path reaches
         # the handler and cordless does the matching, so just list them
-        listed = ", ".join(f"{method} {path}" for method, path in routes)
+        listed = ", ".join(f"{method} {path}" for method, path in cast("list[Any]", routes))
         checks.append((True, "HTTP routes", f"{len(routes)} served on the function URL: {listed}"))
 
     if crons:
         target = defer_worker or function_name
-        missing = []
+        missing: Any = []
         for name in crons:
             rule_name = f"{function_name}-cron-{name}"
             try:
@@ -1028,7 +1067,7 @@ def _health_check(
     return checks
 
 
-def _wire_crons(events, lam, function_name, target_fn, target_arn, crons):
+def _wire_crons(events: Any, lam: Any, function_name: str, target_fn: str, target_arn: str, crons: Any) -> Any:
     if crons:
         # crons are fire-and-forget; retries would double/triple-send messages
         lam.put_function_event_invoke_config(FunctionName=target_fn, MaximumRetryAttempts=0)
@@ -1080,7 +1119,7 @@ def _wire_crons(events, lam, function_name, target_fn, target_arn, crons):
         )
 
 
-def _keepwarm_schedule(keep_warm):
+def _keepwarm_schedule(keep_warm: Any) -> Any:
     if keep_warm is True:
         return _DEFAULT_KEEPWARM_SCHEDULE
     if isinstance(keep_warm, str):
@@ -1088,7 +1127,7 @@ def _keepwarm_schedule(keep_warm):
     return None
 
 
-def _wire_keepwarm(events, lam, function_name, function_arn, keep_warm):
+def _wire_keepwarm(events: Any, lam: Any, function_name: str, function_arn: str, keep_warm: Any) -> Any:
     """Ping the main function directly on a schedule so it doesn't go cold
     between real invocations. Always targets the main function, never the
     worker - regular crons can't do this, since they all share one target
@@ -1118,7 +1157,7 @@ def _wire_keepwarm(events, lam, function_name, function_arn, keep_warm):
     )
 
 
-def _remove_keepwarm(events, lam, function_name):
+def _remove_keepwarm(events: Any, lam: Any, function_name: str) -> Any:
     rule_name = f"{function_name}-keepwarm"
     try:
         targets = events.list_targets_by_rule(Rule=rule_name).get("Targets", [])
@@ -1134,7 +1173,14 @@ def _remove_keepwarm(events, lam, function_name):
         pass
 
 
-def destroy(function_name, role_name, region, defer_worker=None, layer_name=None, ratelimit=False):
+def destroy(
+    function_name: str,
+    role_name: str,
+    region: str | None,
+    defer_worker: Any = None,
+    layer_name: str | None = None,
+    ratelimit: bool = False,
+) -> Any:
     if not function_name:
         raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
 
