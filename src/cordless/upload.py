@@ -1,4 +1,3 @@
-# pyright: strict, reportTypedDictNotRequiredAccess=false
 import importlib.util
 import os
 import tempfile

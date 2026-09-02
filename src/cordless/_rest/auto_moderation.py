@@ -1,4 +1,3 @@
-# pyright: strict
 """Auto moderation REST endpoints (Discord API v10). Every call needs MANAGE_GUILD."""
 
 from typing import Any

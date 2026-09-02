@@ -1,4 +1,3 @@
-# pyright: strict, reportTypedDictNotRequiredAccess=false
 import argparse
 import importlib
 import os

@@ -1,4 +1,3 @@
-# pyright: strict
 """Minimal terminal spinner, no external dependencies."""
 
 import sys

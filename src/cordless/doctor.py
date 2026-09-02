@@ -1,4 +1,3 @@
-# pyright: strict, reportTypedDictNotRequiredAccess=false
 """Read-only diagnostics: AWS credentials, IAM role, Discord app config, and
 deployed Lambda function state. Nothing here creates or modifies anything -
 `cordless deploy` is still what fixes what this finds."""

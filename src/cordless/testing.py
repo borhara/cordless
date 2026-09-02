@@ -1,4 +1,3 @@
-# pyright: strict
 """Test helpers for cordless bots: build interaction payloads and dispatch
 them through the real router - the same code path a deployed bot runs on -
 without a live Discord round-trip or HTTP signature verification.

@@ -1,4 +1,3 @@
-# pyright: strict
 """
 Cog support: group related handlers into a module.
 

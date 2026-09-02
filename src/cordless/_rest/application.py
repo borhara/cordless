@@ -1,4 +1,3 @@
-# pyright: strict
 """Application REST endpoints (Discord API v10).
 
 fetch_current_application/edit_current_application are keyed on @me: Discord

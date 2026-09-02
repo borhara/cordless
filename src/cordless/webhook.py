@@ -1,4 +1,3 @@
-# pyright: strict
 """Discord webhook execution: send/edit/delete messages via a webhook id+token.
 
 Unlike send_message/edit_message in app.py, none of this needs DISCORD_BOT_TOKEN -

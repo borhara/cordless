@@ -1,4 +1,3 @@
-# pyright: strict
 """Guild template REST endpoints (Discord API v10).
 
 Create Guild from Guild Template is left out for the same reason as

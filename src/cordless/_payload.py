@@ -1,4 +1,3 @@
-# pyright: strict
 """Message payload helpers shared by the interaction path (context.py), the
 REST layer (_rest/) and webhook execution (webhook.py).
 

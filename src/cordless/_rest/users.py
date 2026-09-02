@@ -1,4 +1,3 @@
-# pyright: strict
 """User REST endpoints (Discord API v10).
 
 Only the calls a bot token can make. Group DM creation, connections, and

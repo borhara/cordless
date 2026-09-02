@@ -1,4 +1,3 @@
-# pyright: strict
 import asyncio
 import inspect
 from typing import Any, Literal, cast

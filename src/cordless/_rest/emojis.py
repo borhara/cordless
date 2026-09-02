@@ -1,4 +1,3 @@
-# pyright: strict
 """Guild and application emoji REST endpoints (Discord API v10).
 
 Application emojis aren't scoped to a guild, so unlike everywhere else in

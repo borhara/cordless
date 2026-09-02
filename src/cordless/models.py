@@ -1,4 +1,3 @@
-# pyright: strict
 from typing import Any
 
 from ._base import DiscordObject

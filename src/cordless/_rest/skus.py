@@ -1,4 +1,3 @@
-# pyright: strict
 """SKU REST endpoints (Discord API v10)."""
 
 from . import _client

@@ -1,4 +1,3 @@
-# pyright: strict
 """Local development server. Iterate on your bot without deploying.
 
 Wraps bot.handle() in a plain HTTP server, hot-reloads your code on change,

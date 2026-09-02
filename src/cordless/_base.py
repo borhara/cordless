@@ -1,4 +1,3 @@
-# pyright: strict
 """DiscordObject: the attribute wrapper every response model builds on.
 
 Kept in its own module so the REST model classes in _rest/models.py can

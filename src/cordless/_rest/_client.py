@@ -1,4 +1,3 @@
-# pyright: strict
 """Shared low-level HTTP plumbing for cordless's REST layer.
 
 request()/request_raw() are async, matching every other public REST call in

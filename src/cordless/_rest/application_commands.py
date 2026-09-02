@@ -1,4 +1,3 @@
-# pyright: strict
 """Application command endpoints for inspecting and editing commands from a
 running bot (Discord API v10). For deploy-time bulk registration use
 register.sync_commands().

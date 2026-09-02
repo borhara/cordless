@@ -1,4 +1,3 @@
-# pyright: strict
 """Shared dataclasses for REST responses.
 
 Carry read-only convenience properties plus thin action methods (e.g.

@@ -1,4 +1,3 @@
-# pyright: strict
 """Message and reaction REST endpoints (Discord API v10).
 
 Cordless.send_message/edit_message/delete_message (app.py) are the shipped

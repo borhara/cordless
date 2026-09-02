@@ -1,4 +1,3 @@
-# pyright: strict
 """Invite endpoints keyed by code alone (Discord API v10). Channel- and
 guild-scoped invite listing and creation are in channels.py and guilds.py.
 

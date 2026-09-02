@@ -1,4 +1,3 @@
-# pyright: strict
 """Raw HTTP route matching and response coercion for `@bot.route` handlers.
 
 These routes sit outside the Discord interaction flow. A request arrives on

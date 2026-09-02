@@ -1,4 +1,3 @@
-# pyright: strict
 """Stage instance REST endpoints (Discord API v10)."""
 
 from typing import Any

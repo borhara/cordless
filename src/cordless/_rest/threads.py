@@ -1,4 +1,3 @@
-# pyright: strict
 """Thread REST endpoints (Discord API v10)."""
 
 from typing import Any

@@ -1,4 +1,3 @@
-# pyright: strict
 """Internal REST resource modules backing Cordless's flat
 bot.<verb>_<resource>() API and the corresponding action methods on model
 objects such as Guild, Channel, and Thread.

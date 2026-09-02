@@ -1,4 +1,3 @@
-# pyright: strict
 """Discord UI component builders."""
 
 from collections.abc import Iterable

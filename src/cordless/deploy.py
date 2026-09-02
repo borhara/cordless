@@ -1,4 +1,3 @@
-# pyright: strict, reportTypedDictNotRequiredAccess=false
 import ast
 import hashlib
 import json

@@ -1,4 +1,3 @@
-# pyright: strict
 from nacl.exceptions import BadSignatureError
 from nacl.signing import VerifyKey
 

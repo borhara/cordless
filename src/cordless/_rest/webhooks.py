@@ -1,4 +1,3 @@
-# pyright: strict
 """Bot-token webhook management (Discord API v10). Token-authenticated
 webhook execution (execute, edit/delete message, Slack/GitHub) is in
 cordless/webhook.py, kept dependency-free for the response path.

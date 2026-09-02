@@ -1,4 +1,3 @@
-# pyright: strict
 """RESTMixin: the flat ``bot.<verb>_<resource>()`` surface.
 
 Each attribute is a thin async delegation to a resource module function,

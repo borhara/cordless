@@ -1,4 +1,3 @@
-# pyright: strict
 """Worker Lambda entrypoint for deferred interactions (async Lambda invoke)."""
 
 import asyncio

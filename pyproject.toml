@@ -67,10 +67,33 @@ dev = [
 ]
 
 [tool.pyright]
+include = ["src/cordless", "tests"]
 pythonVersion = "3.11"
-typeCheckingMode = "basic"
+typeCheckingMode = "strict"
 extraPaths = ["tests/fixtures"]
 reportTypedDictNotRequiredAccess = false
+
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+reportMissingParameterType = false
+reportUnknownParameterType = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+reportUnknownLambdaType = false
+reportMissingTypeStubs = false
+reportPrivateUsage = false
+reportUnusedFunction = false
+reportUnusedVariable = false
+reportUntypedFunctionDecorator = false
+reportUntypedNamedTuple = false
+reportConstantRedefinition = false
+reportUnnecessaryComparison = false
+reportUnnecessaryIsInstance = false
+reportUnnecessaryContains = false
+
+[[tool.pyright.executionEnvironments]]
+root = "src"
 
 [tool.ruff]
 line-length = 120

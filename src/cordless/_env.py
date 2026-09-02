@@ -1,4 +1,3 @@
-# pyright: strict
 """Shared .env parsing/loading, with optional per-environment overlay files."""
 
 import os

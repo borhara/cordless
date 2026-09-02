@@ -1,4 +1,3 @@
-# pyright: strict
 """Discord embed builder."""
 
 from datetime import datetime

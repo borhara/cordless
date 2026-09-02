@@ -1,4 +1,3 @@
-# pyright: strict
 """Deferred interaction support: async Lambda invoke and Discord followup webhook."""
 
 import json

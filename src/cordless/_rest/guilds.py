@@ -1,4 +1,3 @@
-# pyright: strict
 """Guild management REST endpoints (Discord API v10).
 
 Members and roles are in members.py. Create Guild, Delete Guild and Modify

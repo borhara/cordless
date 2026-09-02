@@ -1,4 +1,3 @@
-# pyright: strict
 """Channel REST endpoints (Discord API v10), plus the two guild-scoped
 channel endpoints (create, list, reorder) that only make sense alongside
 them."""

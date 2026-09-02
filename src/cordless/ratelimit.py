@@ -1,4 +1,3 @@
-# pyright: strict
 """Optional cross-invocation coordination for outbound Discord rate limits.
 
 Enabled by setting `ratelimit = true` in [deploy] (cordless.toml), which

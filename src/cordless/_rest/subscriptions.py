@@ -1,4 +1,3 @@
-# pyright: strict
 """Subscription REST endpoints (Discord API v10).
 
 Recurring premium purchases, sibling to skus.py's SKU listing and

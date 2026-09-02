@@ -1,4 +1,3 @@
-# pyright: strict
 """Soundboard REST endpoints (Discord API v10)."""
 
 from typing import Any

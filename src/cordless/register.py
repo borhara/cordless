@@ -1,4 +1,3 @@
-# pyright: strict
 import base64
 import json
 import urllib.error

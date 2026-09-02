@@ -1,4 +1,3 @@
-# pyright: strict
 """multipart/form-data encoding for Discord file attachments.
 
 No boto3 dependency, unlike defer.py, since it's used on the direct

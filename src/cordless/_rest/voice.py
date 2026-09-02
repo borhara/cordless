@@ -1,4 +1,3 @@
-# pyright: strict
 """Voice REST endpoints (Discord API v10).
 
 List Voice Regions is the only non-guild-scoped call here.

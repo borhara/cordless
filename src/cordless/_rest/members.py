@@ -1,4 +1,3 @@
-# pyright: strict
 """Guild member and role REST endpoints (Discord API v10)."""
 
 from typing import Any

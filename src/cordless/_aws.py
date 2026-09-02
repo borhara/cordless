@@ -1,4 +1,3 @@
-# pyright: strict
 """Shared AWS session management."""
 
 from typing import Any

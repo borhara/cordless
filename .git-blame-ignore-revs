@@ -1,2 +1,4 @@
-# ruff initial lint pass
-8a6f229633b0ff3611cf4d7fe12345a87381e048
+# .git-blame-ignore-revs
+# Bulk strict flip: removed the per-file `# pyright: strict` line from every
+# src module in one mechanical pass. No behaviour or logic changes.
+0e3d2863cd1d539dae140397410dde1e6be2fddd

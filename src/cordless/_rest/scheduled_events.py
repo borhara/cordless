@@ -1,4 +1,3 @@
-# pyright: strict
 """Guild scheduled event REST endpoints (Discord API v10)."""
 
 from typing import Any

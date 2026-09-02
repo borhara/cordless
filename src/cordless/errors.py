@@ -1,4 +1,3 @@
-# pyright: strict
 import email.message
 from collections.abc import Mapping
 
