@@ -1,10 +1,12 @@
+# pyright: strict, reportTypedDictNotRequiredAccess=false
 """Read-only diagnostics: AWS credentials, IAM role, Discord app config, and
 deployed Lambda function state. Nothing here creates or modifies anything -
 `cordless deploy` is still what fixes what this finds."""
 
 import re
+from typing import Any
 
-from ._progress import _BOLD, _DIM, _GREEN, _RED, _RESET, _YELLOW, wait
+from ._progress import _BOLD, _DIM, _GREEN, _RED, _RESET, _YELLOW, wait  # pyright: ignore[reportPrivateUsage]
 
 _PUBLIC_KEY_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
@@ -19,7 +21,7 @@ _DRIFT_CHECK_KEYS = (
 )
 
 
-def check_aws_credentials(region=None):
+def check_aws_credentials(region: str | None = None) -> tuple[bool, Any, str]:
     """Returns (ok, session_or_none, detail)."""
     from ._aws import get_session
 
@@ -31,10 +33,10 @@ def check_aws_credentials(region=None):
     return True, session, f"account {identity['Account']}"
 
 
-def check_iam_role(iam, role_name, defer_worker=None, ratelimit=False):
+def check_iam_role(iam: Any, role_name: str, defer_worker: Any = None, ratelimit: bool = False) -> list[Any]:
     """Read-only checks against an existing role - never creates one.
     Returns a list of (severity, label, detail)."""
-    checks = []
+    checks: list[Any] = []
     try:
         iam.get_role(RoleName=role_name)
     except iam.exceptions.NoSuchEntityException:
@@ -67,11 +69,11 @@ def check_iam_role(iam, role_name, defer_worker=None, ratelimit=False):
     return checks
 
 
-def check_discord_config(env):
+def check_discord_config(env: dict[str, str]) -> list[Any]:
     """`env` is the resolved DISCORD_* dict (same layering `cordless deploy`
     uses: .env + .env.<environment> + cordless.toml + process env). Returns
     a list of (severity, label, detail)."""
-    checks = []
+    checks: list[Any] = []
 
     public_key = env.get("DISCORD_PUBLIC_KEY")
     if not public_key:
@@ -86,7 +88,7 @@ def check_discord_config(env):
     client_secret = env.get("DISCORD_CLIENT_SECRET")
 
     if token:
-        from .register import _get_application_id
+        from .register import _get_application_id  # pyright: ignore[reportPrivateUsage]
 
         try:
             app_id = _get_application_id(token)
@@ -94,7 +96,7 @@ def check_discord_config(env):
         except RuntimeError as exc:
             checks.append(("fail", "Bot token", str(exc)))
     elif client_id and client_secret:
-        from .register import _get_client_credentials_token
+        from .register import _get_client_credentials_token  # pyright: ignore[reportPrivateUsage]
 
         try:
             _get_client_credentials_token(client_id, client_secret)
@@ -109,11 +111,11 @@ def check_discord_config(env):
     return checks
 
 
-def check_env_drift(lam, function_name, local_env):
+def check_env_drift(lam: Any, function_name: str, local_env: dict[str, str]) -> list[Any]:
     """Compare the deployed function's env vars against the locally resolved
     ones for the handful of Discord credential keys. Reports only presence
     and match/mismatch for secret-shaped keys - never the actual value."""
-    checks = []
+    checks: list[Any] = []
     try:
         deployed_env = (
             lam.get_function_configuration(FunctionName=function_name).get("Environment", {}).get("Variables", {})
@@ -144,20 +146,25 @@ def check_env_drift(lam, function_name, local_env):
 
 
 def check_deployed_function(
-    lam,
-    apigw,
-    events,
-    dynamodb,
-    function_name,
-    defer_worker,
-    crons,
-    keep_warm,
-    ratelimit,
-    table_name,
-    local_env,
-    routes=None,
-):
-    from .deploy import _function_exists, _has_api_gateway, _has_function_url, _health_check
+    lam: Any,
+    apigw: Any,
+    events: Any,
+    dynamodb: Any,
+    function_name: str,
+    defer_worker: Any,
+    crons: Any,
+    keep_warm: Any,
+    ratelimit: bool,
+    table_name: str | None,
+    local_env: dict[str, str],
+    routes: Any = None,
+) -> list[Any]:
+    from .deploy import (
+        _function_exists,  # pyright: ignore[reportPrivateUsage]
+        _has_api_gateway,  # pyright: ignore[reportPrivateUsage]
+        _has_function_url,  # pyright: ignore[reportPrivateUsage]
+        _health_check,  # pyright: ignore[reportPrivateUsage]
+    )
 
     exists, _ = _function_exists(lam, function_name)
     if not exists:
@@ -190,17 +197,17 @@ def check_deployed_function(
 
 
 def run(
-    function_name,
-    role_name,
-    region,
-    defer_worker=None,
-    crons=None,
-    keep_warm=None,
-    ratelimit=False,
-    local_env=None,
-    routes=None,
-    on_section=None,
-):
+    function_name: str | None,
+    role_name: str | None,
+    region: str | None,
+    defer_worker: Any = None,
+    crons: Any = None,
+    keep_warm: Any = None,
+    ratelimit: bool = False,
+    local_env: dict[str, str] | None = None,
+    routes: Any = None,
+    on_section: Any = None,
+) -> tuple[list[Any], bool]:
     """Run every diagnostic check, one section at a time. Returns (sections, ok):
     `sections` is [(title, [(severity, label, detail), ...]), ...] for
     printing; `ok` is False if any check came back "fail" (warnings alone
@@ -211,9 +218,9 @@ def run(
     every section (AWS, Discord, IAM, Lambda each make several blocking
     network calls) to complete before anything shows up."""
     local_env = local_env or {}
-    sections = []
+    sections: list[Any] = []
 
-    def _emit(title, checks):
+    def _emit(title: str, checks: Any) -> None:
         sections.append((title, checks))
         if on_section is not None:
             on_section(title, checks)
@@ -267,7 +274,7 @@ def run(
     return sections, ok
 
 
-def _mark(severity):
+def _mark(severity: str) -> str:
     if severity == "ok":
         return f"{_GREEN}✓{_RESET}"
     if severity == "warn":
@@ -275,13 +282,13 @@ def _mark(severity):
     return f"{_RED}✗{_RESET}"
 
 
-def print_section(title, checks):
+def print_section(title: str, checks: Any) -> None:
     print(f"\n  {_BOLD}{title}{_RESET}")
     for severity, label, detail in checks:
         print(f"    {_mark(severity)} {label}: {detail}")
 
 
-def print_report(sections):
+def print_report(sections: Any) -> None:
     for title, checks in sections:
         print_section(title, checks)
     print(f"\n  {_DIM}── done ──{_RESET}\n")
