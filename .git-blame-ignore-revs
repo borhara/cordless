@@ -1,4 +1,4 @@
 # .git-blame-ignore-revs
 # Bulk strict flip: removed the per-file `# pyright: strict` line from every
 # src module in one mechanical pass. No behaviour or logic changes.
-0e3d2863cd1d539dae140397410dde1e6be2fddd
+b79cb0fdd3bd07b660090888b5b1843823bed3d6
