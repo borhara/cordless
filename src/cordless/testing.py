@@ -1,3 +1,4 @@
+# pyright: strict
 """Test helpers for cordless bots: build interaction payloads and dispatch
 them through the real router - the same code path a deployed bot runs on -
 without a live Discord round-trip or HTTP signature verification.
@@ -10,16 +11,20 @@ Import the module and use it as a namespace, e.g.:
 """
 
 import base64
-import collections
 import json
 import urllib.parse
-from typing import Any
+from typing import Any, NamedTuple, cast
 
 from ._multipart import parse_multipart_payload
 from .context import Context
 from .routes import build_response, normalize_path
 
-RouteResponse = collections.namedtuple("RouteResponse", ["status", "body", "headers"])
+
+class RouteResponse(NamedTuple):
+    status: int
+    body: Any
+    headers: Any
+
 
 _APPLICATION_COMMAND = 2
 _MESSAGE_COMPONENT = 3
@@ -36,18 +41,19 @@ _SELECT_RESOLVED_KEYS = {"user": "users", "role": "roles", "channel": "channels"
 _ANNOTATION_TYPES = [(bool, 5), (int, 4), (float, 10), (str, 3)]
 
 
-def _option_type(value):
+def _option_type(value: Any) -> int:
     for py_type, discord_type in _ANNOTATION_TYPES:
         if type(value) is py_type:
             return discord_type
     return 3
 
 
-def _options_list(options):
-    return [{"name": name, "type": _option_type(value), "value": value} for name, value in (options or {}).items()]
+def _options_list(options: Any) -> list[dict[str, Any]]:
+    src: dict[str, Any] = cast("dict[str, Any]", options or {})
+    return [{"name": name, "type": _option_type(value), "value": value} for name, value in src.items()]
 
 
-def _nest_command_path(parts, leaf_options):
+def _nest_command_path(parts: list[str], leaf_options: Any) -> Any:
     """ "name", "parent/sub", "parent/group/sub" -> nested SUB_COMMAND(_GROUP)
     option trees, matching what router._resolve_command_key expects."""
     if len(parts) == 1:
@@ -65,7 +71,13 @@ def _nest_command_path(parts, leaf_options):
     raise ValueError(f"Command path {'/'.join(parts)!r} is too deep: expected name, name/sub, or name/group/sub")
 
 
-def member(user_id="1", username="test-user", roles=None, permissions=None, nick=None):
+def member(
+    user_id: str = "1",
+    username: str = "test-user",
+    roles: Any = None,
+    permissions: Any = None,
+    nick: str | None = None,
+) -> dict[str, Any]:
     """Build a partial guild member object for the `member` kwarg on the
     other builders below, so `ctx.member.roles`/`ctx.member.permissions`
     are populated instead of just `ctx.user`.
@@ -73,7 +85,7 @@ def member(user_id="1", username="test-user", roles=None, permissions=None, nick
     `roles` is a list of role ids. `permissions` is a `Permissions`
     instance (or a raw integer bitfield) - see `cordless.Permissions`.
     """
-    data = {"user": {"id": user_id, "username": username}, "roles": roles or []}
+    data: dict[str, Any] = {"user": {"id": user_id, "username": username}, "roles": roles or []}
     if permissions is not None:
         data["permissions"] = str(int(permissions))
     if nick is not None:
@@ -82,25 +94,25 @@ def member(user_id="1", username="test-user", roles=None, permissions=None, nick
 
 
 def _shell(
-    itype,
-    data,
+    itype: int,
+    data: dict[str, Any],
     *,
-    member=None,
-    user_id,
-    username,
-    guild_id,
-    guild,
-    channel_id,
-    locale,
-    interaction_id,
-    token,
-    message=None,
-):
+    member: Any = None,
+    user_id: str,
+    username: str,
+    guild_id: str | None,
+    guild: Any,
+    channel_id: str,
+    locale: str,
+    interaction_id: str,
+    token: str,
+    message: Any = None,
+) -> dict[str, Any]:
     """The fields common to every interaction type, regardless of what's in `data`."""
     if member is not None and guild_id is None:
         guild_id = "1"
     user = {"id": user_id, "username": username}
-    shell = {
+    shell: dict[str, Any] = {
         "id": interaction_id,
         "type": itype,
         "token": token,
@@ -118,21 +130,21 @@ def _shell(
 
 
 def command(
-    name,
-    options=None,
+    name: str,
+    options: Any = None,
     *,
-    target=None,
-    target_type=None,
-    member=None,
-    user_id="1",
-    username="test-user",
-    guild_id=None,
-    guild=None,
-    channel_id="1",
-    locale="en-US",
-    interaction_id="1",
-    token="test-token",
-):
+    target: Any = None,
+    target_type: Any = None,
+    member: Any = None,
+    user_id: str = "1",
+    username: str = "test-user",
+    guild_id: str | None = None,
+    guild: Any = None,
+    channel_id: str = "1",
+    locale: str = "en-US",
+    interaction_id: str = "1",
+    token: str = "test-token",
+) -> dict[str, Any]:
     """Build a raw APPLICATION_COMMAND interaction payload, as if a user
     typed `name` with `options` in Discord.
 
@@ -158,7 +170,7 @@ def command(
     parts = name.split("/")
     leaf_options = _options_list(options)
 
-    data = {"name": parts[0]}
+    data: dict[str, Any] = {"name": parts[0]}
     if leaf_options or len(parts) > 1:
         data["options"] = _nest_command_path(parts, leaf_options)
 
@@ -187,23 +199,23 @@ def command(
 
 
 def _component(
-    custom_id,
-    component_type,
+    custom_id: str,
+    component_type: int,
     *,
-    values=None,
-    resolved=None,
-    message=None,
-    member=None,
-    user_id="1",
-    username="test-user",
-    guild_id=None,
-    guild=None,
-    channel_id="1",
-    locale="en-US",
-    interaction_id="1",
-    token="test-token",
-):
-    data = {"custom_id": custom_id, "component_type": component_type}
+    values: Any = None,
+    resolved: Any = None,
+    message: Any = None,
+    member: Any = None,
+    user_id: str = "1",
+    username: str = "test-user",
+    guild_id: str | None = None,
+    guild: Any = None,
+    channel_id: str = "1",
+    locale: str = "en-US",
+    interaction_id: str = "1",
+    token: str = "test-token",
+) -> dict[str, Any]:
+    data: dict[str, Any] = {"custom_id": custom_id, "component_type": component_type}
     if values is not None:
         data["values"] = values
     if resolved:
@@ -225,7 +237,7 @@ def _component(
     )
 
 
-def button(custom_id, **kwargs):
+def button(custom_id: str, **kwargs: Any) -> dict[str, Any]:
     """Build a raw MESSAGE_COMPONENT interaction payload, as if a user
     clicked a button with this `custom_id`. Prefix-matched custom ids
     ("shop:item1") work the same as in production: the handler is looked up
@@ -238,7 +250,7 @@ def button(custom_id, **kwargs):
     return _component(custom_id, 2, **kwargs)
 
 
-def select(custom_id, values=None, kind="string", **kwargs):
+def select(custom_id: str, values: Any = None, kind: str = "string", **kwargs: Any) -> dict[str, Any]:
     """Build a raw MESSAGE_COMPONENT interaction payload, as if a user
     picked from a select menu with this `custom_id`.
 
@@ -254,9 +266,9 @@ def select(custom_id, values=None, kind="string", **kwargs):
         raise ValueError(f"Unknown select kind {kind!r}: expected one of {', '.join(_SELECT_KINDS)}")
 
     resolved_key = _SELECT_RESOLVED_KEYS.get(kind)
-    ids = []
-    resolved = {}
-    for value in values or []:
+    ids: list[Any] = []
+    resolved: dict[str, Any] = {}
+    for value in cast("list[Any]", values or []):
         if isinstance(value, dict) and resolved_key:
             ids.append(value["id"])
             resolved.setdefault(resolved_key, {})[value["id"]] = value
@@ -267,19 +279,19 @@ def select(custom_id, values=None, kind="string", **kwargs):
 
 
 def modal(
-    custom_id,
-    values=None,
+    custom_id: str,
+    values: Any = None,
     *,
-    member=None,
-    user_id="1",
-    username="test-user",
-    guild_id=None,
-    guild=None,
-    channel_id="1",
-    locale="en-US",
-    interaction_id="1",
-    token="test-token",
-):
+    member: Any = None,
+    user_id: str = "1",
+    username: str = "test-user",
+    guild_id: str | None = None,
+    guild: Any = None,
+    channel_id: str = "1",
+    locale: str = "en-US",
+    interaction_id: str = "1",
+    token: str = "test-token",
+) -> dict[str, Any]:
     """Build a raw MODAL_SUBMIT interaction payload, as if a user filled in
     and submitted a modal with this `custom_id`.
 
@@ -289,7 +301,7 @@ def modal(
     """
     components = [
         {"type": 1, "components": [{"type": 4, "custom_id": cid, "value": value}]}
-        for cid, value in (values or {}).items()
+        for cid, value in cast("dict[str, Any]", values or {}).items()
     ]
 
     return _shell(
@@ -308,20 +320,20 @@ def modal(
 
 
 def autocomplete(
-    name,
-    options=None,
-    focused=None,
+    name: str,
+    options: Any = None,
+    focused: str | None = None,
     *,
-    member=None,
-    user_id="1",
-    username="test-user",
-    guild_id=None,
-    guild=None,
-    channel_id="1",
-    locale="en-US",
-    interaction_id="1",
-    token="test-token",
-):
+    member: Any = None,
+    user_id: str = "1",
+    username: str = "test-user",
+    guild_id: str | None = None,
+    guild: Any = None,
+    channel_id: str = "1",
+    locale: str = "en-US",
+    interaction_id: str = "1",
+    token: str = "test-token",
+) -> dict[str, Any]:
     """Build a raw APPLICATION_COMMAND_AUTOCOMPLETE interaction payload, as
     if a user is typing into an option's autocomplete field.
 
@@ -337,7 +349,7 @@ def autocomplete(
             if opt["name"] == focused:
                 opt["focused"] = True
 
-    data = {"name": parts[0], "type": 1}
+    data: dict[str, Any] = {"name": parts[0], "type": 1}
     if leaf_options or len(parts) > 1:
         data["options"] = _nest_command_path(parts, leaf_options)
 
@@ -357,7 +369,7 @@ def autocomplete(
 
 
 async def invoke(
-    bot, interaction_or_name, options=None, *, worker_mode=False, **kwargs
+    bot: Any, interaction_or_name: Any, options: Any = None, *, worker_mode: bool = False, **kwargs: Any
 ) -> tuple[dict[str, Any] | None, Context]:
     """Dispatch an interaction through `bot`'s real router - the same
     dispatch call a deployed Lambda makes - and return `(response, ctx)`:
@@ -405,7 +417,9 @@ async def invoke(
     return json.loads(raw["body"]), ctx
 
 
-async def invoke_route(bot, method, path, *, body="", headers=None, query=None):
+async def invoke_route(
+    bot: Any, method: str, path: str, *, body: str = "", headers: Any = None, query: Any = None
+) -> Any:
     """Dispatch a `@bot.route` handler and return a
     `RouteResponse(status, body, headers)`.
 
