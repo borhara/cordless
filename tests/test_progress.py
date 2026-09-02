@@ -14,7 +14,7 @@ class _FakeStdout:
 
 
 def _run_spinner(monkeypatch, raises=False):
-    monkeypatch.setattr(progress, "_tty", True)
+    monkeypatch.setattr(progress, "tty", True)
     fake = _FakeStdout()
     monkeypatch.setattr(progress.sys, "stdout", fake)
 
@@ -33,9 +33,9 @@ def _run_spinner(monkeypatch, raises=False):
 
 def test_spinner_success_erases_line_before_final_write(monkeypatch):
     writes = _run_spinner(monkeypatch)
-    assert writes[-1] == f"\r{progress._ERASE_LINE}  {progress._GREEN}✓{progress._RESET} IAM role\n"
+    assert writes[-1] == f"\r{progress.ERASE_LINE}  {progress.GREEN}✓{progress.RESET} IAM role\n"
 
 
 def test_spinner_failure_erases_line_before_final_write(monkeypatch):
     writes = _run_spinner(monkeypatch, raises=True)
-    assert writes[-1] == f"\r{progress._ERASE_LINE}  {progress._RED}✗{progress._RESET} IAM role\n"
+    assert writes[-1] == f"\r{progress.ERASE_LINE}  {progress.RED}✗{progress.RESET} IAM role\n"

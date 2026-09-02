@@ -54,7 +54,7 @@ def _options_list(options: Any) -> list[dict[str, Any]]:
 
 def _nest_command_path(parts: list[str], leaf_options: Any) -> Any:
     """ "name", "parent/sub", "parent/group/sub" -> nested SUB_COMMAND(_GROUP)
-    option trees, matching what router._resolve_command_key expects."""
+    option trees, matching what router.resolve_command_key expects."""
     if len(parts) == 1:
         return leaf_options
     if len(parts) == 2:

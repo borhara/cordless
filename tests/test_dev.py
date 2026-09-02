@@ -591,15 +591,15 @@ def test_describe_interaction_unknown_type_falls_back_to_number():
 
 
 def test_status_color_success_is_green():
-    assert dev._status_color(200) == dev._GREEN
+    assert dev._status_color(200) == dev.GREEN
 
 
 def test_status_color_client_error_is_yellow():
-    assert dev._status_color(404) == dev._YELLOW
+    assert dev._status_color(404) == dev.YELLOW
 
 
 def test_status_color_server_error_is_red():
-    assert dev._status_color(500) == dev._RED
+    assert dev._status_color(500) == dev.RED
 
 
 def test_pretty_body_empty_returns_empty_string():

@@ -587,14 +587,14 @@ class Cordless(RESTMixin):
         webhook = await webhooks.create_webhook(
             channel_id, name, avatar=avatar if avatar is not None else UNSET, reason=reason
         )
-        return webhook._data
+        return webhook.to_dict()
 
     async def get_channel_webhooks(self, channel_id: str) -> Any:
         """List a channel's webhooks. Requires DISCORD_BOT_TOKEN."""
         from ._rest import webhooks
 
         result = await webhooks.fetch_channel_webhooks(channel_id)
-        return [webhook._data for webhook in result]
+        return [webhook.to_dict() for webhook in result]
 
     async def delete_webhook(
         self, webhook_id: str, webhook_token: str | None = None, *, reason: str | None = None

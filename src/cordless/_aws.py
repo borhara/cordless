@@ -2,7 +2,7 @@
 
 from typing import Any
 
-_NO_CREDENTIALS_MSG = """
+NO_CREDENTIALS_MSG = """
 No AWS credentials found. cordless looks for credentials in the standard places:
 
   1. Environment variables
@@ -44,6 +44,6 @@ def get_session(region: str | None = None, validate: bool = True) -> Any:
         session.client("sts").get_caller_identity()
         return session
     except NoCredentialsError:
-        raise SystemExit(_NO_CREDENTIALS_MSG)
+        raise SystemExit(NO_CREDENTIALS_MSG)
     except ClientError as exc:
         raise SystemExit(f"AWS credential error: {exc}")

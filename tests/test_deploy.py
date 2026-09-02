@@ -12,8 +12,6 @@ from cordless.deploy import (
     _allow_worker_invoke,
     _ensure_api_gateway,
     _ensure_function_url,
-    _function_exists,
-    _health_check,
     _list_all_routes,
     _publish_cordless_layer,
     _remove_keepwarm,
@@ -23,6 +21,8 @@ from cordless.deploy import (
     destroy,
     ensure_iam_role,
     ensure_ratelimit_table,
+    function_exists,
+    health_check,
     ratelimit_table_name,
     scan_missing_packages,
 )
@@ -170,12 +170,12 @@ def test_ensure_iam_role_attaches_extra_policies(aws_clients_with_policy):
 
 
 # ---------------------------------------------------------------------------
-# _function_exists
+# function_exists
 # ---------------------------------------------------------------------------
 
 
 def test_function_exists_returns_false_for_missing(aws_clients):
-    exists, arn = _function_exists(aws_clients["lam"], "nonexistent")
+    exists, arn = function_exists(aws_clients["lam"], "nonexistent")
     assert exists is False
     assert arn is None
 
@@ -184,7 +184,7 @@ def test_function_exists_returns_true_when_present(aws_clients, tmp_path):
     iam, lam = aws_clients["iam"], aws_clients["lam"]
     role_arn = _make_role(iam)
     _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
-    exists, arn = _function_exists(lam, "my-fn")
+    exists, arn = function_exists(lam, "my-fn")
     assert exists is True
     assert arn is not None
     assert "my-fn" in arn
@@ -520,7 +520,7 @@ def test_remove_keepwarm_is_safe_when_nothing_exists(aws_clients, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _health_check (describe-only, no AWS cost)
+# health_check (describe-only, no AWS cost)
 # ---------------------------------------------------------------------------
 
 
@@ -532,7 +532,7 @@ def test_health_check_all_green_when_everything_is_wired_correctly(aws_clients, 
     _wire_crons(events, lam, "my-fn", "my-fn", fn_arn, {"daily": "rate(1 day)"})
     _wire_keepwarm(events, lam, "my-fn", fn_arn, True)
 
-    checks = _health_check(
+    checks = health_check(
         lam, apigw, events, None, "my-fn", None, "function_url", {"daily": "rate(1 day)"}, True, False, None
     )
 
@@ -556,7 +556,7 @@ def test_health_check_flags_missing_function_url_permission_statement(aws_client
         FunctionUrlAuthType="NONE",
     )
 
-    checks = _health_check(lam, apigw, events, None, "my-fn", None, "function_url", None, False, False, None)
+    checks = health_check(lam, apigw, events, None, "my-fn", None, "function_url", None, False, False, None)
 
     label_map = {label: (ok, detail) for ok, label, detail in checks}
     assert label_map["Function URL permissions"][0] is False
@@ -568,7 +568,7 @@ def test_health_check_flags_missing_cron_rule(aws_clients, tmp_path):
     _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
     # note: never actually wired via _wire_crons
 
-    checks = _health_check(
+    checks = health_check(
         lam, apigw, events, None, "my-fn", None, "function_url", {"daily": "rate(1 day)"}, False, False, None
     )
 
@@ -588,7 +588,7 @@ def test_health_check_flags_keepwarm_targeting_wrong_function(aws_clients, tmp_p
     wrong_arn = _make_function(lam, "my-fn-worker", role_arn, _minimal_zip(tmp_path))
     _wire_keepwarm(events, lam, "my-fn", wrong_arn, True)
 
-    checks = _health_check(lam, apigw, events, None, "my-fn", None, "function_url", None, True, False, None)
+    checks = health_check(lam, apigw, events, None, "my-fn", None, "function_url", None, True, False, None)
 
     label_map = {label: (ok, detail) for ok, label, detail in checks}
     assert label_map["Keep-warm rule"][0] is False
@@ -600,7 +600,7 @@ def test_health_check_reports_api_gateway_endpoint(aws_clients, tmp_path):
     fn_arn = _make_function(lam, "my-fn", role_arn, _minimal_zip(tmp_path))
     _ensure_api_gateway(apigw, lam, "my-fn", fn_arn, REGION, ACCOUNT_ID)
 
-    checks = _health_check(lam, apigw, events, None, "my-fn", None, "api_gateway", None, False, False, None)
+    checks = health_check(lam, apigw, events, None, "my-fn", None, "api_gateway", None, False, False, None)
 
     label_map = {label: (ok, detail) for ok, label, detail in checks}
     assert label_map["API Gateway"][0] is True
@@ -613,7 +613,7 @@ def test_health_check_reports_missing_api_route(aws_clients, tmp_path):
     _ensure_api_gateway(apigw, lam, "my-fn", fn_arn, REGION, ACCOUNT_ID, routes=[("GET", "/a")])
 
     routes = [("GET", "/a"), ("POST", "/b")]
-    checks = _health_check(lam, apigw, events, None, "my-fn", None, "api_gateway", None, False, False, None, routes)
+    checks = health_check(lam, apigw, events, None, "my-fn", None, "api_gateway", None, False, False, None, routes)
 
     label_map = {label: (ok, detail) for ok, label, detail in checks}
     assert label_map["API routes"] == (False, "missing: POST /b")
@@ -626,7 +626,7 @@ def test_health_check_lists_routes_on_function_url(aws_clients, tmp_path):
     _ensure_function_url(lam, "my-fn")
 
     routes = [("GET", "/healthz"), ("POST", "/hook/{id}")]
-    checks = _health_check(lam, apigw, events, None, "my-fn", None, "function_url", None, False, False, None, routes)
+    checks = health_check(lam, apigw, events, None, "my-fn", None, "function_url", None, False, False, None, routes)
 
     label_map = {label: (ok, detail) for ok, label, detail in checks}
     assert label_map["HTTP routes"][0] is True
@@ -642,7 +642,7 @@ def test_health_check_reports_ratelimit_table_status(aws_clients, tmp_path):
     table_name = ratelimit_table_name("my-fn")
     ensure_ratelimit_table(dynamodb, table_name)
 
-    checks = _health_check(lam, apigw, events, dynamodb, "my-fn", None, "function_url", None, False, True, table_name)
+    checks = health_check(lam, apigw, events, dynamodb, "my-fn", None, "function_url", None, False, True, table_name)
 
     label_map = {label: (ok, detail) for ok, label, detail in checks}
     assert label_map["Rate limit table"] == (True, "ACTIVE")
@@ -660,7 +660,7 @@ def test_deploy_creates_function_and_returns_url(deploy_patches, monkeypatch):
     url = deploy(**_base_deploy_kwargs(deploy_patches))
     assert url
     lam = boto3.client("lambda", region_name=REGION)
-    exists, _ = _function_exists(lam, "my-bot")
+    exists, _ = function_exists(lam, "my-bot")
     assert exists
 
 
@@ -682,7 +682,7 @@ def test_deploy_sets_log_retention_by_default(deploy_patches, monkeypatch):
 
     logs = boto3.client("logs", region_name=REGION)
     [group] = logs.describe_log_groups(logGroupNamePrefix="/aws/lambda/my-bot")["logGroups"]
-    assert group["retentionInDays"] == cordless.deploy._DEFAULT_LOG_RETENTION_DAYS
+    assert group["retentionInDays"] == cordless.deploy.DEFAULT_LOG_RETENTION_DAYS
 
 
 @mock_aws
@@ -904,7 +904,7 @@ def test_deploy_creates_worker_when_configured(deploy_patches, monkeypatch):
     monkeypatch.setattr(cordless.deploy, "_LAMBDA_BASIC_EXECUTION_POLICY", _seed_lambda_execution_policy(iam))
     deploy(**_base_deploy_kwargs(deploy_patches, defer_worker="my-bot-worker"))
     lam = boto3.client("lambda", region_name=REGION)
-    exists, _ = _function_exists(lam, "my-bot-worker")
+    exists, _ = function_exists(lam, "my-bot-worker")
     assert exists
 
 
@@ -1019,7 +1019,7 @@ def test_destroy_removes_function_and_api(deploy_patches, monkeypatch):
     deploy(**_base_deploy_kwargs(deploy_patches))
     destroy("my-bot", "my-bot-role", REGION)
     lam = boto3.client("lambda", region_name=REGION)
-    exists, _ = _function_exists(lam, "my-bot")
+    exists, _ = function_exists(lam, "my-bot")
     assert not exists
     apigw = boto3.client("apigatewayv2", region_name=REGION)
     assert not any(a["Name"] == "my-bot-api" for a in apigw.get_apis()["Items"])
@@ -1057,7 +1057,7 @@ def test_destroy_removes_worker(deploy_patches, monkeypatch):
     deploy(**_base_deploy_kwargs(deploy_patches, defer_worker="my-bot-worker"))
     destroy("my-bot", "my-bot-role", REGION, defer_worker="my-bot-worker")
     lam = boto3.client("lambda", region_name=REGION)
-    exists, _ = _function_exists(lam, "my-bot-worker")
+    exists, _ = function_exists(lam, "my-bot-worker")
     assert not exists
 
 

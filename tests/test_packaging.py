@@ -94,13 +94,13 @@ def test_bundle_cordless_includes_dist_info(tmp_path, monkeypatch):
     _make_tree(pkg_dir, ["app.py", "__init__.py"])
     _make_tree(dist_info, ["METADATA", "RECORD"])
 
-    monkeypatch.setattr(cordless.deploy, "_ensure_packages", lambda pkgs, v: str(tmp_path / "empty"))
+    monkeypatch.setattr(cordless.deploy, "ensure_packages", lambda pkgs, v: str(tmp_path / "empty"))
     (tmp_path / "empty").mkdir(exist_ok=True)
 
     import cordless.upload
 
-    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
-    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": None)
+    monkeypatch.setattr(cordless.upload, "cordless_package_dir", lambda: str(pkg_dir))
+    monkeypatch.setattr(cordless.upload, "layer_extras_dir", lambda v, arch="x86_64": None)
 
     src = tmp_path / "src"
     src.mkdir()
@@ -121,11 +121,11 @@ def test_bundle_cordless_includes_pynacl_extras(tmp_path, monkeypatch):
 
     pkg_dir = tmp_path / "site-packages" / "cordless"
     _make_tree(pkg_dir, ["app.py", "__init__.py"])
-    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
+    monkeypatch.setattr(cordless.upload, "cordless_package_dir", lambda: str(pkg_dir))
 
     extras = tmp_path / "extras"
     _make_tree(extras, ["nacl/signing.py", "nacl/_sodium.abi3.so"])
-    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": str(extras))
+    monkeypatch.setattr(cordless.upload, "layer_extras_dir", lambda v, arch="x86_64": str(extras))
 
     src = tmp_path / "src"
     src.mkdir()
@@ -151,14 +151,14 @@ def test_bundle_cordless_does_not_double_write_when_packages_overlaps_extras(tmp
 
     pkg_dir = tmp_path / "site-packages" / "cordless"
     _make_tree(pkg_dir, ["app.py", "__init__.py"])
-    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
+    monkeypatch.setattr(cordless.upload, "cordless_package_dir", lambda: str(pkg_dir))
 
-    # _layer_extras_dir and a user's own packages=["pynacl"] can resolve to the
+    # layer_extras_dir and a user's own packages=["pynacl"] can resolve to the
     # same cache dir in practice, so point both at one shared directory here
     shared = tmp_path / "shared-pynacl-cache"
     _make_tree(shared, ["nacl/signing.py", ".lock"])
-    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": str(shared))
-    monkeypatch.setattr(cordless.deploy, "_ensure_packages", lambda pkgs, v, arch: str(shared))
+    monkeypatch.setattr(cordless.upload, "layer_extras_dir", lambda v, arch="x86_64": str(shared))
+    monkeypatch.setattr(cordless.deploy, "ensure_packages", lambda pkgs, v, arch: str(shared))
 
     src = tmp_path / "src"
     src.mkdir()
@@ -182,12 +182,12 @@ def test_bundle_cordless_fails_when_pynacl_fetch_fails(tmp_path, monkeypatch):
 
     pkg_dir = tmp_path / "site-packages" / "cordless"
     _make_tree(pkg_dir, ["app.py", "__init__.py"])
-    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
+    monkeypatch.setattr(cordless.upload, "cordless_package_dir", lambda: str(pkg_dir))
 
     def boom(v, arch="x86_64"):
         raise RuntimeError("no matching wheel")
 
-    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", boom)
+    monkeypatch.setattr(cordless.upload, "layer_extras_dir", boom)
 
     src = tmp_path / "src"
     src.mkdir()
@@ -206,13 +206,13 @@ def test_bundle_cordless_includes_egg_info(tmp_path, monkeypatch):
     _make_tree(pkg_dir, ["app.py", "__init__.py"])
     _make_tree(egg_info, ["PKG-INFO", "top_level.txt"])
 
-    monkeypatch.setattr(cordless.deploy, "_ensure_packages", lambda pkgs, v: str(tmp_path / "empty"))
+    monkeypatch.setattr(cordless.deploy, "ensure_packages", lambda pkgs, v: str(tmp_path / "empty"))
     (tmp_path / "empty").mkdir(exist_ok=True)
 
     import cordless.upload
 
-    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
-    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": None)
+    monkeypatch.setattr(cordless.upload, "cordless_package_dir", lambda: str(pkg_dir))
+    monkeypatch.setattr(cordless.upload, "layer_extras_dir", lambda v, arch="x86_64": None)
 
     src = tmp_path / "src"
     src.mkdir()
@@ -238,8 +238,8 @@ def test_bundle_cordless_excludes_cli_only_files(tmp_path, monkeypatch):
         pkg_dir,
         ["app.py", "__init__.py", "deploy.py", "cli.py", "dev.py", "upload.py", "_aws.py", "_progress.py", "_env.py"],
     )
-    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
-    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": None)
+    monkeypatch.setattr(cordless.upload, "cordless_package_dir", lambda: str(pkg_dir))
+    monkeypatch.setattr(cordless.upload, "layer_extras_dir", lambda v, arch="x86_64": None)
 
     src = tmp_path / "src"
     src.mkdir()
@@ -266,8 +266,8 @@ def test_layer_zip_excludes_cli_only_files(tmp_path, monkeypatch):
         pkg_dir,
         ["app.py", "__init__.py", "deploy.py", "cli.py", "dev.py", "upload.py", "_aws.py", "_progress.py", "_env.py"],
     )
-    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
-    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": None)
+    monkeypatch.setattr(cordless.upload, "cordless_package_dir", lambda: str(pkg_dir))
+    monkeypatch.setattr(cordless.upload, "layer_extras_dir", lambda v, arch="x86_64": None)
 
     zip_path = cordless.upload.build_layer_zip("3.12")
     try:
@@ -284,7 +284,7 @@ def test_layer_zip_bundles_pynacl_extras(tmp_path, monkeypatch):
 
     extras = tmp_path / "extras"
     _make_tree(extras, ["nacl/signing.py", "nacl/_sodium.abi3.so"])
-    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": str(extras))
+    monkeypatch.setattr(cordless.upload, "layer_extras_dir", lambda v, arch="x86_64": str(extras))
 
     zip_path = cordless.upload.build_layer_zip("3.12")
     try:
@@ -306,12 +306,12 @@ def test_layer_zip_does_not_double_write_overlapping_names(tmp_path, monkeypatch
     pkg_root = tmp_path / "site-packages"
     pkg_dir = pkg_root / "cordless"
     _make_tree(pkg_dir, ["app.py", "__init__.py"])
-    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
+    monkeypatch.setattr(cordless.upload, "cordless_package_dir", lambda: str(pkg_dir))
 
     extras = tmp_path / "extras"
     # deliberately overlaps with a path the cordless walk also produces
     _make_tree(extras, ["cordless/app.py", "nacl/signing.py"])
-    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": str(extras))
+    monkeypatch.setattr(cordless.upload, "layer_extras_dir", lambda v, arch="x86_64": str(extras))
 
     with warnings.catch_warnings():
         warnings.simplefilter("error")
@@ -331,7 +331,7 @@ def test_layer_zip_fails_when_pynacl_fetch_fails(monkeypatch):
     def boom(v, arch="x86_64"):
         raise RuntimeError("no matching wheel")
 
-    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", boom)
+    monkeypatch.setattr(cordless.upload, "layer_extras_dir", boom)
 
     with pytest.raises(RuntimeError):
         cordless.upload.build_layer_zip("3.12")
@@ -344,17 +344,17 @@ def test_layer_extras_dir_raises_when_fetch_fails(monkeypatch):
     def boom(pkgs, python_version, architecture):
         raise RuntimeError("no matching wheel")
 
-    monkeypatch.setattr(cordless.deploy, "_ensure_packages", boom)
+    monkeypatch.setattr(cordless.deploy, "ensure_packages", boom)
 
     with pytest.raises(RuntimeError):
-        cordless.upload._layer_extras_dir("3.12")
+        cordless.upload.layer_extras_dir("3.12")
 
 
 def test_layer_zip_without_runtime_skips_extras(monkeypatch):
     import cordless.upload
 
     called = []
-    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v: called.append(v))
+    monkeypatch.setattr(cordless.upload, "layer_extras_dir", lambda v: called.append(v))
 
     zip_path = cordless.upload.build_layer_zip()
     try:
@@ -372,8 +372,8 @@ def test_layer_zip_includes_dist_info(tmp_path, monkeypatch):
     _make_tree(pkg_dir, ["app.py", "__init__.py"])
     _make_tree(dist_info, ["METADATA", "RECORD"])
 
-    monkeypatch.setattr(cordless.upload, "_cordless_package_dir", lambda: str(pkg_dir))
-    monkeypatch.setattr(cordless.upload, "_layer_extras_dir", lambda v, arch="x86_64": None)
+    monkeypatch.setattr(cordless.upload, "cordless_package_dir", lambda: str(pkg_dir))
+    monkeypatch.setattr(cordless.upload, "layer_extras_dir", lambda v, arch="x86_64": None)
 
     zip_path = cordless.upload.build_layer_zip("3.12")
     try:

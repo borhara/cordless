@@ -337,7 +337,7 @@ class Router:
         itype = interaction["type"]
 
         if itype == APPLICATION_COMMAND:
-            key, leaf_options = _resolve_command_key(interaction["data"])
+            key, leaf_options = resolve_command_key(interaction["data"])
             entry = self.commands.get(key)
             if not entry:
                 raise UnknownCommandError(f"Unknown command: {key}")
@@ -367,7 +367,7 @@ class Router:
             return await _invoke(handler, ctx, f"Component '{cid}'")
 
         if itype == APPLICATION_COMMAND_AUTOCOMPLETE:
-            key, _ = _resolve_command_key(interaction["data"])
+            key, _ = resolve_command_key(interaction["data"])
             option_name = _focused_option_name(interaction["data"])
             handler = self.autocompletes.get((key, option_name))
             if not handler:
@@ -395,7 +395,7 @@ class Router:
         raise UnsupportedInteractionError(f"Unsupported interaction type: {itype}")
 
 
-def _resolve_command_key(data: Any) -> tuple[str, Any]:
+def resolve_command_key(data: Any) -> tuple[str, Any]:
     name = data["name"]
     options = data.get("options", [])
     if not options:

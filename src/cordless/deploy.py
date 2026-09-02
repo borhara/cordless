@@ -79,7 +79,7 @@ _KNOWN_DEPLOY_KEYS = {
 }
 
 _DEFAULT_KEEPWARM_SCHEDULE = "rate(5 minutes)"
-_DEFAULT_LOG_RETENTION_DAYS = 30
+DEFAULT_LOG_RETENTION_DAYS = 30
 
 
 def load_config(source_dir: str) -> Any:
@@ -229,17 +229,17 @@ def build_function_zip(
 
         if bundle_cordless:
             from .upload import (
-                _cordless_package_dir,
-                _is_runtime_file,
-                _layer_extras_dir,
+                cordless_package_dir,
+                is_runtime_file,
+                layer_extras_dir,
             )
 
-            pkg_dir = _cordless_package_dir()
+            pkg_dir = cordless_package_dir()
             pkg_parent = os.path.dirname(pkg_dir)
             for root, dirs, files in os.walk(pkg_dir):
                 dirs[:] = [d for d in dirs if d != "__pycache__"]
                 for fname in files:
-                    if not _is_runtime_file(fname):
+                    if not is_runtime_file(fname):
                         continue
                     abs_path = os.path.join(root, fname)
                     _write(zf, abs_path, os.path.relpath(abs_path, pkg_parent))
@@ -256,7 +256,7 @@ def build_function_zip(
             # same pynacl bundling the layer path gets, required for signature
             # verification, so a fetch failure here raises rather than shipping
             # a function that can't verify Discord's requests
-            extras_dir = _layer_extras_dir(python_version, architecture)
+            extras_dir = layer_extras_dir(python_version, architecture)
             if extras_dir:
                 for root, dirs, files in os.walk(extras_dir):
                     dirs[:] = [d for d in dirs if d != "__pycache__"]
@@ -266,7 +266,7 @@ def build_function_zip(
                         abs_path = os.path.join(root, fname)
                         _write(zf, abs_path, os.path.relpath(abs_path, extras_dir))
         if packages:
-            pkg_dir = _ensure_packages(packages, python_version, architecture)
+            pkg_dir = ensure_packages(packages, python_version, architecture)
             for root, dirs, files in os.walk(pkg_dir):
                 dirs[:] = [d for d in dirs if d != "__pycache__"]
                 for fname in files:
@@ -283,7 +283,7 @@ def _packages_cache_dir(packages: Any, python_version: str, architecture: str = 
     return os.path.join(os.path.expanduser("~"), ".cache", "cordless", "packages", key)
 
 
-def _ensure_packages(packages: Any, python_version: str, architecture: str = "x86_64") -> str:
+def ensure_packages(packages: Any, python_version: str, architecture: str = "x86_64") -> str:
     """uv-install Lambda-compatible wheels, cached across deploys.
 
     The cache key is the exact packages list + python version, so unpinned
@@ -387,9 +387,9 @@ def _publish_cordless_layer(
     except lam.exceptions.ResourceNotFoundException:
         pass
 
-    from .upload import _LAMBDA_RUNTIMES
+    from .upload import LAMBDA_RUNTIMES
 
-    runtimes: Any = [f"python{python_version}"] if python_version else _LAMBDA_RUNTIMES
+    runtimes: Any = [f"python{python_version}"] if python_version else LAMBDA_RUNTIMES
 
     zip_path = build_layer_zip(python_version, architecture)
     try:
@@ -423,7 +423,7 @@ def _list_all_rules(events: Any, prefix: str) -> Any:
     return events.get_paginator("list_rules").paginate(NamePrefix=prefix).build_full_result()["Rules"]
 
 
-def _function_exists(lam: Any, function_name: str) -> tuple[bool, Any]:
+def function_exists(lam: Any, function_name: str) -> tuple[bool, Any]:
     try:
         config = lam.get_function_configuration(FunctionName=function_name)
         return True, config["FunctionArn"]
@@ -596,12 +596,12 @@ def _ensure_api_gateway(
     return endpoint
 
 
-def _has_api_gateway(apigw: Any, function_name: str) -> Any:
+def has_api_gateway(apigw: Any, function_name: str) -> Any:
     api_name = f"{function_name}-api"
     return any(a["Name"] == api_name for a in _list_all_apis(apigw))
 
 
-def _has_function_url(lam: Any, function_name: str) -> Any:
+def has_function_url(lam: Any, function_name: str) -> Any:
     try:
         lam.get_function_url_config(FunctionName=function_name)
         return True
@@ -745,14 +745,14 @@ def deploy(
     ratelimit: bool = False,
     endpoint: Any = None,
     keep_warm: Any = None,
-    log_retention_days: int = _DEFAULT_LOG_RETENTION_DAYS,
+    log_retention_days: int = DEFAULT_LOG_RETENTION_DAYS,
     routes: Any = None,
 ) -> Any:
     if not function_name:
         raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
 
     from ._aws import get_session
-    from ._progress import _DIM, _RESET, Spinner, _tty, success, summary
+    from ._progress import DIM, RESET, Spinner, success, summary, tty
 
     zip_path: str = ""
     layer_arn: Any = None
@@ -785,9 +785,9 @@ def deploy(
         # bot.route works on either: dispatch reads the same payload-format-2.0
         # event either way. api_gateway just adds edge 404s for unknown paths
         # and deploy-time route sync, so switching to it stays an opt-in.
-        if _has_function_url(lam, function_name):
+        if has_function_url(lam, function_name):
             endpoint = "function_url"
-        elif _has_api_gateway(apigw, function_name):
+        elif has_api_gateway(apigw, function_name):
             endpoint = "api_gateway"
         else:
             endpoint = "function_url"
@@ -823,7 +823,7 @@ def deploy(
         )
 
     try:
-        exists, function_arn = _function_exists(lam, function_name)
+        exists, function_arn = function_exists(lam, function_name)
         verb = "updating" if exists else "creating"
         with Spinner(f"{verb}  {function_name}"):
             if exists:
@@ -863,7 +863,7 @@ def deploy(
                 url = _ensure_api_gateway(apigw, lam, function_name, function_arn, region, account_id, routes=routes)
 
         if defer_worker:
-            w_exists, worker_arn = _function_exists(lam, defer_worker)
+            w_exists, worker_arn = function_exists(lam, defer_worker)
             w_verb = "updating" if w_exists else "creating"
             with Spinner(f"{w_verb}  {defer_worker}"):
                 if w_exists:
@@ -911,7 +911,7 @@ def deploy(
     # run even when crons is empty so rules for deleted crons get cleaned up
     if crons is not None:
         cron_target = defer_worker or function_name
-        _, cron_arn = _function_exists(lam, cron_target)
+        _, cron_arn = function_exists(lam, cron_target)
         events = session.client("events")
         with Spinner(f"cron schedules ({len(crons)})"):
             _wire_crons(events, lam, function_name, cron_target, cron_arn, crons)
@@ -919,7 +919,7 @@ def deploy(
     with Spinner("keep-warm" if keep_warm else "keep-warm (off)"):
         _wire_keepwarm(session.client("events"), lam, function_name, function_arn, keep_warm)
 
-    health = _health_check(
+    health = health_check(
         lam,
         apigw,
         session.client("events"),
@@ -955,15 +955,15 @@ def deploy(
             *health,
         ]
     )
-    dim = _DIM if _tty else ""
-    reset = _RESET if _tty else ""
+    dim = DIM if tty else ""
+    reset = RESET if tty else ""
     print()
     print(f"  {dim}(paste this url into your app's Interactions Endpoint URL){reset}")
     success(url)
     return url
 
 
-def _health_check(
+def health_check(
     lam: Any,
     apigw: Any,
     events: Any,

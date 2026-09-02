@@ -22,6 +22,10 @@ class DiscordObject:
         except KeyError:
             raise AttributeError(name) from None
 
+    def to_dict(self) -> dict[str, Any]:
+        """The raw Discord API object this wraps."""
+        return self._data
+
     def __eq__(self, other: object) -> bool:
         if isinstance(other, DiscordObject):
             return self._data == other._data

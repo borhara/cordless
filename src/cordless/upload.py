@@ -4,7 +4,7 @@ import tempfile
 import zipfile
 from typing import Any, cast
 
-_LAMBDA_RUNTIMES: list[Any] = ["python3.10", "python3.11", "python3.12", "python3.13", "python3.14"]
+LAMBDA_RUNTIMES: list[Any] = ["python3.10", "python3.11", "python3.12", "python3.13", "python3.14"]
 
 # Local-machine-only tooling (the `cordless deploy`/`cordless dev` CLI itself)
 # that never runs inside a deployed Lambda - excluded from both the layer and
@@ -12,27 +12,27 @@ _LAMBDA_RUNTIMES: list[Any] = ["python3.10", "python3.11", "python3.12", "python
 _CLI_ONLY_FILES: set[str] = {"deploy.py", "cli.py", "dev.py", "upload.py", "_aws.py", "_progress.py", "_env.py"}
 
 
-def _is_runtime_file(fname: str) -> bool:
+def is_runtime_file(fname: str) -> bool:
     return fname not in _CLI_ONLY_FILES and not fname.endswith(".pyc")
 
 
-def _cordless_package_dir() -> str:
+def cordless_package_dir() -> str:
     spec = importlib.util.find_spec("cordless")
     if spec is None or spec.origin is None:
         raise SystemExit("Cannot locate the cordless package. Is it installed?")
     return os.path.dirname(spec.origin)
 
 
-def _layer_extras_dir(python_version: str, architecture: str = "x86_64") -> str:
+def layer_extras_dir(python_version: str, architecture: str = "x86_64") -> str:
     """Fetch pynacl (required for signature verification) for the layer."""
-    from .deploy import _ensure_packages
+    from .deploy import ensure_packages
 
-    return _ensure_packages(["pynacl"], python_version, architecture)
+    return ensure_packages(["pynacl"], python_version, architecture)
 
 
 def build_layer_zip(python_version: str | None = None, architecture: str = "x86_64") -> str:
     """Zip cordless (plus pynacl, when fetchable) in the python/ layout Lambda layers require."""
-    pkg_dir = _cordless_package_dir()
+    pkg_dir = cordless_package_dir()
     site_dir = os.path.dirname(pkg_dir)
 
     tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
@@ -52,7 +52,7 @@ def build_layer_zip(python_version: str | None = None, architecture: str = "x86_
         for root, dirs, files in os.walk(pkg_dir):
             dirs[:] = [d for d in dirs if d != "__pycache__"]
             for fname in files:
-                if not _is_runtime_file(fname):
+                if not is_runtime_file(fname):
                     continue
                 abs_path = os.path.join(root, fname)
                 rel_path = os.path.relpath(abs_path, site_dir)
@@ -68,7 +68,7 @@ def build_layer_zip(python_version: str | None = None, architecture: str = "x86_
                         rel_path = os.path.relpath(abs_path, site_dir)
                         _write(zf, abs_path, os.path.join("python", rel_path))
 
-        extras_dir = _layer_extras_dir(python_version, architecture) if python_version else None
+        extras_dir = layer_extras_dir(python_version, architecture) if python_version else None
         if extras_dir:
             for root, dirs, files in os.walk(extras_dir):
                 dirs[:] = [d for d in dirs if d != "__pycache__"]
@@ -94,7 +94,7 @@ def upload(function_name: str, layer_name: str, region: str | None, python_versi
     try:
         print(f"Publishing layer '{layer_name}'...", flush=True)
         with open(zip_path, "rb") as f:
-            runtimes: Any = [f"python{python_version}"] if python_version else _LAMBDA_RUNTIMES
+            runtimes: Any = [f"python{python_version}"] if python_version else LAMBDA_RUNTIMES
             resp = lam.publish_layer_version(
                 LayerName=layer_name,
                 Content={"ZipFile": f.read()},

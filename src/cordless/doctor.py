@@ -5,7 +5,7 @@ deployed Lambda function state. Nothing here creates or modifies anything -
 import re
 from typing import Any
 
-from ._progress import _BOLD, _DIM, _GREEN, _RED, _RESET, _YELLOW, wait
+from ._progress import BOLD, DIM, GREEN, RED, RESET, YELLOW, wait
 
 _PUBLIC_KEY_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
@@ -87,18 +87,18 @@ def check_discord_config(env: dict[str, str]) -> list[Any]:
     client_secret = env.get("DISCORD_CLIENT_SECRET")
 
     if token:
-        from .register import _get_application_id
+        from .register import get_application_id
 
         try:
-            app_id = _get_application_id(token)
+            app_id = get_application_id(token)
             checks.append(("ok", "Bot token", f"valid (application id {app_id})"))
         except RuntimeError as exc:
             checks.append(("fail", "Bot token", str(exc)))
     elif client_id and client_secret:
-        from .register import _get_client_credentials_token
+        from .register import get_client_credentials_token
 
         try:
-            _get_client_credentials_token(client_id, client_secret)
+            get_client_credentials_token(client_id, client_secret)
             checks.append(("ok", "Client credentials", "valid"))
         except RuntimeError as exc:
             checks.append(("fail", "Client credentials", str(exc)))
@@ -159,24 +159,24 @@ def check_deployed_function(
     routes: Any = None,
 ) -> list[Any]:
     from .deploy import (
-        _function_exists,
-        _has_api_gateway,
-        _has_function_url,
-        _health_check,
+        function_exists,
+        has_api_gateway,
+        has_function_url,
+        health_check,
     )
 
-    exists, _ = _function_exists(lam, function_name)
+    exists, _ = function_exists(lam, function_name)
     if not exists:
         return [("warn", "Deployed function", f"{function_name!r} not deployed yet - run `cordless deploy`")]
 
-    if _has_function_url(lam, function_name):
+    if has_function_url(lam, function_name):
         endpoint = "function_url"
-    elif _has_api_gateway(apigw, function_name):
+    elif has_api_gateway(apigw, function_name):
         endpoint = "api_gateway"
     else:
         endpoint = "function_url"
 
-    health = _health_check(
+    health = health_check(
         lam,
         apigw,
         events,
@@ -275,14 +275,14 @@ def run(
 
 def _mark(severity: str) -> str:
     if severity == "ok":
-        return f"{_GREEN}✓{_RESET}"
+        return f"{GREEN}✓{RESET}"
     if severity == "warn":
-        return f"{_YELLOW}⚠{_RESET}"
-    return f"{_RED}✗{_RESET}"
+        return f"{YELLOW}⚠{RESET}"
+    return f"{RED}✗{RESET}"
 
 
 def print_section(title: str, checks: Any) -> None:
-    print(f"\n  {_BOLD}{title}{_RESET}")
+    print(f"\n  {BOLD}{title}{RESET}")
     for severity, label, detail in checks:
         print(f"    {_mark(severity)} {label}: {detail}")
 
@@ -290,4 +290,4 @@ def print_section(title: str, checks: Any) -> None:
 def print_report(sections: Any) -> None:
     for title, checks in sections:
         print_section(title, checks)
-    print(f"\n  {_DIM}── done ──{_RESET}\n")
+    print(f"\n  {DIM}── done ──{RESET}\n")

@@ -19,14 +19,14 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, cast
 
-from ._progress import _DIM, _GREEN, _RED, _RESET, _YELLOW, Spinner, _tty
+from ._progress import DIM, GREEN, RED, RESET, YELLOW, Spinner, tty
 from .router import (
     APPLICATION_COMMAND,
     APPLICATION_COMMAND_AUTOCOMPLETE,
     MESSAGE_COMPONENT,
     MODAL_SUBMIT,
     PING,
-    _resolve_command_key,
+    resolve_command_key,
 )
 
 _WATCH_EXCLUDE = {".git", ".venv", "venv", "__pycache__", "node_modules", ".pytest_cache", "dist", "build"}
@@ -47,10 +47,10 @@ def _describe_interaction(body: Any) -> str:
     if itype == PING:
         return "ping"
     if itype == APPLICATION_COMMAND:
-        key, _ = _resolve_command_key(data)
+        key, _ = resolve_command_key(data)
         return f"/{key}"
     if itype == APPLICATION_COMMAND_AUTOCOMPLETE:
-        key, _ = _resolve_command_key(data)
+        key, _ = resolve_command_key(data)
         return f"/{key} (autocomplete)"
     if itype == MESSAGE_COMPONENT:
         kind = "button" if data.get("component_type", 2) == 2 else "select"
@@ -66,10 +66,10 @@ def _timestamp() -> str:
 
 def _status_color(status: int) -> str:
     if status < 300:
-        return _GREEN
+        return GREEN
     if status < 500:
-        return _YELLOW
-    return _RED
+        return YELLOW
+    return RED
 
 
 def _pretty_body(body: Any) -> str:
@@ -85,9 +85,9 @@ def _pretty_body(body: Any) -> str:
 
 
 def _log_request(label: str, status: int, elapsed_ms: float, body: Any, verbose: bool = False) -> None:
-    color = _status_color(status) if _tty else ""
-    dim = _DIM if _tty else ""
-    reset = _RESET if _tty else ""
+    color = _status_color(status) if tty else ""
+    dim = DIM if tty else ""
+    reset = RESET if tty else ""
     print(f"  {dim}{_timestamp()}{reset} → {label}  {color}{status}{reset}  {elapsed_ms:.0f}ms")
     if not verbose:
         return
@@ -131,8 +131,8 @@ class Reloader:
             snapshot = self._scan()
             if self.bot is None or snapshot != self._mtimes:
                 if self.bot is not None:
-                    dim = _DIM if _tty else ""
-                    reset = _RESET if _tty else ""
+                    dim = DIM if tty else ""
+                    reset = RESET if tty else ""
                     print(f"  {dim}{_timestamp()}{reset} ↻ reloading")
                     self._purge()
                 self._mtimes = snapshot
@@ -312,9 +312,9 @@ def run_dev(
     if tunnel:
         tunnel_proc, url = _start_tunnel(port)
         if url:
-            green = _GREEN if _tty else ""
-            dim = _DIM if _tty else ""
-            reset = _RESET if _tty else ""
+            green = GREEN if tty else ""
+            dim = DIM if tty else ""
+            reset = RESET if tty else ""
             print(f"  public  {green}{url}{reset}")
             print(f"  {dim}(it may take up to 15s for the url to work correctly){reset}")
             print()

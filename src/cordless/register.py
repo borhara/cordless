@@ -10,7 +10,7 @@ from ._useragent import USER_AGENT
 API_BASE = "https://discord.com/api/v10"
 
 
-def _get_application_id(bot_token: str) -> Any:
+def get_application_id(bot_token: str) -> Any:
     request = urllib.request.Request(
         f"{API_BASE}/oauth2/applications/@me",
         method="GET",
@@ -26,7 +26,7 @@ def _get_application_id(bot_token: str) -> Any:
         ) from exc
 
 
-def _get_client_credentials_token(client_id: str, client_secret: str) -> Any:
+def get_client_credentials_token(client_id: str, client_secret: str) -> Any:
     credentials = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
     data = urllib.parse.urlencode(
         {"grant_type": "client_credentials", "scope": "applications.commands.update"}
@@ -71,11 +71,11 @@ def sync_commands(
     development for instant updates scoped to a single server.
     """
     if bot_token:
-        application_id = _get_application_id(bot_token)
+        application_id = get_application_id(bot_token)
         authorization = f"Bot {bot_token}"
     elif client_id and client_secret:
         application_id = client_id
-        authorization = f"Bearer {_get_client_credentials_token(client_id, client_secret)}"
+        authorization = f"Bearer {get_client_credentials_token(client_id, client_secret)}"
     else:
         raise ValueError("Provide either bot_token, or both client_id and client_secret")
 

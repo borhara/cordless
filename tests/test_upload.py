@@ -88,7 +88,7 @@ def test_upload_falls_back_to_known_runtimes_when_no_python_version_given(aws_cl
     upload.upload("my-fn", "my-layer", REGION)
 
     version = aws_clients["lam"].list_layer_versions(LayerName="my-layer")["LayerVersions"][0]
-    assert version["CompatibleRuntimes"] == upload._LAMBDA_RUNTIMES
+    assert version["CompatibleRuntimes"] == upload.LAMBDA_RUNTIMES
 
 
 def test_upload_replaces_older_version_of_the_same_layer_instead_of_stacking(aws_clients, tmp_path):

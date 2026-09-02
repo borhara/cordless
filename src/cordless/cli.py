@@ -156,7 +156,7 @@ def _upload(args: argparse.Namespace) -> None:
 
 def _deploy(args: argparse.Namespace) -> None:
     from . import _progress
-    from .deploy import _DEFAULT_LOG_RETENTION_DAYS, deploy, load_config
+    from .deploy import DEFAULT_LOG_RETENTION_DAYS, deploy, load_config
 
     _progress.verbose = args.verbose
 
@@ -227,7 +227,7 @@ def _deploy(args: argparse.Namespace) -> None:
         ratelimit=bool(cfg.get("ratelimit", False)),
         endpoint=args.endpoint or cfg.get("endpoint"),
         keep_warm=cfg.get("keep-warm"),
-        log_retention_days=int(cfg.get("log_retention", _DEFAULT_LOG_RETENTION_DAYS)),
+        log_retention_days=int(cfg.get("log_retention", DEFAULT_LOG_RETENTION_DAYS)),
         routes=routes,
     )
 
@@ -481,9 +481,9 @@ def _logs(args: argparse.Namespace) -> None:
     try:
         latest_ms = fetch_and_print(start_ms)
     except NoCredentialsError:
-        from ._aws import _NO_CREDENTIALS_MSG
+        from ._aws import NO_CREDENTIALS_MSG
 
-        raise SystemExit(_NO_CREDENTIALS_MSG)
+        raise SystemExit(NO_CREDENTIALS_MSG)
     if args.follow:
         print("  --- following (Ctrl+C to stop) ---", flush=True)
         try:
@@ -526,7 +526,7 @@ def _doctor(args: argparse.Namespace) -> None:
     crons = {name: entry["schedule"] for name, entry in bot.crons.items()} if bot else None
     routes = bot.router.route_defs() if bot else None
 
-    from ._progress import _DIM, _RESET
+    from ._progress import DIM, RESET
 
     def _print_as_it_goes(title: str, checks: Any) -> None:
         doctor.print_section(title, checks)
@@ -544,7 +544,7 @@ def _doctor(args: argparse.Namespace) -> None:
         routes=routes,
         on_section=_print_as_it_goes,
     )
-    print(f"\n  {_DIM}── done ──{_RESET}\n")
+    print(f"\n  {DIM}── done ──{RESET}\n")
     if not ok:
         raise SystemExit(1)
 
