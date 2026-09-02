@@ -19,14 +19,14 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, cast
 
-from ._progress import _DIM, _GREEN, _RED, _RESET, _YELLOW, Spinner, _tty  # pyright: ignore[reportPrivateUsage]
+from ._progress import _DIM, _GREEN, _RED, _RESET, _YELLOW, Spinner, _tty
 from .router import (
     APPLICATION_COMMAND,
     APPLICATION_COMMAND_AUTOCOMPLETE,
     MESSAGE_COMPONENT,
     MODAL_SUBMIT,
     PING,
-    _resolve_command_key,  # pyright: ignore[reportPrivateUsage]
+    _resolve_command_key,
 )
 
 _WATCH_EXCLUDE = {".git", ".venv", "venv", "__pycache__", "node_modules", ".pytest_cache", "dist", "build"}
@@ -245,7 +245,7 @@ def _make_handler(reloader: Any, verbose: bool = False) -> type[BaseHTTPRequestH
         do_PATCH = _serve
         do_DELETE = _serve
 
-        def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+        def log_message(self, format: str, *args: Any) -> None:
             return  # _serve already logs a richer line
 
     return DevHandler

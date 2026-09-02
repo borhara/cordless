@@ -257,7 +257,7 @@ def _table() -> Any:
     if table is None:
         import boto3
 
-        table = boto3.resource("dynamodb").Table(name)  # pyright: ignore[reportUnknownMemberType]
+        table = boto3.resource("dynamodb").Table(name)
         _tables[name] = table
     return table
 

@@ -7,6 +7,8 @@ layer and close an import loop.
 
 from typing import Any, cast
 
+__all__ = ["DiscordObject", "_wrap"]
+
 
 class DiscordObject:
     """Thin attribute wrapper around a raw Discord API object."""
@@ -42,3 +44,8 @@ class DiscordObject:
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(id={self._data.get('id')!r})"
+
+
+def _wrap(cls: type[Any], data: Any) -> Any:
+    """Build `cls(data)`, or `None` when `data` is absent."""
+    return cls(data) if data is not None else None

@@ -191,10 +191,11 @@ def test_stringized_literal_choices_are_resolved():
 
 
 def test_unresolvable_annotation_falls_back_to_string():
-    async def f(ctx, thing: "NotDefinedAnywhere"):  # noqa: F821  # pyright: ignore[reportUndefinedVariable]
-        pass
+    src = "from __future__ import annotations\nasync def f(ctx, thing: NotDefinedAnywhere): ..."
+    ns = {}
+    exec(compile(src, "<test>", "exec"), ns)
 
-    assert options_from_signature(f)[0]["type"] == 3
+    assert options_from_signature(ns["f"])[0]["type"] == 3
 
 
 def test_string_literal_choices():
@@ -216,10 +217,11 @@ def test_int_literal_choices():
 
 
 def test_float_literal_choices_are_typed_as_number():
-    async def f(ctx, ratio: Literal[1.5, 2.5]):  # pyright: ignore[reportInvalidTypeForm]
-        pass
+    src = "from typing import Literal\nasync def f(ctx, ratio: Literal[1.5, 2.5]): ..."
+    ns = {}
+    exec(compile(src, "<test>", "exec"), ns)
 
-    opt = options_from_signature(f)[0]
+    opt = options_from_signature(ns["f"])[0]
     assert opt["type"] == 10
     assert opt["choices"][0] == {"name": "1.5", "value": 1.5}
 

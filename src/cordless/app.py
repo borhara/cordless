@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import importlib
 import inspect
 import json
 import os
@@ -41,7 +42,7 @@ def _prewarm_defer() -> None:
     use defer=True.
     """
     try:
-        from . import defer as _defer_mod  # noqa: F401  # pyright: ignore[reportUnusedImport]
+        importlib.import_module(".defer", __package__)
     except Exception:
         pass
 
@@ -586,14 +587,14 @@ class Cordless(RESTMixin):
         webhook = await webhooks.create_webhook(
             channel_id, name, avatar=avatar if avatar is not None else UNSET, reason=reason
         )
-        return webhook._data  # pyright: ignore[reportPrivateUsage]
+        return webhook._data
 
     async def get_channel_webhooks(self, channel_id: str) -> Any:
         """List a channel's webhooks. Requires DISCORD_BOT_TOKEN."""
         from ._rest import webhooks
 
         result = await webhooks.fetch_channel_webhooks(channel_id)
-        return [webhook._data for webhook in result]  # pyright: ignore[reportPrivateUsage]
+        return [webhook._data for webhook in result]
 
     async def delete_webhook(
         self, webhook_id: str, webhook_token: str | None = None, *, reason: str | None = None
@@ -916,7 +917,6 @@ class Cordless(RESTMixin):
         """Load a cog module by dotted path (e.g. 'cogs.game').
         Discovers all Cog instances defined in the module automatically.
         Alternatively, define a plain (non-async) setup(bot) for manual control."""
-        import importlib
         import inspect
 
         from .cog import Cog as _Cog
@@ -943,7 +943,6 @@ class Cordless(RESTMixin):
 
     def load_extensions(self, package: str) -> None:
         """Load all cog modules in a package (e.g. 'cogs'). Files starting with '_' are skipped."""
-        import importlib
         import pkgutil
 
         pkg = importlib.import_module(package)

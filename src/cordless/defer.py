@@ -41,7 +41,7 @@ try:
     from botocore.exceptions import NoRegionError as _NoRegionError
 
     try:
-        _lambda_client: Any = _boto3.client("lambda")  # pyright: ignore[reportUnknownMemberType]
+        _lambda_client: Any = _boto3.client("lambda")
     except _NoRegionError:
         _lambda_client = None
 except ImportError:
@@ -60,7 +60,7 @@ def invoke_worker(function_name: str, interaction: Any) -> None:
         try:
             import boto3
 
-            client = boto3.client("lambda")  # pyright: ignore[reportUnknownMemberType]
+            client = boto3.client("lambda")
         except ImportError:
             raise RuntimeError(_NO_DEPLOY_MSG)
     resp = client.invoke(

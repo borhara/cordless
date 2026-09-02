@@ -156,7 +156,7 @@ def _upload(args: argparse.Namespace) -> None:
 
 def _deploy(args: argparse.Namespace) -> None:
     from . import _progress
-    from .deploy import _DEFAULT_LOG_RETENTION_DAYS, deploy, load_config  # pyright: ignore[reportPrivateUsage]
+    from .deploy import _DEFAULT_LOG_RETENTION_DAYS, deploy, load_config
 
     _progress.verbose = args.verbose
 
@@ -481,7 +481,7 @@ def _logs(args: argparse.Namespace) -> None:
     try:
         latest_ms = fetch_and_print(start_ms)
     except NoCredentialsError:
-        from ._aws import _NO_CREDENTIALS_MSG  # pyright: ignore[reportPrivateUsage]
+        from ._aws import _NO_CREDENTIALS_MSG
 
         raise SystemExit(_NO_CREDENTIALS_MSG)
     if args.follow:
@@ -526,7 +526,7 @@ def _doctor(args: argparse.Namespace) -> None:
     crons = {name: entry["schedule"] for name, entry in bot.crons.items()} if bot else None
     routes = bot.router.route_defs() if bot else None
 
-    from ._progress import _DIM, _RESET  # pyright: ignore[reportPrivateUsage]
+    from ._progress import _DIM, _RESET
 
     def _print_as_it_goes(title: str, checks: Any) -> None:
         doctor.print_section(title, checks)

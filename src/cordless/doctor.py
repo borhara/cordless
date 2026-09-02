@@ -5,7 +5,7 @@ deployed Lambda function state. Nothing here creates or modifies anything -
 import re
 from typing import Any
 
-from ._progress import _BOLD, _DIM, _GREEN, _RED, _RESET, _YELLOW, wait  # pyright: ignore[reportPrivateUsage]
+from ._progress import _BOLD, _DIM, _GREEN, _RED, _RESET, _YELLOW, wait
 
 _PUBLIC_KEY_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
@@ -87,7 +87,7 @@ def check_discord_config(env: dict[str, str]) -> list[Any]:
     client_secret = env.get("DISCORD_CLIENT_SECRET")
 
     if token:
-        from .register import _get_application_id  # pyright: ignore[reportPrivateUsage]
+        from .register import _get_application_id
 
         try:
             app_id = _get_application_id(token)
@@ -95,7 +95,7 @@ def check_discord_config(env: dict[str, str]) -> list[Any]:
         except RuntimeError as exc:
             checks.append(("fail", "Bot token", str(exc)))
     elif client_id and client_secret:
-        from .register import _get_client_credentials_token  # pyright: ignore[reportPrivateUsage]
+        from .register import _get_client_credentials_token
 
         try:
             _get_client_credentials_token(client_id, client_secret)
@@ -159,10 +159,10 @@ def check_deployed_function(
     routes: Any = None,
 ) -> list[Any]:
     from .deploy import (
-        _function_exists,  # pyright: ignore[reportPrivateUsage]
-        _has_api_gateway,  # pyright: ignore[reportPrivateUsage]
-        _has_function_url,  # pyright: ignore[reportPrivateUsage]
-        _health_check,  # pyright: ignore[reportPrivateUsage]
+        _function_exists,
+        _has_api_gateway,
+        _has_function_url,
+        _health_check,
     )
 
     exists, _ = _function_exists(lam, function_name)

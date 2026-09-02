@@ -25,7 +25,7 @@ def _cordless_package_dir() -> str:
 
 def _layer_extras_dir(python_version: str, architecture: str = "x86_64") -> str:
     """Fetch pynacl (required for signature verification) for the layer."""
-    from .deploy import _ensure_packages  # pyright: ignore[reportPrivateUsage, reportUnknownVariableType]
+    from .deploy import _ensure_packages
 
     return _ensure_packages(["pynacl"], python_version, architecture)
 
@@ -86,7 +86,7 @@ def upload(function_name: str, layer_name: str, region: str | None, python_versi
     from ._aws import get_session
 
     session = get_session(region)
-    lam = session.client("lambda")  # pyright: ignore[reportUnknownMemberType]
+    lam = session.client("lambda")
 
     print("Building layer zip...", flush=True)
     zip_path = build_layer_zip(python_version)

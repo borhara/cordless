@@ -2,6 +2,7 @@ import base64
 import json
 from typing import Any, cast
 
+from ._base import _wrap
 from ._multipart import build_multipart_body
 from ._payload import (
     _FLAG_EPHEMERAL,
@@ -12,16 +13,7 @@ from ._payload import (
     _validate_uikit,
     _with_guild_id,
 )
-from .models import (
-    Attachment,
-    Channel,
-    Guild,
-    Member,
-    Message,
-    Role,
-    User,
-    _wrap,  # pyright: ignore[reportPrivateUsage]
-)
+from .models import Attachment, Channel, Guild, Member, Message, Role, User
 
 _CHANNEL_MESSAGE_WITH_SOURCE = 4
 _UPDATE_MESSAGE = 7

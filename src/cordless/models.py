@@ -843,10 +843,6 @@ class Guild(DiscordObject):
         await users.leave_guild(self.id, **kwargs)
 
 
-def _wrap(cls: type[Any], data: Any) -> Any:  # pyright: ignore[reportUnusedFunction]
-    return cls(data) if data is not None else None
-
-
 # Imported at the end, not at module scope: the resource modules import
 # the model classes above, so importing them back any earlier would be a
 # circular import. Every class is defined by this point.

@@ -229,9 +229,9 @@ def build_function_zip(
 
         if bundle_cordless:
             from .upload import (
-                _cordless_package_dir,  # pyright: ignore[reportPrivateUsage]
-                _is_runtime_file,  # pyright: ignore[reportPrivateUsage]
-                _layer_extras_dir,  # pyright: ignore[reportPrivateUsage]
+                _cordless_package_dir,
+                _is_runtime_file,
+                _layer_extras_dir,
             )
 
             pkg_dir = _cordless_package_dir()
@@ -387,7 +387,7 @@ def _publish_cordless_layer(
     except lam.exceptions.ResourceNotFoundException:
         pass
 
-    from .upload import _LAMBDA_RUNTIMES  # pyright: ignore[reportPrivateUsage]
+    from .upload import _LAMBDA_RUNTIMES
 
     runtimes: Any = [f"python{python_version}"] if python_version else _LAMBDA_RUNTIMES
 
@@ -752,7 +752,7 @@ def deploy(
         raise SystemExit("Function name is required: pass --function or set [deploy] function in cordless.toml")
 
     from ._aws import get_session
-    from ._progress import _DIM, _RESET, Spinner, _tty, success, summary  # pyright: ignore[reportPrivateUsage]
+    from ._progress import _DIM, _RESET, Spinner, _tty, success, summary
 
     zip_path: str = ""
     layer_arn: Any = None

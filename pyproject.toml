@@ -56,7 +56,7 @@ pythonpath = ["src"]
 [dependency-groups]
 dev = [
     "boto3>=1.20",
-    "boto3-stubs[apigatewayv2,dynamodb,events,iam,lambda,logs,sts]",
+    "boto3-stubs[full]",
     "botocore[crt]",
     "moto[iam,awslambda-simple,apigatewayv2,events,logs,s3]>=5.0",
     "pynacl>=1.5",
@@ -72,6 +72,7 @@ pythonVersion = "3.11"
 typeCheckingMode = "strict"
 extraPaths = ["tests/fixtures"]
 reportTypedDictNotRequiredAccess = false
+reportPrivateUsage = false
 
 [[tool.pyright.executionEnvironments]]
 root = "tests"
@@ -82,7 +83,6 @@ reportUnknownVariableType = false
 reportUnknownArgumentType = false
 reportUnknownLambdaType = false
 reportMissingTypeStubs = false
-reportPrivateUsage = false
 reportUnusedFunction = false
 reportUnusedVariable = false
 reportUntypedFunctionDecorator = false
