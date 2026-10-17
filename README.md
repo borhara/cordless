@@ -91,6 +91,3 @@ Paste the URL into your Discord app's **Interactions Endpoint URL** and your bot
 ## Documentation
 
 Full docs at **[cordless.dev](https://cordless.dev)**: commands, options, buttons, modals, deferred interactions, Components v2, scheduled handlers, the REST API, and the full deploy reference.
-
-
-> Please note that this is a work in progress, I have found genuine interest in serverless development and wanted an easy way to provision AWS.
